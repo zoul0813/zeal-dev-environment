@@ -1,0 +1,15 @@
+[submodule "repos/Zeal-8-bit-OS"]
+	path = home/Zeal-8-bit-OS
+	url = https://github.com/Zeal8bit/Zeal-8-bit-OS.git
+[submodule "repos/Zeal-VideoBoard-SDK"]
+	path = home/Zeal-VideoBoard-SDK
+	url = https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git
+[submodule "repos/Zeal-Bootloader"]
+	path = home/Zeal-Bootloader
+	url = https://github.com/Zeal8bit/Zeal-Bootloader.git
+[submodule "repos/ZealFS"]
+	path = home/ZealFS
+	url = https://github.com/Zeal8bit/ZealFS.git
+[submodule "repos/Zeal-WebEmulator"]
+	path = home/Zeal-WebEmulator
+	url = https://github.com/Zeal8bit/Zeal-WebEmulator.git

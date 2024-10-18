@@ -1,0 +1,62 @@
+#!/bin/sh
+
+set +x
+
+ZDE_PATH=$(dirname $0)
+mkdir -p ~/.zde
+
+ZDE_MOUNTED=
+if [ -f ~/.zde/mount ]; then
+  ZDE_MOUNTED=$(cat ~/.zde/mount)
+fi
+
+COMMAND=$1
+shift
+
+CONTAINER_NAME=zeal8bit
+docker ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
+RUNNING=$?
+
+case $COMMAND in
+  update)
+    echo "Pulling latest Zeal 8-bit repositories"
+    git checkout main
+    git fetch
+    git pull origin main
+    git submodule update --init --recursive --remote
+    ;;
+  status)
+    if [ "$RUNNING" = "1" ]; then
+      echo "ZDE is stopped"
+    else
+      echo "ZDE is running, mounted to ${ZDE_MOUNTED}"
+    fi
+    ;;
+  start)
+    if [ "$RUNNING" = "1" ]; then
+      docker compose -f $ZDE_PATH/docker-compose.yml  up -d
+      echo $PWD > ~/.zde/mount
+    else
+      echo "ZDE is already running"
+    fi
+    ;;
+  stop)
+    if [ "$RUNNING" = "0" ]; then
+      docker compose -f $ZDE_PATH/docker-compose.yml  down
+      rm ~/.zde/mount
+    else
+      echo "ZDE is not running"
+    fi
+    ;;
+  make)
+    if [ "$RUNNING" = "0" ]; then
+      shift
+      docker exec -t zeal8bit make $@
+    else
+      echo "ZDE is not running"
+    fi
+    ;;
+  *)
+    echo "Help: update, status, start, stop, make"
+    ;;
+esac

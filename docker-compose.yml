@@ -1,0 +1,14 @@
+services:
+  zeal8bit-dev-env:
+    container_name: zeal8bit
+    privileged: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - "linux/amd64"
+    restart: on-failure
+    volumes:
+      - ${PWD}:/src
+      - ./home:/home/zeal8bit
+    command: ["sleep","infinity"]
