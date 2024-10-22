@@ -13,9 +13,15 @@ fi
 COMMAND=$1
 shift
 
+RUNNING="1"
 CONTAINER_NAME=zeal8bit
-docker ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
-RUNNING=$?
+if command -v docker 2>&1 >/dev/null; then
+  docker ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
+  RUNNING=$?
+else
+  echo "WARNING: docker not found, ensure docker is installed before using ZDE"
+fi
+
 
 case $COMMAND in
   update)
@@ -50,11 +56,13 @@ case $COMMAND in
     ;;
   make)
     if [ "$RUNNING" = "0" ]; then
-      shift
       docker exec -t zeal8bit make $@
     else
       echo "ZDE is not running"
     fi
+    ;;
+  rebuild)
+    docker compose -f $ZDE_PATH/docker-compose.yml build
     ;;
   *)
     echo "Help: update, status, start, stop, make"

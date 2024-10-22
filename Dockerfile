@@ -62,6 +62,8 @@ RUN echo "Setting up ZealFS" \
   && mkdir -p /mnt/eeprom \
   && mkdir -p /mnt/cf
 
+RUN apk add --no-cache py3-pillow
+
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
