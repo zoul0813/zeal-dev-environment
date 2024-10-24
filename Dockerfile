@@ -64,6 +64,13 @@ RUN echo "Setting up ZealFS" \
 
 RUN apk add --no-cache py3-pillow
 
+RUN echo "Installing supervisord" \
+  && apk add --no-cache nodejs npm supervisor \
+  && mkdir -p /var/log/supervisor \
+  && mkdir -p /etc/supervisor.d
+COPY etc/supervisord.conf /etc/supervisord.conf
+COPY etc/supervisor.d/emulator.ini /etc/supervisor.d/emulator.ini
+
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

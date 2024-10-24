@@ -22,6 +22,44 @@ else
   echo "WARNING: docker not found, ensure docker is installed before using ZDE"
 fi
 
+emulator()
+{
+  CMD=$1
+  case $CMD in
+    start)
+      shift
+      emulator_start $@
+      ;;
+    stop)
+      shift
+      emulator_stop
+      ;;
+    *)
+      emulator_start $@
+      ;;
+  esac
+}
+
+emulator_start()
+{
+  # supervisord -c /etc/supervisord.conf
+  docker exec -t zeal8bit supervisorctl status emulator
+  STATUS=$?
+  if [ "$STATUS" = "3" ]; then
+    docker exec -t zeal8bit supervisorctl start emulator
+  fi
+  PATH=$PATH:$ZDE_PATH/bin $ZDE_PATH/bin/xdg-open "http://127.0.0.1:1145/?r=latest&$1"
+}
+
+emulator_stop()
+{
+  docker exec -t zeal8bit supervisorctl status emulator
+  STATUS=$?
+  if [ "$STATUS" = "0" ]; then
+    docker exec -t zeal8bit supervisorctl stop emulator
+  fi
+}
+
 
 case $COMMAND in
   update)
@@ -53,6 +91,12 @@ case $COMMAND in
     else
       echo "ZDE is not running"
     fi
+    ;;
+  emu)
+    emulator $@
+    ;;
+  emulator)
+    emulator $@
     ;;
   make)
     if [ "$RUNNING" = "0" ]; then
