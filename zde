@@ -60,6 +60,27 @@ emulator_stop()
   fi
 }
 
+stop()
+{
+  if [ "$RUNNING" = "0" ]; then
+    docker compose -f $ZDE_PATH/docker-compose.yml stop
+    rm ~/.zde/mount
+    RUNNING="1"
+  else
+    echo "ZDE is not running"
+  fi
+}
+
+start()
+{
+  if [ "$RUNNING" = "1" ]; then
+    docker compose -f $ZDE_PATH/docker-compose.yml  up -d
+    echo $PWD > ~/.zde/mount
+    RUNNING="0"
+  else
+    echo "ZDE is already running"
+  fi
+}
 
 case $COMMAND in
   update)
@@ -77,20 +98,14 @@ case $COMMAND in
     fi
     ;;
   start)
-    if [ "$RUNNING" = "1" ]; then
-      docker compose -f $ZDE_PATH/docker-compose.yml  up -d
-      echo $PWD > ~/.zde/mount
-    else
-      echo "ZDE is already running"
-    fi
+    start $@
     ;;
   stop)
-    if [ "$RUNNING" = "0" ]; then
-      docker compose -f $ZDE_PATH/docker-compose.yml  down
-      rm ~/.zde/mount
-    else
-      echo "ZDE is not running"
-    fi
+    stop $@
+    ;;
+  restart)
+    stop
+    start $@
     ;;
   emu)
     emulator $@

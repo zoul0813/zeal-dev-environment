@@ -2,6 +2,7 @@ services:
   zeal8bit-dev-env:
     container_name: zeal8bit
     privileged: true
+    image: zoul0813/zeal-dev-environment:latest
     build:
       context: .
       dockerfile: Dockerfile

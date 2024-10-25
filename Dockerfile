@@ -7,6 +7,7 @@ RUN echo "Installing prerequisites" \
   && apk update \
   && apk add --no-cache bash git curl python3 py3-pip build-base bison flex zlib-dev boost-dev \
   && apk add --no-cache fuse3 fuse3-libs fuse3-dev pkgconf \
+  && apk add --no-cache py3-pillow \
   && python3 -m venv /opt/penv \
   && . /opt/penv/bin/activate \
   && pip3 install kconfiglib
@@ -14,9 +15,9 @@ RUN echo "Installing prerequisites" \
 # SDCC
 RUN echo "Building SDCC" \
   && mkdir -p /opt/sdcc \
-  && curl http://nightly.z88dk.org/zsdcc/zsdcc_r14648_src.tar.gz -o /opt/sdcc/zsdcc_r14648_src.tar.gz \
-  && tar xf /opt/sdcc/zsdcc_r14648_src.tar.gz -C /opt/sdcc \
-  && cd /opt/sdcc/src/sdcc-build \
+  && curl -L https://sourceforge.net/projects/sdcc/files/sdcc/4.4.0/sdcc-src-4.4.0.tar.bz2/download -o /opt/sdcc/sdcc-4.4.0.tar.bz2 \
+  && tar xjf /opt/sdcc/sdcc-4.4.0.tar.bz2 -C /opt/sdcc \
+  && cd /opt/sdcc/sdcc-4.4.0 \
   && ./configure \
 		--disable-ds390-port --disable-ds400-port \
 		--disable-hc08-port --disable-s08-port --disable-mcs51-port \
@@ -29,9 +30,9 @@ RUN echo "Building SDCC" \
 		--disable-non-free \
 		--disable-ucsim \
     && make all \
-    && ln -s /opt/sdcc/src/sdcc-build/bin /opt/sdcc/bin \
-    && ln -s /opt/sdcc/src/sdcc-build/device/include /opt/sdcc/include \
-    && ln -s /opt/sdcc/src/sdcc-build/device/lib /opt/sdcc/lib
+    && ln -s /opt/sdcc/sdcc-4.4.0/bin /opt/sdcc/bin \
+    && ln -s /opt/sdcc/sdcc-4.4.0/device/include /opt/sdcc/include \
+    && ln -s /opt/sdcc/sdcc-4.4.0/device/lib /opt/sdcc/lib
 
 # --disable-sdcpp --disable-packihx --disable-sdcdb --disable-sdbinutil --disable-device-lib
 # => => # /opt/sdcc/src/sdcc-build/bin/sdcc -I./../../include -I. --std-c23  -mr2ka --max-allocs-per-node 25000 -c ../_sint2fs.c -o _sint2fs
@@ -40,14 +41,14 @@ ENV \
   ZDE="true" \
   ZOS_PATH="$HOME/Zeal-8-bit-OS" \
   ZVB_SDK_PATH="$HOME/Zeal-VideoBoard-SDK" \
+  ZGDK_PATH="$HOME/zeal-game-dev-kit" \
   SDCC_PATH="/opt/sdcc" \
   PYTHON_BIN="/opt/penv/bin"
-ENV \
-  CPATH="$SDCC_PATH/include:$CPATH" \
-  LIBRARY_PATH="$SDCC_PATH/lib:$LIBRARY_PATH" \
-  PATH="$PATH:$ZOS_PATH/tools:$ZVB_SDK_PATH/tools/zeal2gif:$SDCC_PATH/bin"
 
-RUN echo $PATH
+ENV \
+  CPATH="$SDCC_PATH/include" \
+  LIBRARY_PATH="$SDCC_PATH/lib" \
+  PATH="$PATH:$ZOS_PATH/tools:$ZVB_SDK_PATH/tools/zeal2gif:$SDCC_PATH/bin"
 
 # # Zeal 8-bit Repos
 # RUN echo "Cloning repos" \
@@ -62,15 +63,12 @@ RUN echo "Setting up ZealFS" \
   && mkdir -p /mnt/eeprom \
   && mkdir -p /mnt/cf
 
-RUN apk add --no-cache py3-pillow
-
 RUN echo "Installing supervisord" \
   && apk add --no-cache nodejs npm supervisor \
   && mkdir -p /var/log/supervisor \
   && mkdir -p /etc/supervisor.d
 COPY etc/supervisord.conf /etc/supervisord.conf
 COPY etc/supervisor.d/emulator.ini /etc/supervisor.d/emulator.ini
-
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
