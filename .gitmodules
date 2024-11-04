@@ -15,4 +15,4 @@
 	url = https://github.com/Zeal8bit/Zeal-WebEmulator.git
 [submodule "home/zeal-game-dev-kit"]
 	path = home/zeal-game-dev-kit
-	url = git@github.com:zoul0813/zeal-game-dev-kit.git
+	url = https://github.com/zoul0813/zeal-game-dev-kit.git
