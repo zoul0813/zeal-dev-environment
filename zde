@@ -89,6 +89,10 @@ case $COMMAND in
     git fetch
     git pull origin main
     git submodule update --init --recursive --remote
+    if [ "$RUNNING" = "0" ]; then
+      start
+    fi
+    docker exec -t $CONTAINER_NAME npm --prefix /home/zeal8bit/Zeal-WebEmulator install /home/zeal8bit/Zeal-WebEmulator
     ;;
   status)
     if [ "$RUNNING" = "1" ]; then
@@ -115,7 +119,7 @@ case $COMMAND in
     ;;
   make)
     if [ "$RUNNING" = "0" ]; then
-      docker exec -t zeal8bit make $@
+      docker exec -t $CONTAINER_NAME make $@
     else
       echo "ZDE is not running"
     fi
