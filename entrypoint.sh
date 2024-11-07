@@ -4,7 +4,7 @@ cd /home/zeal8bit/ZealFS \
 make
 cd /src
 
-supervisord
+supervisord -c /etc/supervisord.conf
 
 exec "$@"
 

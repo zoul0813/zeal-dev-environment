@@ -15,6 +15,9 @@ shift
 
 RUNNING="1"
 CONTAINER_NAME=zeal8bit
+COMPOSE_PATH=$ZDE_PATH/docker-compose.yml
+export ZDE_IMAGE=zoul0813/zeal-dev-environment
+export ZDE_VERSION="${ZDE_VERSION:=latest}"
 if command -v docker 2>&1 >/dev/null; then
   docker ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
   RUNNING=$?
@@ -63,7 +66,7 @@ emulator_stop()
 stop()
 {
   if [ "$RUNNING" = "0" ]; then
-    docker compose -f $ZDE_PATH/docker-compose.yml stop
+    docker compose -f ${COMPOSE_PATH} stop
     rm ~/.zde/mount
     RUNNING="1"
   else
@@ -74,7 +77,7 @@ stop()
 start()
 {
   if [ "$RUNNING" = "1" ]; then
-    docker compose -f $ZDE_PATH/docker-compose.yml  up -d
+    docker compose -f ${COMPOSE_PATH} up -d
     echo $PWD > ~/.zde/mount
     RUNNING="0"
   else
@@ -89,10 +92,11 @@ case $COMMAND in
       stop
     fi
     echo "Pulling latest Zeal 8-bit repositories"
-    git checkout main
-    git fetch
-    git pull origin main
-    git submodule update --init --recursive --remote
+    git -C $ZDE_PATH checkout main
+    git -C $ZDE_PATH fetch
+    git -C $ZDE_PATH pull origin main
+    git -C $ZDE_PATH submodule update --init --recursive --remote
+    docker image pull ${ZDE_IMAGE}:${ZDE_VERSION}
     if [ "$RESTART" = "0" ]; then
       start
     fi
@@ -129,9 +133,9 @@ case $COMMAND in
     ;;
   rebuild)
     if [ "$RUNNING" = "0" ]; then
-      docker compose -f $ZDE_PATH/docker-compose.yml down
+      docker compose -f ${COMPOSE_PATH} down
     fi
-    docker compose -f $ZDE_PATH/docker-compose.yml build
+    docker compose -f ${COMPOSE_PATH} build
     ;;
   *)
     echo "Help: update, status, start, stop, make"
