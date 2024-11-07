@@ -84,15 +84,18 @@ start()
 
 case $COMMAND in
   update)
+    RESTART=$RUNNING
+    if [ "$RUNNING" = "0" ]; then
+      stop
+    fi
     echo "Pulling latest Zeal 8-bit repositories"
     git checkout main
     git fetch
     git pull origin main
     git submodule update --init --recursive --remote
-    if [ "$RUNNING" = "0" ]; then
+    if [ "$RESTART" = "0" ]; then
       start
     fi
-    docker exec -t $CONTAINER_NAME npm --prefix /home/zeal8bit/Zeal-WebEmulator install /home/zeal8bit/Zeal-WebEmulator
     ;;
   status)
     if [ "$RUNNING" = "1" ]; then
