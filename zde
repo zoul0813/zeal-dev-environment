@@ -157,6 +157,9 @@ case $COMMAND in
     emulator $@
     ;;
   make)
+    if [[ ! -z "${ASEPRITE_PATH}" ]]; then
+      make -f $ZDE_PATH/home/zeal-game-dev-kit/aseprite.mk
+    fi
     if [ "$RUNNING" = "0" ]; then
       docker exec --env-file=$ZDE_PATH/.env -t $CONTAINER_NAME make $@
     else
