@@ -46,8 +46,8 @@ ENV \
   PYTHON_BIN="/opt/penv/bin"
 
 ENV \
-  CPATH="$SDCC_PATH/include" \
-  LIBRARY_PATH="$SDCC_PATH/lib" \
+  # CPATH="$SDCC_PATH/include" \
+  # LIBRARY_PATH="$SDCC_PATH/lib" \
   PATH="$PATH:$ZOS_PATH/tools:$ZVB_SDK_PATH/tools/zeal2gif:$SDCC_PATH/bin"
 
 # # Zeal 8-bit Repos
@@ -60,8 +60,8 @@ ENV \
 
 # ZealFS
 RUN echo "Setting up ZealFS" \
-  && mkdir -p /mnt/eeprom \
-  && mkdir -p /mnt/cf
+  && apk add --no-cache rsync \
+  && mkdir -p /media/zealfs
 
 RUN echo "Installing supervisord" \
   && apk add --no-cache nodejs npm supervisor \

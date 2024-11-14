@@ -12,6 +12,7 @@ services:
     volumes:
       - ${PWD}:/src
       - ./home:/home/zeal8bit
+      - ./mnt:/mnt
     ports:
       - 1145:1145
     command: ["sleep","infinity"]

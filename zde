@@ -85,6 +85,38 @@ start()
   fi
 }
 
+make_image()
+{
+  TYPE=$1
+  SIZE=$2
+
+  if [ -f $ZDE_PATH/mnt/$TYPE.img ]; then
+    read -p "Image exists, overwrite? ([Y]es, [N]o)" -n 1 -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]
+    then
+        [[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1
+    fi
+
+    rm $ZDE_PATH/mnt/$TYPE.img
+  fi
+
+  shift
+  case $TYPE in
+    eeprom)
+      docker exec -t $CONTAINER_NAME /home/zeal8bit/zsync.sh eeprom ${SIZE:=32}
+      ;;
+    cf)
+      docker exec -t $CONTAINER_NAME /home/zeal8bit/zsync.sh cf ${SIZE:=64}
+      ;;
+    sd)
+      docker exec -t $CONTAINER_NAME /home/zeal8bit/zsync.sh sd ${SIZE:=64}
+      ;;
+    *)
+      echo "Invalid arguments, must provide TYPE (eeprom, cf, sd)"
+      ;;
+  esac
+}
+
 case $COMMAND in
   update)
     RESTART=$RUNNING
@@ -130,6 +162,9 @@ case $COMMAND in
     else
       echo "ZDE is not running"
     fi
+    ;;
+  image)
+    make_image $@
     ;;
   rebuild)
     if [ "$RUNNING" = "0" ]; then
