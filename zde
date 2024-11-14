@@ -158,7 +158,7 @@ case $COMMAND in
     ;;
   make)
     if [ "$RUNNING" = "0" ]; then
-      docker exec -t $CONTAINER_NAME make $@
+      docker exec --env-file=$ZDE_PATH/.env -t $CONTAINER_NAME make $@
     else
       echo "ZDE is not running"
     fi
