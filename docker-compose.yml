@@ -1,6 +1,7 @@
 services:
   zeal8bit-dev-env:
     container_name: zeal8bit
+    platform: linux/amd64
     privileged: true
     image: ${ZDE_IMAGE:-zoul0813/zeal-dev-environment}:${ZDE_VERSION:-latest}
     build:
