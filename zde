@@ -2,7 +2,7 @@
 
 set +x
 
-ZDE_PATH=$(dirname $0)
+ZDE_PATH=$(dirname "$0")
 mkdir -p ~/.zde
 
 ZDE_MOUNTED=
@@ -15,7 +15,7 @@ shift
 
 RUNNING="1"
 CONTAINER_NAME=zeal8bit
-COMPOSE_PATH=$ZDE_PATH/docker-compose.yml
+COMPOSE_PATH="$ZDE_PATH/docker-compose.yml"
 export ZDE_IMAGE=zoul0813/zeal-dev-environment
 export ZDE_VERSION="${ZDE_VERSION:=latest}"
 if command -v docker 2>&1 >/dev/null; then
@@ -51,7 +51,7 @@ emulator_start()
   if [ "$STATUS" = "3" ]; then
     docker exec -t zeal8bit supervisorctl start emulator
   fi
-  PATH=$PATH:$ZDE_PATH/bin $ZDE_PATH/bin/xdg-open "http://127.0.0.1:1145/?r=latest&$1"
+  PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1145/?r=latest&$1"
 }
 
 emulator_stop()
@@ -66,7 +66,7 @@ emulator_stop()
 stop()
 {
   if [ "$RUNNING" = "0" ]; then
-    docker compose -f ${COMPOSE_PATH} stop
+    docker compose -f "$COMPOSE_PATH" stop
     rm ~/.zde/mount
     RUNNING="1"
   else
@@ -77,7 +77,7 @@ stop()
 start()
 {
   if [ "$RUNNING" = "1" ]; then
-    docker compose -f ${COMPOSE_PATH} up -d
+    docker compose -f "$COMPOSE_PATH" up -d
     echo $PWD > ~/.zde/mount
     RUNNING="0"
   else
@@ -90,14 +90,14 @@ make_image()
   TYPE=$1
   SIZE=$2
 
-  if [ -f $ZDE_PATH/mnt/$TYPE.img ]; then
+  if [ -f "$ZDE_PATH/mnt/$TYPE.img" ]; then
     read -p "Image exists, overwrite? ([Y]es, [N]o)" -n 1 -r
     if [[ ! $REPLY =~ ^[Yy]$ ]]
     then
         [[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1
     fi
 
-    rm $ZDE_PATH/mnt/$TYPE.img
+    rm "$ZDE_PATH/mnt/$TYPE.img"
   fi
 
   shift
@@ -124,9 +124,9 @@ case $COMMAND in
       stop
     fi
     echo "Pulling latest Zeal 8-bit repositories"
-    git -C $ZDE_PATH checkout main
-    git -C $ZDE_PATH pull --recurse-submodules origin main
-    #git -C $ZDE_PATH submodule update --init --recursive --remote
+    git -C "$ZDE_PATH" checkout main
+    git -C "$ZDE_PATH" submodule init
+    git -C "$ZDE_PATH" pull --recurse-submodules origin main
     docker image pull ${ZDE_IMAGE}:${ZDE_VERSION}
     if [ "$RESTART" = "0" ]; then
       start
@@ -157,10 +157,10 @@ case $COMMAND in
     ;;
   make)
     if [[ ! -z "${ASEPRITE_PATH}" ]]; then
-      make -f $ZDE_PATH/home/zeal-game-dev-kit/aseprite.mk
+      make -f "$ZDE_PATH/home/zeal-game-dev-kit/aseprite.mk"
     fi
     if [ "$RUNNING" = "0" ]; then
-      docker exec --env-file=$ZDE_PATH/.env -t $CONTAINER_NAME make $@
+      docker exec --env-file="$ZDE_PATH/.env" -t $CONTAINER_NAME make $@
     else
       echo "ZDE is not running"
     fi
@@ -170,9 +170,9 @@ case $COMMAND in
     ;;
   rebuild)
     if [ "$RUNNING" = "0" ]; then
-      docker compose -f ${COMPOSE_PATH} down
+      docker compose -f "$COMPOSE_PATH" down
     fi
-    docker compose -f ${COMPOSE_PATH} build
+    docker compose -f "$COMPOSE_PATH" build
     ;;
   *)
     echo "Help: update, status, start, stop, make"
