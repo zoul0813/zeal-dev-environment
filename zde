@@ -125,9 +125,8 @@ case $COMMAND in
     fi
     echo "Pulling latest Zeal 8-bit repositories"
     git -C $ZDE_PATH checkout main
-    git -C $ZDE_PATH fetch
-    git -C $ZDE_PATH pull origin main
-    git -C $ZDE_PATH submodule update --init --recursive --remote
+    git -C $ZDE_PATH pull --recurse-submodules origin main
+    #git -C $ZDE_PATH submodule update --init --recursive --remote
     docker image pull ${ZDE_IMAGE}:${ZDE_VERSION}
     if [ "$RESTART" = "0" ]; then
       start
