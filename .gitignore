@@ -3,3 +3,5 @@
 /home/.npm
 .cache
 .vscode
+.cookiecutter_replay
+.cookiecutter

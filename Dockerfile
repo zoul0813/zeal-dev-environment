@@ -10,7 +10,8 @@ RUN echo "Installing prerequisites" \
   && apk add --no-cache py3-pillow \
   && python3 -m venv /opt/penv \
   && . /opt/penv/bin/activate \
-  && pip3 install kconfiglib
+  && pip3 install kconfiglib \
+  && pip3 install cookiecutter
 
 # SDCC
 RUN echo "Building SDCC" \

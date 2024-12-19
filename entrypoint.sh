@@ -1,11 +1,18 @@
 #!/bin/sh
 
-cd /home/zeal8bit/ZealFS && make
+if [ ! -f /home/zeal8bit/ZealFS/zealfs ]; then
+  echo "Building ZealFS"
+  cd /home/zeal8bit/ZealFS && make
+fi
+
 mkdir -p /mnt/eeprom
 mkdir -p /mnt/cf
 mkdir -p /mnt/sd
 
-cd /home/zeal8bit/Zeal-8-bit-OS/packer && make
+if [ ! -f /home/zeal8bit/Zeal-8-bit-OS/packer/pack ]; then
+  echo "Building Packer"
+  cd /home/zeal8bit/Zeal-8-bit-OS/packer && make
+fi
 
 cd /src
 
