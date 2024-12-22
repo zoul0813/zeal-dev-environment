@@ -8,5 +8,8 @@
 #define __banked
 #define __naked
 #endif
+#ifdef __SDCC_VERSION_MAJOR
+#define __attribute__(a)
+#endif
 
 #endif
