@@ -28,6 +28,7 @@ AlwaysBreakBeforeMultilineStrings: false
 BinPackArguments: true
 BinPackParameters: true
 BreakBeforeBraces: Custom
+# InsertBraces: true
 BraceWrapping:
   AfterFunction:   true
   AfterCaseLabel:  false
@@ -149,5 +150,4 @@ TabWidth:        4
 # LineEnding:      LF
 UseCRLF:         false
 UseTab:          Never
-
-
+InsertNewlineAtEOF: true
