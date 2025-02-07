@@ -14,16 +14,17 @@ COMMAND=$1
 shift
 
 RUNNING="1"
-CONTAINER_CMD=docker
+CONTAINER_CMD="${ZDE_USE:-default}"
 CONTAINER_NAME=zeal8bit
 COMPOSE_PATH="$ZDE_PATH/docker-compose.yml"
 export ZDE_IMAGE=zoul0813/zeal-dev-environment
 export ZDE_VERSION="${ZDE_VERSION:=latest}"
 # export ZDE_PLATFORM=linux/amd64
-if command -v docker 2>&1 >/dev/null; then
+if ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "docker" ]) && command -v docker 2>&1 >/dev/null; then
+  CONTAINER_CMD=docker
   $CONTAINER_CMD ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
   RUNNING=$?
-elif command -v podman 2>&1 >/dev/null; then
+elif ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "podman" ]) && command -v podman 2>&1 >/dev/null; then
   CONTAINER_CMD=podman
   $CONTAINER_CMD ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
   RUNNING=$?
@@ -139,11 +140,13 @@ case $COMMAND in
     fi
     ;;
   status)
+    echo -n "ZDE is "
     if [ "$RUNNING" = "1" ]; then
-      echo "ZDE is stopped"
+      echo "stopped"
     else
-      echo "ZDE is running, mounted to ${ZDE_MOUNTED}"
+      echo -n "running, mounted to ${ZDE_MOUNTED}"
     fi
+    echo " with ${CONTAINER_CMD}"
     ;;
   start)
     start $@
