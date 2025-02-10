@@ -175,7 +175,7 @@ case $COMMAND in
     fi
     ;;
   create)
-    $CONTAINER_CMD run --rm -v .:/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
+    $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
     ;;
   image)
     make_image $@
