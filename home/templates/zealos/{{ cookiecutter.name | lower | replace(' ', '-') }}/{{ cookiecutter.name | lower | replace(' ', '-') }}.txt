@@ -1,0 +1,13 @@
+.TH {{ cookiecutter.name }} 1 "{% now 'local', '%d %b %Y' %}" {{ cookiecutter.name }} "{{ cookiecutter.name }} manual"
+.SH NAME
+{{ cookiecutter.name }} \- {{ cookiecutter.description }}
+.SH SYNOPSIS
+{{ cookiecutter.name }}
+.SH DESCRIPTION
+{{ cookiecutter.description }}
+.SH OPTIONS
+
+.SH SEE ALSO
+
+.SH BUGS
+No known bugs.

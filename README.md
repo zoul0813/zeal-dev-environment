@@ -41,23 +41,47 @@ zde COMMAND [OPTIONS]
 
 * `make` - execute make, passing all additional arguments (ie; `zde make all`)
 
-  You can pass additional arguments to `zde make`, such as `zde make all` or `zde make clean`, etc.
+  > You can pass additional arguments to `zde make`, such as `zde make all` or `zde make clean`, etc.
 
 * `emu[lator]` - launches the Zeal Web Emulator at (http://127.0.0.1:1145/?r=latest)
 
-  You can optionally pass `stop` and `start` to stop or start the emulator.
-
-  In addition, you can pass a URL encoded query string to pass additional arguments to the emulator, such as the preferred ROM to use (default: `r=latest`).  Refer to the Zeal-WebEmulator docs for available options.
+  > You can optionally pass `stop` and `start` to stop or start the emulator.
+  >
+  > In addition, you can pass a URL encoded query string to pass additional arguments to the emulator,
+  > such as the preferred ROM to use (default: `r=latest`).  Refer to the Zeal-WebEmulator docs for
+  > available options.
 
 * `image` - generates [eeprom,sd,cf] disk images from files contained within $ZDE_PATH/mnt/[eeprom,sd,cf]
 
-  This option copies the contents of $ZDE_PATH/mnt/[eeprom,sd,cf] into $ZDE_PATH/mnt/[eeprom,sd,cf].img
-
-  You can optionally pass an additional "size" (32,64,etc) to create a 32k or 64k ZealFS image
-
-  For example, `zde image eeprom 64` will copy the contents of $ZDE_PATH/mnt/eeprom to $ZDE_PATH/mnt/eeprom.img and create a 64k image file that can be flashed to the 64k EEPROM on Zeal 8-bit Computer.
+  > This option copies the contents of $ZDE_PATH/mnt/[eeprom,sd,cf] into $ZDE_PATH/mnt/[eeprom,sd,cf].img
+  >
+  > You can optionally pass an additional "size" (32,64,etc) to create a 32k or 64k ZealFS image
+  >
+  > For example, `zde image eeprom 64` will copy the contents of >$ZDE_PATH/mnt/eeprom to
+  > $ZDE_PATH/mnt/eeprom.img and create a 64k image file that can be flashed to the 64k EEPROM on Zeal 8-bit Computer.
 
 * `rebuild` - rebuilds the ZDE docker image, this is for ZDE development and not something users should need to use
+
+* `create` - creates a new project from available templates
+
+  > Usage: `zde create {template} name={project_name}`
+  >
+  > Templates: `zealos`, `zgdk`
+  >
+  > The project template is created in the current working folder, so you will have a `project_name` folder in
+  > your current path after executing.
+
+### `zde create` example
+  ```shell
+  $ cd /path/to/root
+  $ zde create zealos name=hello
+  $ cd hello
+  $ zde restart
+  $ zde make
+  $ zde emu
+  ```
+  The project will produce a `{project_name}.bin`, so in the case of the example you would have `hello.bin`
+  to run in the emulator.
 
 
 ## Included Features
