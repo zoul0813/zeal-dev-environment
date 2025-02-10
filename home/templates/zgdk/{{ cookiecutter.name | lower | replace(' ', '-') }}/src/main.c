@@ -70,7 +70,7 @@ void deinit(void) {
 
     error err;
     err = player_deinit();
-    handle_error(err, "failed to deinit player", 1);
+    handle_error(err, "failed to deinit player", 0);
 }
 
 void reset(void) {
