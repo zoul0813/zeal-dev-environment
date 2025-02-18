@@ -16,3 +16,6 @@
 [submodule "home/zeal-game-dev-kit"]
 	path = home/zeal-game-dev-kit
 	url = https://github.com/zoul0813/zeal-game-dev-kit.git
+[submodule "home/zeal-archiver"]
+	path = home/zeal-archiver
+	url = https://github.com/zoul0813/zeal-archiver
