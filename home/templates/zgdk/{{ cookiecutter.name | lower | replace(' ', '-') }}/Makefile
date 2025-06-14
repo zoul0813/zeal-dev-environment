@@ -64,10 +64,21 @@ BIN={{ cookiecutter.name | lower }}.bin
 # ZGDK Specific
 ##
 
+# ZGDK_DEBUG=1
 # ASEPRITE_PATH ?= ~/.steam/debian-installation/steamapps/common/Aseprite/aseprite
+# ASSETS_OUTPUT=assets
 # GIF_SRCS=$(ASEPRITE_SRCS:.aseprite=.gif)
 # ZTS_SRCS=$(GIF_SRCS:.gif=.zts)
 # ZTM_SRCS=$(TILEMAP_SRCS:.tmx=.ztm)
+# GFX_BITS=8
+GFX_COMPRESSED=1
+# GFX_STRIP=16
+# GFX_COLORS=16
+# TILED_SIZE ?= 0
+# TILED_LAYER ?= 0
+# TILED_COMPRESSED ?= 0
+# TILED_OUTPUT ?= 0
+# ZAR_HEADER ?= 0
 
 # Set these #define flags
 # EMULATOR=1
@@ -89,7 +100,6 @@ ifndef ZGDK_PATH
 	$(error "Failure: ZGDK_PATH variable not found. It must point to ZGDK path.")
 endif
 
-GFX_STRIP = 48
 
 include $(ZGDK_PATH)/base_sdcc.mk
 
