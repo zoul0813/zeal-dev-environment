@@ -33,6 +33,8 @@ zde COMMAND [OPTIONS]
 
 * `update` - pulls the latest ZDE updates, along with associated Zeal repos
 
+* `status` - shows the current status (running, mounted to, with docker/podman)
+
 * `start` - start ZDE, mounting the current directory as the project root (ie; /src)
 
 * `stop` - stop ZDE
