@@ -70,6 +70,45 @@ emulator_stop()
   fi
 }
 
+playground()
+{
+  CMD=$1
+  case $CMD in
+    start)
+      shift
+      playground_start $@
+      ;;
+    stop)
+      shift
+      playground_stop
+      ;;
+    *)
+      playground_start $@
+      ;;
+  esac
+}
+
+playground_start()
+{
+  # supervisord -c /etc/supervisord.conf
+  $CONTAINER_CMD exec -t zeal8bit supervisorctl status playground
+  STATUS=$?
+  if [ "$STATUS" = "3" ]; then
+    $CONTAINER_CMD exec -t zeal8bit /home/zeal8bit/Zeal-Playground/tools/build_manifest.py /home/zeal8bit/Zeal-Playground/files /home/zeal8bit/Zeal-Playground/files/manifest.json
+    $CONTAINER_CMD exec -t zeal8bit supervisorctl start playground
+  fi
+  PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1155/?r=latest&$1"
+}
+
+playground_stop()
+{
+  $CONTAINER_CMD exec -t zeal8bit supervisorctl status playground
+  STATUS=$?
+  if [ "$STATUS" = "0" ]; then
+    $CONTAINER_CMD exec -t zeal8bit supervisorctl stop playground
+  fi
+}
+
 stop()
 {
   if [ "$RUNNING" = "0" ]; then
@@ -163,6 +202,9 @@ case $COMMAND in
     ;;
   emulator)
     emulator $@
+    ;;
+  playground)
+    playground $@
     ;;
   make)
     if [[ ! -z "${ASEPRITE_PATH}" ]]; then

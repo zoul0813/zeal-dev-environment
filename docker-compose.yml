@@ -21,7 +21,9 @@ services:
     volumes:
       - ${PWD}:/src
       - ./home:/home/zeal8bit
-      - ./mnt:/mnt
+      - ./mnt:/mnt\
+      - ./etc/supervisor.d:/etc/supervisor.d
     ports:
       - 1145:1145
+      - 1155:1155
     command: ["sleep","infinity"]

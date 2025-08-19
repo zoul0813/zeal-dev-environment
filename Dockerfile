@@ -70,6 +70,7 @@ RUN echo "Installing supervisord" \
   && mkdir -p /etc/supervisor.d
 COPY etc/supervisord.conf /etc/supervisord.conf
 COPY etc/supervisor.d/emulator.ini /etc/supervisor.d/emulator.ini
+COPY etc/supervisor.d/playground.ini /etc/supervisor.d/playground.ini
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
