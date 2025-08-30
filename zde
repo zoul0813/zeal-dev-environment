@@ -167,7 +167,6 @@ make_image()
 case $COMMAND in
   -i)
     echo "ZDE: Interactive Mode"
-    set -x
     if [ "$1" = "-b" ]; then
       CONTAINER_SERVICE=zeal8bit-build-env
     fi

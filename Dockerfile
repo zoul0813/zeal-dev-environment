@@ -74,6 +74,10 @@ COPY etc/supervisord.conf /etc/supervisord.conf
 COPY etc/supervisor.d/emulator.ini /etc/supervisor.d/emulator.ini
 COPY etc/supervisor.d/playground.ini /etc/supervisor.d/playground.ini
 
+RUN echo "Installing python modules" \
+  && . /opt/penv/bin/activate \
+  && pip3 install pillow
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
