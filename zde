@@ -16,6 +16,7 @@ shift
 RUNNING="1"
 CONTAINER_CMD="${ZDE_USE:-default}"
 CONTAINER_NAME=zeal8bit
+CONTAINER_SERVICE=zeal8bit-dev-env
 COMPOSE_PATH="$ZDE_PATH/docker-compose.yml"
 export ZDE_IMAGE=zoul0813/zeal-dev-environment
 export ZDE_VERSION="${ZDE_VERSION:=latest}"
@@ -53,20 +54,20 @@ emulator()
 emulator_start()
 {
   # supervisord -c /etc/supervisord.conf
-  $CONTAINER_CMD exec -t zeal8bit supervisorctl status emulator
+  $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl status emulator
   STATUS=$?
   if [ "$STATUS" = "3" ]; then
-    $CONTAINER_CMD exec -t zeal8bit supervisorctl start emulator
+    $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl start emulator
   fi
   PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1145/?r=latest&$1"
 }
 
 emulator_stop()
 {
-  $CONTAINER_CMD exec -t zeal8bit supervisorctl status emulator
+  $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl status emulator
   STATUS=$?
   if [ "$STATUS" = "0" ]; then
-    $CONTAINER_CMD exec -t zeal8bit supervisorctl stop emulator
+    $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl stop emulator
   fi
 }
 
@@ -91,21 +92,21 @@ playground()
 playground_start()
 {
   # supervisord -c /etc/supervisord.conf
-  $CONTAINER_CMD exec -t zeal8bit supervisorctl status playground
+  $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl status playground
   STATUS=$?
   if [ "$STATUS" = "3" ]; then
     $CONTAINER_CMD exec -t zeal8bit /home/zeal8bit/Zeal-Playground/tools/build_manifest.py /home/zeal8bit/Zeal-Playground/files /home/zeal8bit/Zeal-Playground/files/manifest.json
-    $CONTAINER_CMD exec -t zeal8bit supervisorctl start playground
+    $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl start playground
   fi
   PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1155/?r=latest&$1"
 }
 
 playground_stop()
 {
-  $CONTAINER_CMD exec -t zeal8bit supervisorctl status playground
+  $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl status playground
   STATUS=$?
   if [ "$STATUS" = "0" ]; then
-    $CONTAINER_CMD exec -t zeal8bit supervisorctl stop playground
+    $CONTAINER_CMD exec -t zeal8bit /opt/penv/bin/supervisorctl stop playground
   fi
 }
 
@@ -164,6 +165,14 @@ make_image()
 }
 
 case $COMMAND in
+  -i)
+    echo "ZDE: Interactive Mode"
+    set -x
+    if [ "$1" = "-b" ]; then
+      CONTAINER_SERVICE=zeal8bit-build-env
+    fi
+    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm $CONTAINER_SERVICE /bin/bash
+    ;;
   update)
     RESTART=$RUNNING
     if [ "$RUNNING" = "0" ]; then

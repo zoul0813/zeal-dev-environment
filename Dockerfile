@@ -1,11 +1,11 @@
-FROM z88dk/z88dk:20241014
+FROM z88dk/z88dk:20250825
 
 ENV HOME=/home/zeal8bit
 
 # Dev Tools
 RUN echo "Installing prerequisites" \
   && apk update \
-  && apk add --no-cache bash git curl python3 py3-pip build-base bison flex zlib-dev boost-dev \
+  && apk add --no-cache bash git curl python3 py3-pip build-base cmake bison flex zlib-dev boost-dev \
   && apk add --no-cache fuse3 fuse3-libs fuse3-dev pkgconf \
   && apk add --no-cache py3-pillow \
   && python3 -m venv /opt/penv \
@@ -30,13 +30,28 @@ RUN echo "Building SDCC" \
 		--disable-r2k-port \
 		--disable-non-free \
 		--disable-ucsim \
-    && make all \
-    && ln -s /opt/sdcc/sdcc-4.4.0/bin /opt/sdcc/bin \
-    && ln -s /opt/sdcc/sdcc-4.4.0/device/include /opt/sdcc/include \
-    && ln -s /opt/sdcc/sdcc-4.4.0/device/lib /opt/sdcc/lib
+    --prefix=/opt/sdcc \
+  && make all \
+  && make install
 
 # --disable-sdcpp --disable-packihx --disable-sdcdb --disable-sdbinutil --disable-device-lib
 # => => # /opt/sdcc/src/sdcc-build/bin/sdcc -I./../../include -I. --std-c23  -mr2ka --max-allocs-per-node 25000 -c ../_sint2fs.c -o _sint2fs
+
+# GNU AS
+RUN echo "Building GNU AS" \
+  && mkdir -p /opt/gnu-as \
+  && curl -L https://ftp.gnu.org/gnu/binutils/binutils-2.41.tar.gz -o /opt/gnu-as/binutils-2.41.tar.gz \
+  && tar xzf /opt/gnu-as/binutils-2.41.tar.gz -C /opt/gnu-as \
+  && cd /opt/gnu-as/binutils-2.41 \
+  && mkdir build && cd build \
+  && ../configure --target=z80-elf --host=x86_64-linux-musl --prefix=/opt/gnu-as --disable-nls \
+  && make MAKEINFO=true -j$(nproc) \
+  && make MAKEINFO=true install
+
+# ZealFS
+RUN echo "Setting up ZealFS" \
+  && apk add --no-cache rsync \
+  && mkdir -p /media/zealfs
 
 ENV \
   ZDE="true" \
@@ -44,28 +59,15 @@ ENV \
   ZVB_SDK_PATH="$HOME/Zeal-VideoBoard-SDK" \
   ZGDK_PATH="$HOME/zeal-game-dev-kit" \
   SDCC_PATH="/opt/sdcc" \
-  PYTHON_BIN="/opt/penv/bin"
+  GNUAS_PATH="/opt/gnu-as" \
+  PYTHON_BIN="/opt/penv/bin" \
+  PATH="$PATH:/opt/sdcc/bin:/opt/gnu-as/bin:/home/zeal8bit/Zeal-8-bit-OS/tools:/home/zeal8bit/Zeal-VideoBoard-SDK/tools/zeal2gif"
 
-ENV \
-  # CPATH="$SDCC_PATH/include" \
-  # LIBRARY_PATH="$SDCC_PATH/lib" \
-  PATH="$PATH:$ZOS_PATH/tools:$ZVB_SDK_PATH/tools/zeal2gif:$SDCC_PATH/bin"
-
-# # Zeal 8-bit Repos
-# RUN echo "Cloning repos" \
-#   && git clone --depth=1 --recurse-submodules --shallow-submodules https://github.com/Zeal8bit/Zeal-Bootloader.git ${HOME}/Zeal-Bootloader \
-#   && git clone --depth=1 --recurse-submodules --shallow-submodules https://github.com/Zeal8bit/Zeal-8-bit-OS.git ${HOME}/Zeal-8-bit-OS \
-#   && git clone --depth=1 --recurse-submodules --shallow-submodules https://github.com/Zeal8bit/ZealFS.git ${HOME}/ZealFS \
-#   && git clone --depth=1 --recurse-submodules --shallow-submodules https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git ${HOME}/Zeal-VideoBoard-SDK \
-#   && git clone --depth=1 --recurse-submodules --shallow-submodules https://github.com/Zeal8bit/Zeal-WebEmulator.git ${HOME}/Zeal-WebEmulator
-
-# ZealFS
-RUN echo "Setting up ZealFS" \
-  && apk add --no-cache rsync \
-  && mkdir -p /media/zealfs
 
 RUN echo "Installing supervisord" \
-  && apk add --no-cache nodejs npm supervisor \
+  && apk add --no-cache nodejs npm \
+  && . /opt/penv/bin/activate \
+  && pip3 install --upgrade "setuptools<81" supervisor \
   && mkdir -p /var/log/supervisor \
   && mkdir -p /etc/supervisor.d
 COPY etc/supervisord.conf /etc/supervisord.conf

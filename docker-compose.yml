@@ -10,18 +10,12 @@ services:
       platforms:
         - "linux/amd64"
     restart: on-failure
-    environment:
-      ZDE: true
-      ZOS_PATH: /home/zeal8bit/Zeal-8-bit-OS
-      ZVB_SDK_PATH: /home/zeal8bit/Zeal-VideoBoard-SDK
-      ZGDK_PATH: /home/zeal8bit/zeal-game-dev-kit
-      SDCC_PATH: /opt/sdcc
-      PYTHON_BIN: /opt/penv/bin
-      ZAR_PATH: /home/zeal8bit/zeal-archiver
+    env_file:
+      - .env
     volumes:
       - ${PWD}:/src
       - ./home:/home/zeal8bit
-      - ./mnt:/mnt\
+      - ./mnt:/mnt
       - ./etc/supervisor.d:/etc/supervisor.d
     ports:
       - 1145:1145

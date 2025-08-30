@@ -1,5 +1,7 @@
 #!/bin/sh
 
+. /opt/penv/bin/activate
+
 if [ ! -f /home/zeal8bit/ZealFS/zealfs ]; then
   echo "Building ZealFS"
   cd /home/zeal8bit/ZealFS && make
