@@ -207,34 +207,42 @@ case $COMMAND in
     fi
     echo " with ${CONTAINER_CMD}"
     ;;
-  start)
+  start|restart)
+    if [ "$RUNNING" = "0" ]; then
+      stop
+    fi
     start $@
     ;;
   stop)
     stop $@
     ;;
-  restart)
-    stop
-    start $@
-    ;;
-  emu)
-    emulator $@
-    ;;
-  emulator)
+  emu|emulator)
+    if [ "$RUNNING" = "1" ]; then
+      start
+    fi
     emulator $@
     ;;
   playground)
+    if [ "$RUNNING" = "1" ]; then
+      start
+    fi
     playground $@
     ;;
   make)
     if [[ ! -z "${ASEPRITE_PATH}" ]]; then
       make -f "$ZDE_PATH/home/zeal-game-dev-kit/aseprite.mk"
     fi
-    if [ "$RUNNING" = "0" ]; then
-      $CONTAINER_CMD exec --env-file="$ZDE_PATH/.env" -t $CONTAINER_NAME make $@
+    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE make $@
+    ;;
+  cmake)
+    BUILD_DIR=${1:-build}
+    if [ ! -d "$BUILD_DIR" ]; then
+      echo "Generating build directory"
+      $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE cmake -B $BUILD_DIR
     else
-      echo "ZDE is not running"
+      echo "Build directory exists"
     fi
+    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE cmake --build $BUILD_DIR
     ;;
   create)
     $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"

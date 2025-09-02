@@ -76,6 +76,10 @@ zde COMMAND [OPTIONS]
 
   > You can pass additional arguments to `zde make`, such as `zde make all` or `zde make clean`, etc.
 
+* `cmake` - execute cmake in the current directory
+
+  > You can optionally pass the name of the cmake build dir `zde cmake bin`, by default it assumes `build`
+
 * `emu[lator]` - launches the Zeal Web Emulator at (http://127.0.0.1:1145/?r=latest)
 
   > You can optionally pass `stop` and `start` to stop or start the emulator.
@@ -83,6 +87,10 @@ zde COMMAND [OPTIONS]
   > In addition, you can pass a URL encoded query string to pass additional arguments to the emulator,
   > such as the preferred ROM to use (default: `r=latest`).  Refer to the Zeal-WebEmulator docs for
   > available options.
+
+* `playground` - launches the Zeal Playground at (http://127.0.0.1:1155/?r=latest)
+
+  > You can optionally pass `stop` and `start` to stop or start the emulator.
 
 * `image` - generates [eeprom,sd,cf] disk images from files contained within $ZDE_PATH/mnt/[eeprom,sd,cf]
 
@@ -159,7 +167,6 @@ various other paths will be setup for you.
   $ cd /path/to/root
   $ zde create zealos name=hello
   $ cd hello
-  $ zde restart
   $ zde make
   $ zde emu
   ```
