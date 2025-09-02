@@ -5,6 +5,8 @@ set +x
 ZDE_PATH=$(dirname "$0")
 mkdir -p ~/.zde
 
+ZDE_BRANCH="${ZDE_BRANCH:-main}"
+
 ZDE_MOUNTED=
 if [ -f ~/.zde/mount ]; then
   ZDE_MOUNTED=$(cat ~/.zde/mount)
@@ -23,11 +25,11 @@ export ZDE_VERSION="${ZDE_VERSION:=latest}"
 # export ZDE_PLATFORM=linux/amd64
 if ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "docker" ]) && command -v docker 2>&1 >/dev/null; then
   CONTAINER_CMD=docker
-  $CONTAINER_CMD ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
+  $CONTAINER_CMD ps --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"
   RUNNING=$?
 elif ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "podman" ]) && command -v podman 2>&1 >/dev/null; then
   CONTAINER_CMD=podman
-  $CONTAINER_CMD ps --filter "name=$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"
+  $CONTAINER_CMD ps --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"
   RUNNING=$?
 else
   echo "WARNING: docker/podman not found, ensure docker, or podman, is installed before using ZDE"
@@ -114,7 +116,9 @@ stop()
 {
   if [ "$RUNNING" = "0" ]; then
     $CONTAINER_CMD compose -f "$COMPOSE_PATH" stop
-    rm ~/.zde/mount
+    if [ -e ~/.zde/mount ]; then
+      rm ~/.zde/mount
+    fi
     RUNNING="1"
   else
     echo "ZDE is not running"
@@ -170,7 +174,15 @@ case $COMMAND in
     if [ "$1" = "-b" ]; then
       CONTAINER_SERVICE=zeal8bit-build-env
     fi
-    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm $CONTAINER_SERVICE /bin/bash
+    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE /bin/bash
+    ;;
+  activate)
+    if [ -t 1 ]; then
+      # stdout is a terminal → probably not being used with eval
+      echo "⚠️  This script must be run with: eval \"\$(zde activate)\"" >&2
+    else
+      $ZDE_PATH/bin/activate
+    fi
     ;;
   update)
     RESTART=$RUNNING
@@ -178,10 +190,10 @@ case $COMMAND in
       stop
     fi
     echo "Pulling latest Zeal 8-bit repositories"
-    git -C "$ZDE_PATH" checkout main
+    git -C "$ZDE_PATH" checkout $ZDE_BRANCH
     git -C "$ZDE_PATH" submodule init
-    git -C "$ZDE_PATH" pull --recurse-submodules origin main
-    $CONTAINER_CMD image pull ${ZDE_IMAGE}:${ZDE_VERSION}
+    git -C "$ZDE_PATH" pull --recurse-submodules origin $ZDE_BRANCH
+    $CONTAINER_CMD image pull docker.io/${ZDE_IMAGE}:${ZDE_VERSION}
     if [ "$RESTART" = "0" ]; then
       start
     fi
