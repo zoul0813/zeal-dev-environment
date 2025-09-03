@@ -1,22 +1,30 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 # Resolve the directory where this script lives
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ -n "$BASH_VERSION" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [ -n "$ZSH_VERSION" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
+else
+    # Fallback, may fail in some sh implementations
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
 
-# Go up two levels from bin/activate → project root
-ZEAL_HOME="$(cd "$SCRIPT_DIR/.." && pwd)/home"
+# Go up a level from bin/activate → project root
+ZDE_HOME="$(cd "$SCRIPT_DIR/.." && pwd)/home"
+
 
 # Export the variable so it persists in this shell session
-export ZEAL_HOME
-export ZDE_PATH="$ZEAL_HOME/.."
-export ZOS_PATH="$ZEAL_HOME/Zeal-8-bit-OS"
-export ZVB_SDK_PATH="$ZEAL_HOME/Zeal-VideoBoard-SDK"
-export ZGDK_PATH="$ZEAL_HOME/zeal-game-dev-kit"
-export ZAR_PATH="$ZEAL_HOME/zeal-archiver"
+export ZDE_HOME
+export ZDE_PATH="$ZDE_HOME/.."
+export ZOS_PATH="$ZDE_HOME/Zeal-8-bit-OS"
+export ZVB_SDK_PATH="$ZDE_HOME/Zeal-VideoBoard-SDK"
+export ZGDK_PATH="$ZDE_HOME/zeal-game-dev-kit"
+export ZAR_PATH="$ZDE_HOME/zeal-archiver"
 
 export PATH="$ZDE_PATH:$PATH"
 export PATH="$ZOS_PATH/tools:$PATH"
 export PATH="$ZVB_SDK_PATH/tools/zeal2gif:$PATH"
 export PATH="$ZVB_SDK_PATH/tools/tiled2zeal:$PATH"
-export PATH="$ZEAL_HOME/zeal-archiver:$PATH"
+export PATH="$ZDE_HOME/zeal-archiver:$PATH"
 export PATH="$ZDE_PATH:$PATH"

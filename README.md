@@ -145,17 +145,17 @@ This will export a handful of env vars used by Zeal build tools,
 for example:
 
 ```shell
-export ZDE_PATH="$ZEAL_HOME/.."
-export ZOS_PATH="$ZEAL_HOME/Zeal-8-bit-OS"
-export ZVB_SDK_PATH="$ZEAL_HOME/Zeal-VideoBoard-SDK"
-export ZGDK_PATH="$ZEAL_HOME/zeal-game-dev-kit"
-export ZAR_PATH="$ZEAL_HOME/zeal-archiver"
+export ZDE_PATH="$ZDE_HOME/.."
+export ZOS_PATH="$ZDE_HOME/Zeal-8-bit-OS"
+export ZVB_SDK_PATH="$ZDE_HOME/Zeal-VideoBoard-SDK"
+export ZGDK_PATH="$ZDE_HOME/zeal-game-dev-kit"
+export ZAR_PATH="$ZDE_HOME/zeal-archiver"
 
 export PATH="$ZDE_PATH:$PATH"
 export PATH="$ZOS_PATH/tools:$PATH"
 export PATH="$ZVB_SDK_PATH/tools/zeal2gif:$PATH"
 export PATH="$ZVB_SDK_PATH/tools/tiled2zeal:$PATH"
-export PATH="$ZEAL_HOME/zeal-archiver:$PATH"
+export PATH="$ZDE_HOME/zeal-archiver:$PATH"
 export PATH="$ZDE_PATH:$PATH"
 ```
 
