@@ -6,25 +6,33 @@ if [ -n "$BASH_VERSION" ]; then
 elif [ -n "$ZSH_VERSION" ]; then
     SCRIPT_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
 else
-    # Fallback, may fail in some sh implementations
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 fi
 
-# Go up a level from bin/activate → project root
 ZDE_HOME="$(cd "$SCRIPT_DIR/.." && pwd)/home"
 
+set_vars() {
+    cat <<EOF
+export ZDE_HOME="$ZDE_HOME"
+export ZDE_PATH="\$ZDE_HOME/.."
+export ZOS_PATH="\$ZDE_HOME/Zeal-8-bit-OS"
+export ZVB_SDK_PATH="\$ZDE_HOME/Zeal-VideoBoard-SDK"
+export ZGDK_PATH="\$ZDE_HOME/zeal-game-dev-kit"
+export ZAR_PATH="\$ZDE_HOME/zeal-archiver"
 
-# Export the variable so it persists in this shell session
-export ZDE_HOME
-export ZDE_PATH="$ZDE_HOME/.."
-export ZOS_PATH="$ZDE_HOME/Zeal-8-bit-OS"
-export ZVB_SDK_PATH="$ZDE_HOME/Zeal-VideoBoard-SDK"
-export ZGDK_PATH="$ZDE_HOME/zeal-game-dev-kit"
-export ZAR_PATH="$ZDE_HOME/zeal-archiver"
+export PATH="\$ZDE_PATH:\$PATH"
+export PATH="\$ZOS_PATH/tools:\$PATH"
+export PATH="\$ZVB_SDK_PATH/tools/zeal2gif:\$PATH"
+export PATH="\$ZVB_SDK_PATH/tools/tiled2zeal:\$PATH"
+export PATH="\$ZDE_HOME/zeal-archiver:\$PATH"
+export PATH="\$ZDE_PATH:\$PATH"
+EOF
+}
 
-export PATH="$ZDE_PATH:$PATH"
-export PATH="$ZOS_PATH/tools:$PATH"
-export PATH="$ZVB_SDK_PATH/tools/zeal2gif:$PATH"
-export PATH="$ZVB_SDK_PATH/tools/tiled2zeal:$PATH"
-export PATH="$ZDE_HOME/zeal-archiver:$PATH"
-export PATH="$ZDE_PATH:$PATH"
+# If we are sourced, apply directly.
+# If not, just print so it can be used with eval.
+if [ "${BASH_SOURCE[0]}" != "$0" ] || [ -n "$ZSH_EVAL_CONTEXT" ]; then
+    eval "$(set_vars)"
+else
+    set_vars
+fi

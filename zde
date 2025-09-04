@@ -22,6 +22,7 @@ CONTAINER_SERVICE=zeal8bit-dev-env
 COMPOSE_PATH="$ZDE_PATH/docker-compose.yml"
 export ZDE_IMAGE=zoul0813/zeal-dev-environment
 export ZDE_VERSION="${ZDE_VERSION:=latest}"
+export ZEAL_KERNEL_VERSION=$(git -C $ZDE_PATH/home/Zeal-8-bit-OS describe --tags)
 # export ZDE_PLATFORM=linux/amd64
 if ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "docker" ]) && command -v docker 2>&1 >/dev/null; then
   CONTAINER_CMD=docker
@@ -34,6 +35,8 @@ elif ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "podman" ]) && co
 else
   echo "WARNING: docker/podman not found, ensure docker, or podman, is installed before using ZDE"
 fi
+CONTAINER_EXEC=("$CONTAINER_CMD" "compose" "-f" "$COMPOSE_PATH" "run" "-i" "--rm" "--entrypoint" "")
+
 
 emulator()
 {
@@ -154,13 +157,13 @@ make_image()
   shift
   case $TYPE in
     eeprom)
-      $CONTAINER_CMD exec -t $CONTAINER_NAME /home/zeal8bit/zsync.sh eeprom ${SIZE:=32}
+      "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh eeprom ${SIZE:=32}
       ;;
     cf)
-      $CONTAINER_CMD exec -t $CONTAINER_NAME /home/zeal8bit/zsync.sh cf ${SIZE:=64}
+      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh cf ${SIZE:=64}
       ;;
     sd)
-      $CONTAINER_CMD exec -t $CONTAINER_NAME /home/zeal8bit/zsync.sh sd ${SIZE:=64}
+      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh sd ${SIZE:=64}
       ;;
     *)
       echo "Invalid arguments, must provide TYPE (eeprom, cf, sd)"
@@ -174,7 +177,7 @@ case $COMMAND in
     if [ "$1" = "-b" ]; then
       CONTAINER_SERVICE=zeal8bit-build-env
     fi
-    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE /bin/bash
+    $"${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /bin/bash
     ;;
   activate)
     if [ -t 1 ]; then
@@ -232,7 +235,7 @@ case $COMMAND in
     if [[ ! -z "${ASEPRITE_PATH}" ]]; then
       make -f "$ZDE_PATH/home/zeal-game-dev-kit/aseprite.mk"
     fi
-    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE make $@
+    $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE make $@
     ;;
   cmake)
     BUILD_DIR=${1:-build}
@@ -242,7 +245,11 @@ case $COMMAND in
     else
       echo "Build directory exists"
     fi
-    $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE cmake --build $BUILD_DIR
+    $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake --build $BUILD_DIR
+    ;;
+  kernel)
+    KERNEL_CONFIG=${1:-zeal8bit}
+    $"${CONTAINER_EXEC[@]}"  -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
     ;;
   create)
     $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
