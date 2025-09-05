@@ -13,9 +13,11 @@ mkdir -p /mnt/sd
 
 cd /src
 
-supervisord -c /etc/supervisord.conf
+if [ "$(id -u)" = "0" ]; then
+  supervisord -c /etc/supervisord.conf
+fi
 
-echo "Welcome to Zeal Dev Environment"
+cat /home/zeal8bit/motd.txt
 
 exec "$@"
 
