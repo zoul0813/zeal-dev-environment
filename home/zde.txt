@@ -1,0 +1,12 @@
+ZDE Interactive Mode Help
+
+# Commands
+
+* make
+* cmake
+
+# Paths
+
+/home/zeal8bit
+/src
+/mnt

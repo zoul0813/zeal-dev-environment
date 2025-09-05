@@ -78,6 +78,9 @@ RUN echo "Installing python modules" \
   && . /opt/penv/bin/activate \
   && pip3 install pillow
 
+RUN echo "Installing su-exec" \
+  && apk add --no-cache su-exec
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

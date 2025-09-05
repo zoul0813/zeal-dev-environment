@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set +x
-# set -x
 
 ZDE_PATH=$(dirname "$0")
 mkdir -p ~/.zde
@@ -36,7 +35,10 @@ elif ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "podman" ]) && co
 else
   echo "WARNING: docker/podman not found, ensure docker, or podman, is installed before using ZDE"
 fi
-CONTAINER_EXEC=("$CONTAINER_CMD" "compose" "-f" "$COMPOSE_PATH" "run" "-i" "--rm" "--user" $(id -u):$(id -g) "--entrypoint" "")
+# CONTAINER_EXEC=("$CONTAINER_CMD" "compose" "-f" "$COMPOSE_PATH" "run" "-i" "--rm" "--user" $(id -u):$(id -g) "--entrypoint" "")
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
+CONTAINER_EXEC=("$CONTAINER_CMD" "compose" "-f" "$COMPOSE_PATH" "run" "-i" "--rm" "-e" "HOST_UID=${HOST_UID}" "-e" "HOST_GID=${HOST_GID}")
 
 
 emulator()

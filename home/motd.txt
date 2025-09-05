@@ -1,3 +1,4 @@
 Welcome to Zeal Development Environment
 
+Type `zde` to get help for using ZDE in Interactive Mode.
 
