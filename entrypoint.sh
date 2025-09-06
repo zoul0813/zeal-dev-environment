@@ -38,7 +38,18 @@ if ! id -u $USERNAME >/dev/null 2>&1; then
     adduser -u $HOST_UID -G $GROUPNAME -D $USERNAME
 fi
 
-cat /home/zeal8bit/motd.txt
+if [ "$1" = "/bin/bash" ]; then
+    if [ -f /home/zeal8bit/motd.txt ]; then
+        cat /home/zeal8bit/motd.txt
+    fi
+fi
 
 export PS1="($CONTAINER_ID_SHORT) \u:\w\$ "
-exec su-exec $USERNAME "$@"
+
+# If no command is passed, default to bash
+if [ $# -eq 0 ]; then
+    exec su-exec "$USERNAME" /bin/bash
+else
+    # Run arbitrary command safely
+    exec su-exec "$USERNAME" "$@"
+fi
