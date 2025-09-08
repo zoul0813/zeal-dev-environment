@@ -244,7 +244,7 @@ case $COMMAND in
     BUILD_DIR=${1:-build}
     if [ ! -d "$BUILD_DIR" ]; then
       echo "Generating build directory"
-      $CONTAINER_CMD compose -f "$COMPOSE_PATH" run -i --rm --entrypoint "" $CONTAINER_SERVICE cmake -B $BUILD_DIR
+      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake -B $BUILD_DIR
     else
       echo "Build directory exists"
     fi
@@ -255,7 +255,8 @@ case $COMMAND in
     $"${CONTAINER_EXEC[@]}"  -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
     ;;
   create)
-    $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
+    # $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
+    $"${CONTAINER_EXEC[@]}" -v $(pwd):/tmp $CONTAINER_SERVICE /home/zeal8bit/templates/create.sh "$@"
     ;;
   image)
     make_image $@

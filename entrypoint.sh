@@ -1,7 +1,5 @@
 #!/bin/sh
 
-
-
 . /opt/penv/bin/activate
 
 if [ ! -f /home/zeal8bit/ZealFS/zealfs ]; then
@@ -45,6 +43,8 @@ if [ "$1" = "/bin/bash" ]; then
 fi
 
 export PS1="($CONTAINER_ID_SHORT) \u:\w\$ "
+
+chown $HOST_UID:$HOST_GID /home/zeal8bit
 
 # If no command is passed, default to bash
 if [ $# -eq 0 ]; then
