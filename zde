@@ -241,14 +241,20 @@ case $COMMAND in
     $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE make $@
     ;;
   cmake)
-    BUILD_DIR=${1:-build}
+    if [[ "$1" =~ ^- ]]; then
+      BUILD_DIR="build"
+    else
+      BUILD_DIR=${1:-build}
+      shift
+    fi
+
     if [ ! -d "$BUILD_DIR" ]; then
       echo "Generating build directory"
       $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake -B $BUILD_DIR
     else
       echo "Build directory exists"
     fi
-    $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake --build $BUILD_DIR
+    $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake --build $BUILD_DIR "$@"
     ;;
   kernel)
     KERNEL_CONFIG=${1:-zeal8bit}
