@@ -11,7 +11,7 @@ shift
 echo "Zeal 8-bit Kernel Compiler"
 echo "Building " $KERNEL_CONFIG "for" $ZEAL_KERNEL_VERSION
 cd $ZOS_PATH
-make config=$1
+make config=$KERNEL_CONFIG
 echo -e "\n"
 STATSIZE=$($STATBYTES $FULLBIN)
 
