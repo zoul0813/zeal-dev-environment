@@ -40,6 +40,7 @@ HOST_UID=$(id -u)
 HOST_GID=$(id -g)
 CONTAINER_EXEC=("$CONTAINER_CMD" "compose" "-f" "$COMPOSE_PATH" "run" "-i" "--rm" "-e" "HOST_UID=${HOST_UID}" "-e" "HOST_GID=${HOST_GID}")
 
+ZDE_ROMDISK="${ZDE_PATH}/mnt/romdisk"
 
 emulator()
 {
@@ -174,6 +175,39 @@ make_image()
   esac
 }
 
+romdisk_add()
+{
+  if [ $# -eq 0 ]; then
+    echo "Error: No paths provided"
+    echo "Usage: zde romdisk add <path1> [path2] [path3] ..."
+    return 1
+  fi
+
+  mkdir -p "$ZDE_ROMDISK"
+
+  echo "Adding files to romdisk at $ZDE_ROMDISK"
+
+  for path in "$@"; do
+    if [ ! -e "$path" ]; then
+      echo "Warning: '$path' does not exist, skipping"
+      continue
+    fi
+
+    if [ -f "$path" ]; then
+      echo "  Copying file: $path"
+      cp "$path" "$ZDE_ROMDISK/"
+    elif [ -d "$path" ]; then
+      echo "  Copying directory contents (top-level files only): $path"
+      find "$path" -maxdepth 1 -type f -exec cp {} "$ZDE_ROMDISK/" \; 2>/dev/null || echo "Warning: Could not copy contents from '$path'"
+    else
+      echo "Warning: '$path' is not a file or directory, skipping"
+    fi
+  done
+
+  ls -lgo $ZDE_ROMDISK
+  echo "Done! Files copied to romdisk"
+}
+
 case $COMMAND in
   -i)
     echo "ZDE: Interactive Mode"
@@ -258,7 +292,28 @@ case $COMMAND in
     ;;
   kernel)
     KERNEL_CONFIG=${1:-zeal8bit}
-    $"${CONTAINER_EXEC[@]}"  -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
+    $"${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
+    ;;
+  romdisk)
+    # $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE mkdir -p $ZDE_ROMDISK
+    # echo "$ZDE_PATH$ZDE_ROMDISK"
+    # "$ZDE_PATH"/bin/xdg-open "$ZDE_PATH$ZDE_ROMDISK"
+    case $1 in
+      add)
+        shift
+        romdisk_add "$@"
+        ;;
+      *)
+        mkdir -p $ZDE_ROMDISK
+        echo "$ZDE_ROMDISK"
+        ls -lgo $ZDE_ROMDISK
+        echo
+        read -p "Open romdisk folder? ([Y]es, [N]o) " -n 1 -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+          "$ZDE_PATH"/bin/xdg-open "$ZDE_ROMDISK"
+        fi
+        ;;
+    esac
     ;;
   create)
     # $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
@@ -274,6 +329,6 @@ case $COMMAND in
     $CONTAINER_CMD compose -f "$COMPOSE_PATH" build
     ;;
   *)
-    echo "Help: update, status, start, stop, make, emu[lator], create, image"
+    echo "Help: update, status, start, stop, make, emu[lator], create, image, kernel, romdisk"
     ;;
 esac
