@@ -209,6 +209,38 @@ romdisk_add()
   echo "Done! Files copied to romdisk"
 }
 
+romdisk_rm()
+{
+  if [ $# -eq 0 ]; then
+    echo "Error: No paths provided"
+    echo "Usage: zde romdisk rm <path1> [path2] [path3] ..."
+    return 1
+  fi
+
+  for path in "$@"; do
+    local target="$ZDE_ROMDISK/$path"
+
+    if [ ! -e "$target" ]; then
+      echo "Warning: '$path' does not exist in romdisk, skipping"
+      continue
+    fi
+
+    if [ -f "$target" ]; then
+      echo "  Removing file: $path"
+      rm "$target"
+    elif [ -d "$target" ]; then
+      echo "  Removing directory: $path"
+      rm -rf "$target"
+    else
+      echo "Warning: '$path' is not a file or directory, skipping"
+    fi
+  done
+
+  echo
+  ls -lgo $ZDE_ROMDISK
+  echo "Done! Files removed from romdisk"
+}
+
 case $COMMAND in
   -i)
     echo "ZDE: Interactive Mode"
@@ -299,13 +331,18 @@ case $COMMAND in
     $"${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
     ;;
   romdisk)
-    # $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE mkdir -p $ZDE_ROMDISK
-    # echo "$ZDE_PATH$ZDE_ROMDISK"
-    # "$ZDE_PATH"/bin/xdg-open "$ZDE_PATH$ZDE_ROMDISK"
     case $1 in
       add)
         shift
         romdisk_add "$@"
+        ;;
+      ls)
+        echo "$ZDE_ROMDISK"
+        ls -lgo $ZDE_ROMDISK
+        ;;
+      rm)
+        shift
+        romdisk_rm "$@"
         ;;
       *)
         mkdir -p $ZDE_ROMDISK
