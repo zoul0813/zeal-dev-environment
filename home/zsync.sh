@@ -13,9 +13,12 @@ case $IMAGE_NAME in
     /home/zeal8bit/Zeal-8-bit-OS/packer/pack /mnt/$IMAGE_NAME.img /mnt/cf/*.* /mnt/cf/**/*.*
     ;;
   *)
-    /home/zeal8bit/ZealFS/zealfs --image=/mnt/$IMAGE_NAME.img --size=$IMAGE_SIZE /media/zealfs/ \
-    && rsync -ruLkv --delete /mnt/$IMAGE_NAME/ /media/zealfs/ \
-    && umount /media/zealfs/
+    if [ "$IMAGE_NAME" = "tf" ]; then
+      gunzip -c /home/zeal8bit/tf.base.img.gz > /mnt/$IMAGE_NAME.img
+    fi
+    sudo /home/zeal8bit/ZealFS/zealfs -v2 --image=/mnt/$IMAGE_NAME.img --size=$IMAGE_SIZE /media/zealfs/ \
+    && sudo rsync -ruLkv --temp-dir=/tmp --no-perms --whole-file --delete /mnt/$IMAGE_NAME/ /media/zealfs/ \
+    && sudo umount /media/zealfs/
     ;;
 esac
 

@@ -42,9 +42,11 @@ podman tag docker.io/zoul0813/zeal-dev-environment:$VERSION docker.io/zoul0813/z
 read -p "Push to registry? (y/N): " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-  echo "Pushing images..."
-  podman push docker.io/zoul0813/zeal-dev-environment:$VERSION
-  podman push docker.io/zoul0813/zeal-dev-environment:latest
-else
   echo "Images built locally, but not pushed to register."
+  exit 1
 fi
+
+echo "Pushing images..."
+podman push docker.io/zoul0813/zeal-dev-environment:$VERSION
+podman push docker.io/zoul0813/zeal-dev-environment:latest
+

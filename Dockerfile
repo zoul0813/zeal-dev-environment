@@ -48,12 +48,6 @@ RUN echo "Building GNU AS" \
   && make MAKEINFO=true -j$(nproc) \
   && make MAKEINFO=true install
 
-# ZealFS
-RUN echo "Setting up ZealFS" \
-  && apk add --no-cache rsync \
-  && mkdir -p /media/zealfs \
-  && chmod 777 /media/zealfs
-
 ENV \
   ZDE="true" \
   ZOS_PATH="$HOME/Zeal-8-bit-OS" \
@@ -81,6 +75,17 @@ RUN echo "Installing python modules" \
 
 RUN echo "Installing su-exec" \
   && apk add --no-cache su-exec
+
+# ZealFS
+RUN echo "Setting up ZealFS" \
+  && apk add --no-cache rsync \
+  && mkdir -p /media/zealfs \
+  && chmod 777 /media/zealfs
+
+RUN echo "Configuring sudo" \
+  && apk add --no-cache sudo \
+  && echo "zeal8bit ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/zeal8bit \
+  && chmod 0440 /etc/sudoers.d/zeal8bit
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
