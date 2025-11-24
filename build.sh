@@ -36,11 +36,10 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
-podman build -t zoul0813/zeal-dev-environment:$VERSION .
-podman tag zoul0813/zeal-dev-environment:$VERSION docker.io/zoul0813/zeal-dev-environment:$VERSION
-podman tag zoul0813/zeal-dev-environment:$VERSION docker.io/zoul0813/zeal-dev-environment:latest
+podman build --platform linux/amd64 -t docker.io/zoul0813/zeal-dev-environment:$VERSION .
+podman tag docker.io/zoul0813/zeal-dev-environment:$VERSION docker.io/zoul0813/zeal-dev-environment:latest
 
-read -p "Read pushings to register? (y/N): " -n 1 -r
+read -p "Push to registry? (y/N): " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   echo "Pushing images..."

@@ -3,13 +3,14 @@
 set +x
 
 ZDE_PATH=$(dirname "$0")
-mkdir -p ~/.zde
+ZDE_USER_PATH=~/.zeal8bit
+mkdir -p $ZDE_USER_PATH
 
 ZDE_BRANCH="${ZDE_BRANCH:-main}"
 
 ZDE_MOUNTED=
-if [ -f ~/.zde/mount ]; then
-  ZDE_MOUNTED=$(cat ~/.zde/mount)
+if [ -f $ZDE_USER_PATH/zde.mount ]; then
+  ZDE_MOUNTED=$(cat $ZDE_USER_PATH/zde.mount)
 fi
 
 COMMAND=$1
@@ -123,8 +124,8 @@ stop()
 {
   if [ "$RUNNING" = "0" ]; then
     $CONTAINER_CMD compose -f "$COMPOSE_PATH" stop
-    if [ -e ~/.zde/mount ]; then
-      rm ~/.zde/mount
+    if [ -e $ZDE_USER_PATH/zde.mount ]; then
+      rm $ZDE_USER_PATH/zde.mount
     fi
     RUNNING="1"
   else
@@ -136,7 +137,7 @@ start()
 {
   if [ "$RUNNING" = "1" ]; then
     $CONTAINER_CMD compose -f "$COMPOSE_PATH" up -d
-    echo $PWD > ~/.zde/mount
+    echo $PWD > $ZDE_USER_PATH/zde.mount
     RUNNING="0"
   else
     echo "ZDE is already running"
@@ -166,11 +167,11 @@ make_image()
     cf)
       $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh cf ${SIZE:=64}
       ;;
-    sd)
-      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh sd ${SIZE:=64}
+    tf)
+      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh tf ${SIZE:=4096}
       ;;
     *)
-      echo "Invalid arguments, must provide TYPE (eeprom, cf, sd)"
+      echo "Invalid arguments, must provide TYPE (eeprom, cf, tf)"
       ;;
   esac
 }
@@ -239,6 +240,7 @@ case $COMMAND in
     fi
     ;;
   status)
+    echo "DEPRECATED: The use of 'zde status' is deprecated, this is only used with 'zde start|restart|stop'"
     echo -n "ZDE is "
     if [ "$RUNNING" = "1" ]; then
       echo "stopped"
@@ -248,12 +250,14 @@ case $COMMAND in
     echo " with ${CONTAINER_CMD}"
     ;;
   start|restart)
+    echo "DEPRECATED: The use of 'zde start|stop|restart' is deprecated, just use 'zde make|cmake' directly"
     if [ "$RUNNING" = "0" ]; then
       stop
     fi
     start $@
     ;;
   stop)
+    echo "DEPRECATED: The use of 'zde start|stop|restart' is deprecated, just use 'zde make|cmake' directly"
     stop $@
     ;;
   emu|emulator)

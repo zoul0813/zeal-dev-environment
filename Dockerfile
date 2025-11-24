@@ -51,7 +51,8 @@ RUN echo "Building GNU AS" \
 # ZealFS
 RUN echo "Setting up ZealFS" \
   && apk add --no-cache rsync \
-  && mkdir -p /media/zealfs
+  && mkdir -p /media/zealfs \
+  && chmod 777 /media/zealfs
 
 ENV \
   ZDE="true" \
