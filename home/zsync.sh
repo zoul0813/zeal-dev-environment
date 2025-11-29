@@ -6,6 +6,18 @@ IMAGE_SIZE=$2
 echo "Image Name: " $IMAGE_NAME
 echo "Image Size: " $IMAGE_SIZE
 
+if [ ! -f /home/zeal8bit/ZealFS/zealfs ]; then
+  echo "Building ZealFS"
+  ZEALFS_HOME=/home/zeal8bit/ZealFS
+  cmake -S $ZEALFS_HOME -B $ZEALFS_HOME/build && cmake --build $ZEALFS_HOME/build \
+  && mv $ZEALFS_HOME/build/zealfs $ZEALFS_HOME/zealfs \
+  && rm -rf $ZEALFS_HOME/build
+fi
+
+mkdir -p /mnt/eeprom
+mkdir -p /mnt/cf
+mkdir -p /mnt/sd
+
 case $IMAGE_NAME in
   cf)
     echo $@
