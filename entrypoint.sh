@@ -4,7 +4,10 @@
 
 if [ ! -f /home/zeal8bit/ZealFS/zealfs ]; then
   echo "Building ZealFS"
-  cd /home/zeal8bit/ZealFS && make
+  ZEALFS_HOME=/home/zeal8bit/ZealFS
+  cmake -S $ZEALFS_HOME -B $ZEALFS_HOME/build && cmake --build $ZEALFS_HOME/build \
+  && mv $ZEALFS_HOME/build/zealfs $ZEALFS_HOME/zealfs \
+  && rm -rf $ZEALFS_HOME/build
 fi
 
 mkdir -p /mnt/eeprom

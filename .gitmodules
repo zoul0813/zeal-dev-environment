@@ -22,3 +22,6 @@
 [submodule "home/Zeal-Playground"]
 	path = home/Zeal-Playground
 	url = https://github.com/Zeal8bit/Zeal-Playground.git
+[submodule "home/zeal-coreutils"]
+	path = home/zeal-coreutils
+	url = https://github.com/zoul0813/zeal-coreutils.git
