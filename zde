@@ -36,6 +36,7 @@ elif ([ "$CONTAINER_CMD" = "default" ] || [ "$CONTAINER_CMD" = "podman" ]) && co
 else
   echo "WARNING: docker/podman not found, ensure docker, or podman, is installed before using ZDE"
 fi
+
 # CONTAINER_EXEC=("$CONTAINER_CMD" "compose" "-f" "$COMPOSE_PATH" "run" "-i" "--rm" "--user" $(id -u):$(id -g) "--entrypoint" "")
 HOST_UID=$(id -u)
 HOST_GID=$(id -g)
