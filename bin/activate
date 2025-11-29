@@ -19,6 +19,7 @@ export ZOS_PATH="\$ZDE_HOME/Zeal-8-bit-OS"
 export ZVB_SDK_PATH="\$ZDE_HOME/Zeal-VideoBoard-SDK"
 export ZGDK_PATH="\$ZDE_HOME/zeal-game-dev-kit"
 export ZAR_PATH="\$ZDE_HOME/zeal-archiver"
+export COREUTILS_PATH="\$ZDE_HOME/zeal-coreutils"
 
 export PATH="\$ZDE_PATH:\$PATH"
 export PATH="\$ZOS_PATH/tools:\$PATH"
