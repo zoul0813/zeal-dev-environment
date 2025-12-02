@@ -3,7 +3,7 @@
 set +x
 
 ZDE_PATH=$(dirname "$0")
-ZDE_USER_PATH=~/.zeal8bit
+ZDE_USER_PATH="${ZDE_USER_PATH:-$HOME/.zeal8bit}"
 mkdir -p $ZDE_USER_PATH
 
 ZDE_BRANCH="${ZDE_BRANCH:-main}"
@@ -329,7 +329,23 @@ case $COMMAND in
     ;;
   kernel)
     KERNEL_CONFIG=${1:-zeal8bit}
+    USER_CONF_CREATE=0
+    if [ "$KERNEL_CONFIG" = "user" ] || [ "$KERNEL_CONFIG" = "menuconfig" ]; then
+      if [ -f "$ZDE_USER_PATH/os.conf" ]; then
+        cp "$ZDE_USER_PATH/os.conf" "$ZDE_PATH/home/Zeal-8-bit-OS/os.conf"
+        echo "Copied $ZDE_USER_PATH/os.conf to $ZDE_PATH/home/Zeal-8-bit-OS/os.conf"
+      else
+        USER_CONF_CREATE=1
+        echo "Warning: $ZDE_USER_PATH/os.conf does not exist"
+      fi
+    fi
     $"${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
+    if [ "$KERNEL_CONFIG" = "menuconfig" ] || [ "$USER_CONF_CREATE" = "1" ]; then
+      if [ -f "$ZDE_PATH/home/Zeal-8-bit-OS/os.conf" ]; then
+        cp "$ZDE_PATH/home/Zeal-8-bit-OS/os.conf" "$ZDE_USER_PATH/os.conf"
+        echo "Copied $ZDE_PATH/home/Zeal-8-bit-OS/os.conf $ZDE_USER_PATH/os.conf"
+      fi
+    fi
     ;;
   romdisk)
     case $1 in

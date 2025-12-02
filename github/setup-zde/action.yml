@@ -1,0 +1,36 @@
+name: Setup ZDE
+description: Checkout zeal-dev-environment and pull the ZDE image
+inputs:
+  repo:
+    description: 'Repository to checkout'
+    required: false
+    default: zoul0813/zeal-dev-environment
+  path:
+    description: 'Path to checkout the repo'
+    required: false
+    default: zeal-dev-environment
+  image:
+    description: 'Docker image to pull'
+    required: false
+    default: zoul0813/zeal-dev-environment:latest
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout ZDE repo
+      uses: actions/checkout@v3
+      with:
+        repository: ${{ inputs.repo }}
+        path: ${{ inputs.path }}
+        submodules: true
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Pull ZDE image
+      run: docker pull ${{ inputs.image }}
+      shell: bash
+
+    - name: Setup Environment
+      run: |
+        echo "ZDE_PATH=${{ github.workspace }}/${{ inputs.path }}" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/${{ inputs.path }}" >> $GITHUB_PATH
+      shell: bash

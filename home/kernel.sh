@@ -5,24 +5,37 @@
 
 FULLBIN="build/os_with_romdisk.img"
 STATBYTES="stat -c %s"
-KERNEL_CONFIG="configs/${1}.default"
-shift
 
 echo "Zeal 8-bit Kernel Compiler"
-echo "Building " $KERNEL_CONFIG "for" $ZEAL_KERNEL_VERSION
 cd $ZOS_PATH
-make config=$KERNEL_CONFIG
-echo -e "\n"
-STATSIZE=$($STATBYTES $FULLBIN)
 
-
-mkdir -p /mnt/roms
-
-if [ "$STATSIZE" -gt 0 ]; then
-  ROM_PATH="/mnt/roms/zeal8bit-${ZEAL_KERNEL_VERSION}.img"
-  cp "$FULLBIN" "$ROM_PATH"
-  echo "Copied to $ROM_PATH"
+SHOW_STAT=1
+if [ "$1" = "user" ]; then
+  KERNEL_CONFIG=""
+  MAKE_CONFIG_ARG=""
+elif [ "$1" = "menuconfig" ]; then
+  echo "Launching menuconfig"
+  MAKE_CONFIG_ARG="menuconfig"
+  SHOW_STAT=0
 else
-  echo "Build failed: $FULLBIN has size 0"
-  exit 1
+  KERNEL_CONFIG="configs/${1}.default"
+  MAKE_CONFIG_ARG="config=$KERNEL_CONFIG"
+  echo "Building " $KERNEL_CONFIG "for" $ZEAL_KERNEL_VERSION
+fi
+shift
+
+make $MAKE_CONFIG_ARG
+
+if [ $SHOW_STAT = 1 ]; then
+  echo -e "\n"
+  STATSIZE=$($STATBYTES $FULLBIN)
+
+  if [ "$STATSIZE" -gt 0 ]; then
+    ROM_PATH="/mnt/roms/zeal8bit-${ZEAL_KERNEL_VERSION}.img"
+    cp "$FULLBIN" "$ROM_PATH"
+    echo "Copied to $ROM_PATH"
+  else
+    echo "Build failed: $FULLBIN has size 0"
+    exit 1
+  fi
 fi
