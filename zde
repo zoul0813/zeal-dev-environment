@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set +x
+# set -x
 
 ZDE_PATH=$(dirname "$0")
 ZDE_USER_PATH="${ZDE_USER_PATH:-$HOME/.zeal8bit}"
@@ -166,10 +167,10 @@ make_image()
       "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh eeprom ${SIZE:=32}
       ;;
     cf)
-      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh cf ${SIZE:=64}
+      "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh cf ${SIZE:=64}
       ;;
     tf)
-      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh tf ${SIZE:=4096}
+      "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE /home/zeal8bit/zsync.sh tf ${SIZE:=4096}
       ;;
     *)
       echo "Invalid arguments, must provide TYPE (eeprom, cf, tf)"
@@ -248,7 +249,7 @@ case $COMMAND in
     if [ "$1" = "-b" ]; then
       CONTAINER_SERVICE=zeal8bit-build-env
     fi
-    $"${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /bin/bash
+    "${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /bin/bash 2>/dev/null
     ;;
   activate)
     if [ -t 1 ]; then
@@ -309,7 +310,7 @@ case $COMMAND in
     if [[ ! -z "${ASEPRITE_PATH}" ]]; then
       make -f "$ZDE_PATH/home/zeal-game-dev-kit/aseprite.mk"
     fi
-    $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE make $@
+    "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE make $@
     ;;
   cmake)
     if [[ "$1" =~ ^- ]]; then
@@ -321,11 +322,11 @@ case $COMMAND in
 
     if [ ! -d "$BUILD_DIR" ]; then
       echo "Generating build directory"
-      $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake -B $BUILD_DIR
+      "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake -B $BUILD_DIR
     else
       echo "Build directory exists"
     fi
-    $"${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake --build $BUILD_DIR "$@"
+    "${CONTAINER_EXEC[@]}" $CONTAINER_SERVICE cmake --build $BUILD_DIR "$@"
     ;;
   kernel)
     KERNEL_CONFIG=${1:-zeal8bit}
@@ -339,7 +340,7 @@ case $COMMAND in
         echo "Warning: $ZDE_USER_PATH/os.conf does not exist"
       fi
     fi
-    $"${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
+    "${CONTAINER_EXEC[@]}" -e ZEAL_KERNEL_VERSION=$ZEAL_KERNEL_VERSION $CONTAINER_SERVICE /home/zeal8bit/kernel.sh $KERNEL_CONFIG
     if [ "$KERNEL_CONFIG" = "menuconfig" ] || [ "$USER_CONF_CREATE" = "1" ]; then
       if [ -f "$ZDE_PATH/home/Zeal-8-bit-OS/os.conf" ]; then
         cp "$ZDE_PATH/home/Zeal-8-bit-OS/os.conf" "$ZDE_USER_PATH/os.conf"
@@ -375,7 +376,7 @@ case $COMMAND in
     ;;
   create)
     # $CONTAINER_CMD run --rm -v $(pwd):/tmp -v $ZDE_PATH/home:/home/zeal8bit --env-file=$ZDE_PATH/.env $ZDE_IMAGE:$ZDE_VERSION /home/zeal8bit/templates/create.sh "$@"
-    $"${CONTAINER_EXEC[@]}" -v $(pwd):/tmp $CONTAINER_SERVICE /home/zeal8bit/templates/create.sh "$@"
+    "${CONTAINER_EXEC[@]}" -v $(pwd):/tmp $CONTAINER_SERVICE /home/zeal8bit/templates/create.sh "$@"
     ;;
   image)
     make_image $@
