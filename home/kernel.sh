@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-## Currently uses the deprecated Makefile as `config=configs/zeal8bit.default`
-## is unsupported with Cmake
+# set -x
 
 FULLBIN="build/os_with_romdisk.img"
 STATBYTES="stat -c %s"
@@ -10,21 +9,30 @@ echo "Zeal 8-bit Kernel Compiler"
 cd $ZOS_PATH
 
 SHOW_STAT=1
+KERNEL_CONFIG=""
+CONFIG_ARG=""
 if [ "$1" = "user" ]; then
   KERNEL_CONFIG=""
   MAKE_CONFIG_ARG=""
+elif [ "$1" = "default" ]; then
+  echo "Creating default config"
+  rm -rf $ZOS_PATH/os.conf
+  BUILD_ARG="--target alldefconfig"
+  SHOW_STAT=0
 elif [ "$1" = "menuconfig" ]; then
   echo "Launching menuconfig"
-  MAKE_CONFIG_ARG="menuconfig"
+  BUILD_ARG="--target menuconfig"
   SHOW_STAT=0
 else
   KERNEL_CONFIG="configs/${1}.default"
-  MAKE_CONFIG_ARG="config=$KERNEL_CONFIG"
+  CONFIG_ARG="-Dconfig=$KERNEL_CONFIG"
   echo "Building " $KERNEL_CONFIG "for" $ZEAL_KERNEL_VERSION
 fi
 shift
 
-make $MAKE_CONFIG_ARG
+
+cmake -B build $CONFIG_ARG
+cmake --build build $BUILD_ARG
 
 if [ $SHOW_STAT = 1 ]; then
   echo -e "\n"
