@@ -1,89 +1,55 @@
-FROM z88dk/z88dk:20250825
+FROM zoul0813/zde-builder:latest as builder
+FROM alpine:latest
+COPY --from=builder /opt /opt
 
-ENV HOME=/home/zeal8bit
+ENV \
+  HOME=/home/zeal8bit \
+  Z88DK_PATH="/opt/z88dk" \
+  SDCC_PATH="/opt/sdcc" \
+  GNUAS_PATH="/opt/gnu-as"
 
 # Dev Tools
 RUN echo "Installing prerequisites" \
   && apk update \
-  && apk add --no-cache bash git curl python3 py3-pip build-base cmake bison flex zlib-dev boost-dev \
-  && apk add --no-cache fuse3 fuse3-libs fuse3-dev pkgconf \
-  && apk add --no-cache py3-pillow \
+  && apk add --no-cache \
+    bash \
+    git \
+    curl \
+    python3 \
+    py3-pip \
+    build-base \
+    cmake \
+    su-exec \
+    sudo \
+    fuse3 \
+    fuse3-libs \
+    fuse3-dev \
+    pkgconf \
+    rsync \
   && python3 -m venv /opt/penv \
   && . /opt/penv/bin/activate \
   && pip3 install kconfiglib \
-  && pip3 install cookiecutter
-
-# SDCC
-RUN echo "Building SDCC" \
-  && mkdir -p /opt/sdcc \
-  && curl -L https://sourceforge.net/projects/sdcc/files/sdcc/4.4.0/sdcc-src-4.4.0.tar.bz2/download -o /opt/sdcc/sdcc-4.4.0.tar.bz2 \
-  && tar xjf /opt/sdcc/sdcc-4.4.0.tar.bz2 -C /opt/sdcc \
-  && cd /opt/sdcc/sdcc-4.4.0 \
-  && ./configure \
-		--disable-ds390-port --disable-ds400-port \
-		--disable-hc08-port --disable-s08-port --disable-mcs51-port \
-		--disable-pic-port --disable-pic14-port --disable-pic16-port \
-		--disable-tlcs90-port --disable-xa51-port --disable-stm8-port \
-		--disable-pdk13-port --disable-pdk14-port \
-		--disable-pdk15-port --disable-pdk16-port \
-		--disable-mos6502-port --disable-mos65c02-port \
-		--disable-r2k-port \
-		--disable-non-free \
-		--disable-ucsim \
-    --prefix=/opt/sdcc \
-  && make all \
-  && make install
-
-# --disable-sdcpp --disable-packihx --disable-sdcdb --disable-sdbinutil --disable-device-lib
-# => => # /opt/sdcc/src/sdcc-build/bin/sdcc -I./../../include -I. --std-c23  -mr2ka --max-allocs-per-node 25000 -c ../_sint2fs.c -o _sint2fs
-
-# GNU AS
-RUN echo "Building GNU AS" \
-  && mkdir -p /opt/gnu-as \
-  && curl -L https://ftp.gnu.org/gnu/binutils/binutils-2.41.tar.gz -o /opt/gnu-as/binutils-2.41.tar.gz \
-  && tar xzf /opt/gnu-as/binutils-2.41.tar.gz -C /opt/gnu-as \
-  && cd /opt/gnu-as/binutils-2.41 \
-  && mkdir build && cd build \
-  && ../configure --target=z80-elf --host=x86_64-linux-musl --prefix=/opt/gnu-as --disable-nls \
-  && make MAKEINFO=true -j$(nproc) \
-  && make MAKEINFO=true install
+  && pip3 install cookiecutter \
+  && pip3 install pillow \
+  && pip3 install --upgrade "setuptools<81" supervisor \
+  && mkdir -p /var/log/supervisor
 
 ENV \
   ZDE="true" \
+  ZCCCFG="${Z88DK_PATH}/lib/config/" \
   ZOS_PATH="$HOME/Zeal-8-bit-OS" \
   ZVB_SDK_PATH="$HOME/Zeal-VideoBoard-SDK" \
   ZGDK_PATH="$HOME/zeal-game-dev-kit" \
-  SDCC_PATH="/opt/sdcc" \
-  GNUAS_PATH="/opt/gnu-as" \
   PYTHON_BIN="/opt/penv/bin" \
-  PATH="$PATH:/opt/sdcc/bin:/opt/gnu-as/bin:/home/zeal8bit/Zeal-8-bit-OS/tools:/home/zeal8bit/Zeal-VideoBoard-SDK/tools/zeal2gif"
+  PATH="$PATH:${Z88DK_PATH}/bin:${PATH}:${SDCC_PATH}/bin:${GNUAS_PATH}/bin:${HOME}/Zeal-8-bit-OS/tools:${HOME}/Zeal-VideoBoard-SDK/tools/zeal2gif"
 
+COPY etc/ /etc/
 
-RUN echo "Installing supervisord" \
-  && apk add --no-cache nodejs npm \
-  && . /opt/penv/bin/activate \
-  && pip3 install --upgrade "setuptools<81" supervisor \
-  && mkdir -p /var/log/supervisor \
-  && mkdir -p /etc/supervisor.d
-COPY etc/supervisord.conf /etc/supervisord.conf
-COPY etc/supervisor.d/emulator.ini /etc/supervisor.d/emulator.ini
-COPY etc/supervisor.d/playground.ini /etc/supervisor.d/playground.ini
-
-RUN echo "Installing python modules" \
-  && . /opt/penv/bin/activate \
-  && pip3 install pillow
-
-RUN echo "Installing su-exec" \
-  && apk add --no-cache su-exec
 
 # ZealFS
-RUN echo "Setting up ZealFS" \
-  && apk add --no-cache rsync \
+RUN echo "Configuring" \
   && mkdir -p /media/zealfs \
-  && chmod 777 /media/zealfs
-
-RUN echo "Configuring sudo" \
-  && apk add --no-cache sudo \
+  && chmod 777 /media/zealfs \
   && echo "zeal8bit ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/zeal8bit \
   && chmod 0440 /etc/sudoers.d/zeal8bit
 
