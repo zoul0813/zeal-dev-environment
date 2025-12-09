@@ -20,6 +20,16 @@ increment_patch() {
     echo "$major.$minor.$patch"
 }
 
+
+read -p "Rebuild ZDE Builder? (y/N): " -n 1 -r
+echo
+BUILD_BUILDER=false
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  BUILD_BUILDER=true
+  BUILDER_VERSION=$(date +%Y%m%d)
+  echo "Builder version: $BUILDER_VERSION"
+fi
+
 if [ -n "$1" ]; then
   VERSION=$1
 else
@@ -36,6 +46,11 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
+if [ "$BUILD_BUILDER" = true ]; then
+  podman build --platform linux/amd64 -f Dockerfile.builder -t docker.io/zoul0813/zde-builder:$BUILDER_VERSION .
+  podman tag docker.io/zoul0813/zde-builder:$BUILDER_VERSION docker.io/zoul0813/zde-builder:latest
+fi
+
 podman build --platform linux/amd64 -t docker.io/zoul0813/zeal-dev-environment:$VERSION .
 podman tag docker.io/zoul0813/zeal-dev-environment:$VERSION docker.io/zoul0813/zeal-dev-environment:latest
 
@@ -44,6 +59,12 @@ echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   echo "Images built locally, but not pushed to register."
   exit 1
+fi
+
+if [ "$BUILD_BUILDER" = true ]; then
+  echo "Pushing zde-builder:$BUILDER_VERSION"
+  podman push docker.io/zoul0813/zde-builder:$BUILDER_VERSION
+  podman push docker.io/zoul0813/zde-builder:latest
 fi
 
 echo "Pushing images..."
