@@ -15,6 +15,7 @@ services:
     volumes:
       - ${PWD}:/src
       - ./home:/home/zeal8bit
+      - ~/.zeal8bit:/home/zeal8bit/.zeal8bit
       - ./mnt:/mnt
       - ./etc/supervisor.d:/etc/supervisor.d
     ports:

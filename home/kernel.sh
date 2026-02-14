@@ -41,8 +41,11 @@ if [ $SHOW_STAT = 1 ]; then
   if [ "$STATSIZE" -gt 0 ]; then
     mkdir -p /mnt/roms
     ROM_PATH="/mnt/roms/zeal8bit-${ZEAL_KERNEL_VERSION}.img"
+    ROM_FILE="zeal8bit-${ZEAL_KERNEL_VERSION}.img"
     cp "$FULLBIN" "$ROM_PATH"
+    ln -sfn "$ROM_FILE" /mnt/roms/latest.img
     echo "Copied to $ROM_PATH"
+    echo "Linked /mnt/roms/latest.img -> $ROM_FILE"
   else
     echo "Build failed: $FULLBIN has size 0"
     exit 1
