@@ -39,6 +39,7 @@ if [ $SHOW_STAT = 1 ]; then
   STATSIZE=$($STATBYTES $FULLBIN)
 
   if [ "$STATSIZE" -gt 0 ]; then
+    mkdir -p /mnt/roms
     ROM_PATH="/mnt/roms/zeal8bit-${ZEAL_KERNEL_VERSION}.img"
     cp "$FULLBIN" "$ROM_PATH"
     echo "Copied to $ROM_PATH"
