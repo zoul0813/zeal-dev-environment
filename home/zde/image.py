@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from common import HOME_DIR, MNT_DIR, dispatch_subcommand
+from common import HOME_DIR, MNT_DIR
 from process import run
 
 
-def run_image(args: list[str]) -> int:
+def main(args: list[str]) -> int:
     if len(args) < 1:
         print("Usage: zde image <eeprom|cf|tf> [size]")
         return 1
@@ -31,12 +31,3 @@ def run_image(args: list[str]) -> int:
         size = size or "4096"
 
     return run([str(HOME_DIR / "zsync.sh"), image_type, size])
-
-
-SUBCOMMANDS = {
-    "run": run_image,
-}
-
-
-def main(args: list[str]) -> int:
-    return dispatch_subcommand("image", args, SUBCOMMANDS, default="run")

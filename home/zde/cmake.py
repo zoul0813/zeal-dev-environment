@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from common import dispatch_subcommand
 from process import run
 
 
-def run_cmake(args: list[str]) -> int:
+def main(args: list[str]) -> int:
     extra = list(args)
     build_dir = "build"
     if extra and not extra[0].startswith("-"):
@@ -21,12 +20,3 @@ def run_cmake(args: list[str]) -> int:
         print("Build directory exists")
 
     return run(["cmake", "--build", build_dir, *extra])
-
-
-SUBCOMMANDS = {
-    "run": run_cmake,
-}
-
-
-def main(args: list[str]) -> int:
-    return dispatch_subcommand("cmake", args, SUBCOMMANDS, default="run")

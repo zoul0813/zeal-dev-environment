@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from common import ROMDISK_DIR, dispatch_subcommand
+from common import ROMDISK_DIR
 
 
 def copy_path_to_romdisk(path: Path) -> None:
@@ -95,12 +95,7 @@ def help() -> int:
     return 0
 
 
-SUBCOMMANDS = {
-    "add": subcmd_add,
-    "rm": subcmd_rm,
-    "ls": subcmd_ls,
-}
-
-
 def main(args: list[str]) -> int:
-    return dispatch_subcommand("romdisk", args, SUBCOMMANDS, default="ls", help_fn=help)
+    if not args:
+        return subcmd_ls([])
+    return subcmd_ls(args)

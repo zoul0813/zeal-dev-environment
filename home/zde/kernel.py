@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 
-from common import HOME_DIR, USER_STATE_DIR, dispatch_subcommand
+from common import HOME_DIR, USER_STATE_DIR
 from process import run
 
 
@@ -31,10 +31,13 @@ def run_kernel(args: list[str]) -> int:
     return rc
 
 
-SUBCOMMANDS = {
-    "run": run_kernel,
-}
+def subcmd_user(args: list[str]) -> int:
+    return run_kernel(["user", *args])
+
+
+def subcmd_menuconfig(args: list[str]) -> int:
+    return run_kernel(["menuconfig", *args])
 
 
 def main(args: list[str]) -> int:
-    return dispatch_subcommand("kernel", args, SUBCOMMANDS, default="run")
+    return run_kernel(args)
