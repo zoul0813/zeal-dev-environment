@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import argparse
-
-from common import HOME_DIR, MNT_DIR
+from common import HOME_DIR, MNT_DIR, dispatch_subcommand
 from process import run
 
 
-def cmd_image(args: argparse.Namespace) -> int:
-    image_type = args.image_type
-    size = args.size
+def run_image(args: list[str]) -> int:
+    if len(args) < 1:
+        print("Usage: zde image <eeprom|cf|tf> [size]")
+        return 1
+
+    image_type = args[0]
+    if image_type not in {"eeprom", "cf", "tf"}:
+        print("Invalid arguments, must provide TYPE (eeprom, cf, tf)")
+        return 1
+
+    size = args[1] if len(args) > 1 else None
     image_path = MNT_DIR / f"{image_type}.img"
 
     if image_path.exists():
@@ -25,3 +31,12 @@ def cmd_image(args: argparse.Namespace) -> int:
         size = size or "4096"
 
     return run([str(HOME_DIR / "zsync.sh"), image_type, size])
+
+
+SUBCOMMANDS = {
+    "run": run_image,
+}
+
+
+def main(args: list[str]) -> int:
+    return dispatch_subcommand("image", args, SUBCOMMANDS, default="run")

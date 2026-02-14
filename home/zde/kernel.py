@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import argparse
 import shutil
 
-from common import HOME_DIR, USER_STATE_DIR
+from common import HOME_DIR, USER_STATE_DIR, dispatch_subcommand
 from process import run
 
 
-def cmd_kernel(args: argparse.Namespace) -> int:
-    kernel_config = args.kernel_config or "zeal8bit"
+def run_kernel(args: list[str]) -> int:
+    kernel_config = args[0] if args else "zeal8bit"
     user_conf = USER_STATE_DIR / "os.conf"
     os_conf = HOME_DIR / "Zeal-8-bit-OS" / "os.conf"
     user_conf_create = False
@@ -30,3 +29,12 @@ def cmd_kernel(args: argparse.Namespace) -> int:
             print(f"Copied {os_conf} to {user_conf}")
 
     return rc
+
+
+SUBCOMMANDS = {
+    "run": run_kernel,
+}
+
+
+def main(args: list[str]) -> int:
+    return dispatch_subcommand("kernel", args, SUBCOMMANDS, default="run")

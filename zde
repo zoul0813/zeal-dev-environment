@@ -23,6 +23,15 @@ HOST_GID=$(id -g)
 
 ZEAL_KERNEL_VERSION=$(git -C "$ZDE_PATH/home/Zeal-8-bit-OS" describe --tags 2>/dev/null || true)
 
+COMMAND="$1"
+case "$COMMAND" in
+  activate|update|status|start|stop|restart|rebuild)
+    echo "Host-only command pending reimplementation in /zde: $COMMAND"
+    echo "TODO(host): implement $COMMAND in this bash wrapper."
+    exit 1
+    ;;
+esac
+
 CONTAINER_EXEC=(
   "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
   -e "HOST_UID=${HOST_UID}"

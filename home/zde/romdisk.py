@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import os
 import shutil
 from pathlib import Path
 
-from common import ROMDISK_DIR
+from common import ROMDISK_DIR, dispatch_subcommand
 
 
 def copy_path_to_romdisk(path: Path) -> None:
@@ -29,28 +28,28 @@ def copy_path_to_romdisk(path: Path) -> None:
     print(f"Warning: '{path}' is not a file or directory, skipping")
 
 
-def cmd_romdisk_add(args: argparse.Namespace) -> int:
-    if not args.paths:
+def subcmd_add(args: list[str]) -> int:
+    if not args:
         print("Error: No paths provided")
         print("Usage: zde romdisk add <path1> [path2] [path3] ...")
         return 1
 
     print(f"Adding files to romdisk at {ROMDISK_DIR}")
-    for raw in args.paths:
+    for raw in args:
         copy_path_to_romdisk(Path(raw))
 
-    cmd_romdisk_ls()
+    subcmd_ls([])
     print("Done! Files copied to romdisk")
     return 0
 
 
-def cmd_romdisk_rm(args: argparse.Namespace) -> int:
-    if not args.paths:
+def subcmd_rm(args: list[str]) -> int:
+    if not args:
         print("Error: No paths provided")
         print("Usage: zde romdisk rm <path1> [path2] [path3] ...")
         return 1
 
-    for raw in args.paths:
+    for raw in args:
         target = ROMDISK_DIR / raw
         if not target.exists():
             print(f"Warning: '{raw}' does not exist in romdisk, skipping")
@@ -63,12 +62,12 @@ def cmd_romdisk_rm(args: argparse.Namespace) -> int:
             target.unlink()
 
     print()
-    cmd_romdisk_ls()
+    subcmd_ls([])
     print("Done! Files removed from romdisk")
     return 0
 
 
-def cmd_romdisk_ls() -> int:
+def subcmd_ls(args: list[str]) -> int:
     ROMDISK_DIR.mkdir(parents=True, exist_ok=True)
     for entry in sorted(ROMDISK_DIR.iterdir(), key=lambda p: p.name):
         stat = entry.stat()
@@ -85,3 +84,23 @@ def cmd_romdisk_ls() -> int:
 
         print(f"{is_dir}{readable}{writable}{executable} {entry.name[:16]:<16}  {size:>8}{suffix}")
     return 0
+
+
+def help() -> int:
+    print("Usage: zde romdisk <subcommand> [args]")
+    print("Subcommands:")
+    print("  ls")
+    print("  add <path1> [path2] [path3] ...")
+    print("  rm <path1> [path2] [path3] ...")
+    return 0
+
+
+SUBCOMMANDS = {
+    "add": subcmd_add,
+    "rm": subcmd_rm,
+    "ls": subcmd_ls,
+}
+
+
+def main(args: list[str]) -> int:
+    return dispatch_subcommand("romdisk", args, SUBCOMMANDS, default="ls", help_fn=help)
