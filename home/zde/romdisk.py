@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+from pathlib import Path
+
+from common import ROMDISK_DIR
+
+
+def copy_path_to_romdisk(path: Path) -> None:
+    if not path.exists():
+        print(f"Warning: '{path}' does not exist, skipping")
+        return
+
+    ROMDISK_DIR.mkdir(parents=True, exist_ok=True)
+    if path.is_file():
+        print(f"  Copying file: {path}")
+        shutil.copy2(path, ROMDISK_DIR / path.name)
+        return
+
+    if path.is_dir():
+        print(f"  Copying directory contents (top-level files only): {path}")
+        for child in path.iterdir():
+            if child.is_file():
+                shutil.copy2(child, ROMDISK_DIR / child.name)
+        return
+
+    print(f"Warning: '{path}' is not a file or directory, skipping")
+
+
+def cmd_romdisk_add(args: argparse.Namespace) -> int:
+    if not args.paths:
+        print("Error: No paths provided")
+        print("Usage: zde romdisk add <path1> [path2] [path3] ...")
+        return 1
+
+    print(f"Adding files to romdisk at {ROMDISK_DIR}")
+    for raw in args.paths:
+        copy_path_to_romdisk(Path(raw))
+
+    cmd_romdisk_ls()
+    print("Done! Files copied to romdisk")
+    return 0
+
+
+def cmd_romdisk_rm(args: argparse.Namespace) -> int:
+    if not args.paths:
+        print("Error: No paths provided")
+        print("Usage: zde romdisk rm <path1> [path2] [path3] ...")
+        return 1
+
+    for raw in args.paths:
+        target = ROMDISK_DIR / raw
+        if not target.exists():
+            print(f"Warning: '{raw}' does not exist in romdisk, skipping")
+            continue
+        if target.is_dir():
+            print(f"  Removing directory: {raw}")
+            shutil.rmtree(target)
+        else:
+            print(f"  Removing file: {raw}")
+            target.unlink()
+
+    print()
+    cmd_romdisk_ls()
+    print("Done! Files removed from romdisk")
+    return 0
+
+
+def cmd_romdisk_ls() -> int:
+    ROMDISK_DIR.mkdir(parents=True, exist_ok=True)
+    for entry in sorted(ROMDISK_DIR.iterdir(), key=lambda p: p.name):
+        stat = entry.stat()
+        is_dir = "d" if entry.is_dir() else "-"
+        readable = "r"
+        writable = "w" if os.access(entry, os.W_OK) else "-"
+        executable = "x" if (entry.suffix == ".bin" or "." not in entry.name) else "-"
+
+        size = stat.st_size
+        suffix = "B"
+        if size > 64 * 1024:
+            size = size // 1024
+            suffix = "K"
+
+        print(f"{is_dir}{readable}{writable}{executable} {entry.name[:16]:<16}  {size:>8}{suffix}")
+    return 0
