@@ -8,5 +8,3 @@ HOME_DIR = Path("/home/zeal8bit") if Path("/home/zeal8bit").is_dir() else SCRIPT
 MNT_DIR = Path("/mnt") if Path("/mnt").is_dir() else REPO_ROOT / "mnt"
 ROMDISK_DIR = MNT_DIR / "romdisk"
 USER_STATE_DIR = HOME_DIR / ".zeal8bit"
-
-HELP_TEXT = "Help: update, deps, rebuild, activate, make, cmake, kernel, image, create, romdisk, emu[lator], playground"

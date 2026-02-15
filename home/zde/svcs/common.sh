@@ -15,6 +15,17 @@ zde_init() {
   export ZDE_IMAGE="${ZDE_IMAGE:-zoul0813/zeal-dev-environment}"
   export ZDE_VERSION="${ZDE_VERSION:-latest}"
 
+  if [ -n "${ZDE_USE:-}" ] && [ -z "${CONTAINER_CMD:-}" ]; then
+    case "$ZDE_USE" in
+      docker|podman)
+        CONTAINER_CMD="$ZDE_USE"
+        ;;
+      *)
+        echo "WARNING: Unsupported ZDE_USE value '$ZDE_USE' (expected: docker|podman); falling back to auto-detect"
+        ;;
+    esac
+  fi
+
   if [ -z "${CONTAINER_CMD:-}" ]; then
     if command -v docker >/dev/null 2>&1; then
       CONTAINER_CMD=docker
@@ -24,6 +35,11 @@ zde_init() {
       echo "WARNING: docker/podman not found, ensure docker or podman is installed before using ZDE"
       return 1
     fi
+  fi
+
+  if ! command -v "$CONTAINER_CMD" >/dev/null 2>&1; then
+    echo "WARNING: Requested container runtime '$CONTAINER_CMD' not found"
+    return 1
   fi
 
   HOST_UID="${HOST_UID:-$(id -u)}"

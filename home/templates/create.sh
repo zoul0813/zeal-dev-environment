@@ -30,6 +30,7 @@ fi
 # activate the python env
 . /opt/penv/bin/activate
 
+OUT_DIR="${ZDE_CREATE_OUT:-/tmp}"
 printf -v escaped_args "%q " "$@"
-CMD="cookiecutter --no-input -f -o /tmp $escaped_args"
+CMD="cookiecutter --no-input -f -o $OUT_DIR $escaped_args"
 eval $CMD

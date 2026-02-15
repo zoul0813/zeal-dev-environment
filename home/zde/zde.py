@@ -8,7 +8,8 @@ import sys
 from collections.abc import Callable
 from types import ModuleType
 
-from mods.common import HELP_TEXT
+HELP_TEXT = "Help: update, deps, activate, make, cmake, kernel, image, create, romdisk, emu[lator], playground"
+
 
 MODULE_ALIASES = {
     "emu": "emulator",
