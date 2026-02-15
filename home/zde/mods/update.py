@@ -42,7 +42,13 @@ def run_capture(cmd: list[str], cwd: Path | None = None) -> str:
 def is_git_repo(path: Path) -> bool:
     if not path.is_dir():
         return False
-    return run(["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"]) == 0
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
 
 
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
@@ -269,9 +275,6 @@ def update_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
         return rc
 
     if ref_type == "branch":
-        rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", ref_value])
-        if rc != 0:
-            return rc
         rc = run(["git", "-C", str(path), "checkout", ref_value])
         if rc != 0:
             rc = run(["git", "-C", str(path), "checkout", "-B", ref_value, f"origin/{ref_value}"])

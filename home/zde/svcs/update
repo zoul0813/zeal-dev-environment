@@ -17,7 +17,6 @@ fi
 
 "$CONTAINER_CMD" image pull "$ZDE_IMAGE_REF"
 
-echo "Running in-container update tasks"
 source "$ZDE_PATH/home/zde/svcs/common.sh"
 zde_init update "$@" || exit 1
 zde_command update "$@"
