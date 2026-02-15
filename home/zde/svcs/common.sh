@@ -2,6 +2,74 @@
 
 set -euo pipefail
 
+zde_init() {
+  if [ -z "${ZDE_PATH:-}" ]; then
+    ZDE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  fi
+
+  COMPOSE_PATH="$ZDE_PATH/docker-compose.yml"
+  CONTAINER_SERVICE="${CONTAINER_SERVICE:-zeal8bit-dev-env}"
+  ZDE_USER_PATH="${ZDE_USER_PATH:-$HOME/.zeal8bit}"
+  mkdir -p "$ZDE_USER_PATH"
+
+  export ZDE_IMAGE="${ZDE_IMAGE:-zoul0813/zeal-dev-environment}"
+  export ZDE_VERSION="${ZDE_VERSION:-latest}"
+
+  if [ -z "${CONTAINER_CMD:-}" ]; then
+    if command -v docker >/dev/null 2>&1; then
+      CONTAINER_CMD=docker
+    elif command -v podman >/dev/null 2>&1; then
+      CONTAINER_CMD=podman
+    else
+      echo "WARNING: docker/podman not found, ensure docker or podman is installed before using ZDE"
+      return 1
+    fi
+  fi
+
+  HOST_UID="${HOST_UID:-$(id -u)}"
+  HOST_GID="${HOST_GID:-$(id -g)}"
+  ZEAL_KERNEL_VERSION="${ZEAL_KERNEL_VERSION:-$(git -C "$ZDE_PATH/home/Zeal-8-bit-OS" describe --tags 2>/dev/null || true)}"
+  ZDE_IMAGE_REF="${ZDE_IMAGE_REF:-${ZDE_IMAGE}:${ZDE_VERSION}}"
+  LAUNCH_PWD="${LAUNCH_PWD:-$PWD}"
+
+  if [ "${#}" -gt 0 ]; then
+    COMMAND="${1:-}"
+    if [ "${#}" -gt 1 ]; then
+      HOST_ARGS=("${@:2}")
+    else
+      HOST_ARGS=()
+    fi
+  else
+    COMMAND=""
+    HOST_ARGS=()
+  fi
+
+  export CONTAINER_CMD
+  export ZDE_PATH
+  export COMPOSE_PATH
+  export CONTAINER_SERVICE
+  export ZDE_USER_PATH
+  export ZDE_IMAGE_REF
+  export HOST_UID
+  export HOST_GID
+  export ZEAL_KERNEL_VERSION
+  export LAUNCH_PWD
+}
+
+zde_command() {
+  CONTAINER_EXEC=(
+    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
+    -e "HOST_UID=${HOST_UID}"
+    -e "HOST_GID=${HOST_GID}"
+  )
+
+  if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then
+    CONTAINER_EXEC+=( -e "ZEAL_KERNEL_VERSION=${ZEAL_KERNEL_VERSION}" )
+  fi
+
+  "${CONTAINER_EXEC[@]}" "$CONTAINER_SERVICE" /home/zeal8bit/zde/zde.py "$@"
+}
+
 container_running() {
   "$CONTAINER_CMD" ps --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"
 }

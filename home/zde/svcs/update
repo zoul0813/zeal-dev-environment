@@ -12,10 +12,6 @@ git -C "$ZDE_PATH" pull --recurse-submodules origin "$ZDE_BRANCH"
 "$CONTAINER_CMD" image pull "$ZDE_IMAGE_REF"
 
 echo "Running in-container update tasks"
-CONTAINER_EXEC=(
-  "$CONTAINER_CMD" compose -f "$ZDE_PATH/docker-compose.yml" run -i --rm
-  -e "HOST_UID=${HOST_UID}"
-  -e "HOST_GID=${HOST_GID}"
-)
-
-"${CONTAINER_EXEC[@]}" zeal8bit-dev-env /home/zeal8bit/zde/zde.py update "$@"
+source "$ZDE_PATH/home/zde/svcs/common.sh"
+zde_init update "$@" || exit 1
+zde_command update "$@"
