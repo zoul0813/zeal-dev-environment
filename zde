@@ -16,15 +16,15 @@ case "$COMMAND" in
     exit 0
     ;;
   emu|emulator)
-    "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]}"
+    "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]-}"
     exit $?
     ;;
   playground)
-    "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]}"
+    "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]-}"
     exit $?
     ;;
   update)
-    "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]}"
+    "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]-}"
     exit $?
     ;;
   start|stop|restart|status)

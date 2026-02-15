@@ -70,6 +70,12 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         for key in ("id", "repo", "path"):
             if key not in dep or not isinstance(dep[key], str) or not dep[key].strip():
                 raise RuntimeError(f"Dependency missing required string field: {key}")
+        required = dep.get("required")
+        if required is not None and not isinstance(required, bool):
+            raise RuntimeError(f"Dependency '{dep['id']}' has non-boolean required flag")
+        metadata = dep.get("metadata")
+        if metadata is not None and not isinstance(metadata, dict):
+            raise RuntimeError(f"Dependency '{dep['id']}' has non-map metadata")
         dep_id = dep["id"]
         if dep_id in ids:
             raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")
@@ -81,35 +87,28 @@ def load_lock(lock_file: Path) -> dict[str, Any]:
     if not lock_file.is_file():
         return {"version": 1, "dependencies": {}}
 
-    with lock_file.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    if yaml is not None:
+        with lock_file.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    else:
+        yq_check = subprocess.run(
+            ["yq", "--version"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if yq_check.returncode != 0:
+            raise RuntimeError("PyYAML or yq is required to parse deps-lock.yml")
+        raw = run_capture(["yq", "-o=json", ".", str(lock_file)])
+        data = json.loads(raw)
 
     if not isinstance(data, dict):
-        raise RuntimeError("deps.lock must be a JSON object")
+        raise RuntimeError("deps-lock.yml must be a YAML object")
 
     deps = data.get("dependencies")
     if not isinstance(deps, dict):
         data["dependencies"] = {}
     return data
-
-
-def migrate_lock_by_id(
-    lock_deps: dict[str, Any],
-    deps: list[dict[str, Any]],
-) -> dict[str, Any]:
-    by_id: dict[str, Any] = {}
-    for dep in deps:
-        repo = dep["repo"]
-        dep_id = dep["id"]
-
-        candidate = lock_deps.get(dep_id)
-        if not isinstance(candidate, dict):
-            candidate = lock_deps.get(repo)
-        if not isinstance(candidate, dict):
-            candidate = {}
-
-        by_id[dep_id] = candidate
-    return by_id
 
 
 def current_commit(path: Path) -> str | None:
@@ -122,9 +121,30 @@ def current_commit(path: Path) -> str | None:
 
 
 def write_lock(lock_file: Path, lock: dict[str, Any]) -> None:
-    with lock_file.open("w", encoding="utf-8") as f:
-        json.dump(lock, f, indent=2, sort_keys=True)
-        f.write("\n")
+    if yaml is not None:
+        with lock_file.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(lock, f, sort_keys=True)
+        return
+
+    yq_check = subprocess.run(
+        ["yq", "--version"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if yq_check.returncode != 0:
+        raise RuntimeError("PyYAML or yq is required to write deps-lock.yml")
+
+    payload = json.dumps(lock, sort_keys=True)
+    result = subprocess.run(
+        ["yq", "-P", "-o=yaml", ".", "-"],
+        check=True,
+        input=payload,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    lock_file.write_text(result.stdout, encoding="utf-8")
 
 
 def configured_ref(dep: dict[str, Any]) -> tuple[str, str]:
@@ -231,7 +251,7 @@ def resolve_env() -> Env:
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
 
     user_path = Path(os.environ.get("ZDE_USER_PATH", str(zde_home / ".zeal8bit")))
-    lock_file = user_path / "deps.lock"
+    lock_file = user_path / "deps-lock.yml"
 
     return Env(
         zde_root=zde_root,
@@ -256,56 +276,50 @@ def resolve_dep_path(env: Env, dep_path: str) -> Path:
     return candidate
 
 
+def build_lock_entry(
+    dep: dict[str, Any],
+    ref_type: str,
+    ref_value: str,
+    status: str,
+    updated_at: str,
+    current_commit_value: str | None,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "repo": dep["repo"],
+        "path": dep["path"],
+        "ref_type": ref_type,
+        "ref_value": ref_value,
+        "status": status,
+        "updated_at": updated_at,
+        "current_commit": current_commit_value,
+    }
+    metadata = dep.get("metadata")
+    if isinstance(metadata, dict) and metadata:
+        entry["metadata"] = metadata
+    return entry
+
+
 def update_deps(env: Env) -> int:
     env.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
     deps = load_deps_yaml(env.deps_file)
     lock = load_lock(env.lock_file)
-    lock_deps_raw: dict[str, Any] = lock.setdefault("dependencies", {})
-    lock_deps: dict[str, Any] = migrate_lock_by_id(lock_deps_raw, deps)
+    lock.setdefault("dependencies", {})
+    lock_deps: dict[str, Any] = {}
     lock["dependencies"] = lock_deps
 
     now = datetime.now(timezone.utc).isoformat()
 
-    active_ids = set()
     for dep in deps:
         repo = dep["repo"]
         dep_id = dep["id"]
         ref_type, ref_value = configured_ref(dep)
-        active_ids.add(dep_id)
+        required = bool(dep.get("required", False))
         dep_path = resolve_dep_path(env, dep["path"])
-        installed = dep_path.is_dir() and (dep_path / ".git").exists()
-
-        entry = lock_deps.get(dep_id, {})
-        if not isinstance(entry, dict):
-            entry = {}
-
-        entry["key"] = dep_id
-        entry["id"] = dep_id
-        entry["repo"] = repo
-        entry["path"] = dep["path"]
-        entry["ref_type"] = ref_type
-        entry["ref_value"] = ref_value
-        entry["branch"] = dep.get("branch")
-        entry["tag"] = dep.get("tag")
-        entry["commit"] = dep.get("commit")
-        entry["installed"] = installed
-        entry["metadata"] = {k: v for k, v in dep.items() if k not in {"id", "repo", "path", "branch", "tag", "commit"}}
-
-        lock_deps[dep_id] = entry
-
-    for dep_id in list(lock_deps.keys()):
-        if dep_id not in active_ids:
-            del lock_deps[dep_id]
-
-    for dep in deps:
-        repo = dep["repo"]
-        dep_id = dep["id"]
-        entry = lock_deps[dep_id]
-        ref_type = str(entry.get("ref_type") or "branch")
-        ref_value = str(entry.get("ref_value") or "main")
-        dep_path = resolve_dep_path(env, entry["path"])
         has_git = dep_path.is_dir() and (dep_path / ".git").exists()
+
+        if not has_git and not required:
+            continue
 
         if dep_path.exists() and not has_git:
             try:
@@ -313,9 +327,8 @@ def update_deps(env: Env) -> int:
             except OSError:
                 has_entries = True
             if has_entries:
-                entry["status"] = "path_conflict"
-                entry["updated_at"] = now
-                entry["current_commit"] = None
+                if not required:
+                    continue
                 lock["updated_at"] = now
                 write_lock(env.lock_file, lock)
                 print(
@@ -330,17 +343,28 @@ def update_deps(env: Env) -> int:
             rc = update_repo(dep_path, repo, ref_type, ref_value)
 
         if rc != 0:
-            entry["status"] = "sync_failed"
-            entry["updated_at"] = now
+            if has_git:
+                lock_deps[dep_id] = build_lock_entry(
+                    dep=dep,
+                    ref_type=ref_type,
+                    ref_value=ref_value,
+                    status="sync_failed",
+                    updated_at=now,
+                    current_commit_value=current_commit(dep_path),
+                )
             lock["updated_at"] = now
             write_lock(env.lock_file, lock)
             print(f"Failed syncing dependency: {dep_id}", file=sys.stderr)
             return rc
 
-        entry["installed"] = True
-        entry["status"] = "synced"
-        entry["updated_at"] = now
-        entry["current_commit"] = current_commit(dep_path)
+        lock_deps[dep_id] = build_lock_entry(
+            dep=dep,
+            ref_type=ref_type,
+            ref_value=ref_value,
+            status="synced",
+            updated_at=now,
+            current_commit_value=current_commit(dep_path),
+        )
 
     lock["updated_at"] = now
     write_lock(env.lock_file, lock)

@@ -1,64 +1,74 @@
 version: 1
 dependencies:
   - id: Zeal8bit/Zeal-8-bit-OS
-    name: Zeal 8-bit OS
-    description: Zeal 8-bit operating system source
     repo: https://github.com/Zeal8bit/Zeal-8-bit-OS.git
     path: home/Zeal-8-bit-OS
     branch: main
+    required: true
+    metadata:
+      name: Zeal 8-bit OS
+      description: Zeal 8-bit operating system source
 
   - id: Zeal8bit/Zeal-VideoBoard-SDK
-    name: Zeal VideoBoard SDK
-    description: VideoBoard SDK and tools
     repo: https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git
     path: home/Zeal-VideoBoard-SDK
     branch: main
+    metadata:
+      name: Zeal VideoBoard SDK
+      description: VideoBoard SDK and tools
 
   - id: Zeal8bit/Zeal-Bootloader
-    name: Zeal Bootloader
-    description: Zeal bootloader source
     repo: https://github.com/Zeal8bit/Zeal-Bootloader.git
     path: home/Zeal-Bootloader
     branch: main
+    metadata:
+      name: Zeal Bootloader
+      description: Zeal bootloader source
 
   - id: Zeal8bit/ZealFS
-    name: ZealFS
-    description: Zeal file system tools/source
     repo: https://github.com/Zeal8bit/ZealFS.git
     path: home/ZealFS
     branch: main
+    metadata:
+      name: ZealFS
+      description: Zeal file system tools/source
 
   - id: Zeal8bit/Zeal-WebEmulator
-    name: Zeal Web Emulator
-    description: Browser-based Zeal emulator
     repo: https://github.com/Zeal8bit/Zeal-WebEmulator.git
     path: home/Zeal-WebEmulator
-    branch: master
+    branch: main
+    metadata:
+      name: Zeal Web Emulator
+      description: Browser-based Zeal emulator
 
   - id: zoul0813/zeal-game-dev-kit
-    name: Zeal Game Dev Kit
-    description: Game development kit
     repo: https://github.com/zoul0813/zeal-game-dev-kit.git
     path: home/zeal-game-dev-kit
     branch: main
+    metadata:
+      name: Zeal Game Dev Kit
+      description: Game development kit
 
   - id: zoul0813/zeal-archiver
-    name: Zeal Archiver
-    description: Zeal archiving tools
     repo: https://github.com/zoul0813/zeal-archiver.git
     path: home/zeal-archiver
     branch: main
+    metadata:
+      name: Zeal Archiver
+      description: Zeal archiving tools
 
   - id: Zeal8bit/Zeal-Playground
-    name: Zeal Playground
-    description: Playground web app and files
     repo: https://github.com/Zeal8bit/Zeal-Playground.git
     path: home/Zeal-Playground
     branch: main
+    metadata:
+      name: Zeal Playground
+      description: Playground web app and files
 
   - id: zoul0813/zeal-coreutils
-    name: Zeal Coreutils
-    description: Core utility programs for Zeal
     repo: https://github.com/zoul0813/zeal-coreutils.git
     path: home/zeal-coreutils
     branch: main
+    metadata:
+      name: Zeal Coreutils
+      description: Core utility programs for Zeal
