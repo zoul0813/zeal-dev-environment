@@ -2,16 +2,18 @@
 
 set -euo pipefail
 
-ZDE_BRANCH="${ZDE_BRANCH:-$(git -C "$ZDE_PATH" branch --show-current 2>/dev/null || true)}"
+CURRENT_BRANCH="$(git -C "$ZDE_PATH" branch --show-current 2>/dev/null || true)"
 
-if [ -z "$ZDE_BRANCH" ]; then
-  echo "Unable to determine current ZDE branch (detached HEAD)."
-  echo "Set ZDE_BRANCH explicitly to run update, e.g. ZDE_BRANCH=main zde update"
-  exit 1
+if [ "$CURRENT_BRANCH" = "main" ]; then
+  echo "Pulling latest Zeal 8-bit repository branch: main"
+  git -C "$ZDE_PATH" pull origin main
+else
+  if [ -z "$CURRENT_BRANCH" ]; then
+    echo "Skipping ZDE git pull (detached HEAD; not on main)"
+  else
+    echo "Skipping ZDE git pull (current branch: $CURRENT_BRANCH)"
+  fi
 fi
-
-echo "Pulling latest Zeal 8-bit repository branch: $ZDE_BRANCH"
-git -C "$ZDE_PATH" pull origin "$ZDE_BRANCH"
 
 "$CONTAINER_CMD" image pull "$ZDE_IMAGE_REF"
 

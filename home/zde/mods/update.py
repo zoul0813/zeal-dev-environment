@@ -93,23 +93,23 @@ def load_lock(lock_file: Path) -> dict[str, Any]:
     return data
 
 
-def migrate_lock_by_repo(
+def migrate_lock_by_id(
     lock_deps: dict[str, Any],
     deps: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    by_repo: dict[str, Any] = {}
+    by_id: dict[str, Any] = {}
     for dep in deps:
         repo = dep["repo"]
         dep_id = dep["id"]
 
-        candidate = lock_deps.get(repo)
+        candidate = lock_deps.get(dep_id)
         if not isinstance(candidate, dict):
-            candidate = lock_deps.get(dep_id)
+            candidate = lock_deps.get(repo)
         if not isinstance(candidate, dict):
             candidate = {}
 
-        by_repo[repo] = candidate
-    return by_repo
+        by_id[dep_id] = candidate
+    return by_id
 
 
 def current_commit(path: Path) -> str | None:
@@ -121,28 +121,93 @@ def current_commit(path: Path) -> str | None:
         return None
 
 
-def update_repo(path: Path, branch: str) -> int:
-    if not (path / ".git").exists():
+def write_lock(lock_file: Path, lock: dict[str, Any]) -> None:
+    with lock_file.open("w", encoding="utf-8") as f:
+        json.dump(lock, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def configured_ref(dep: dict[str, Any]) -> tuple[str, str]:
+    commit = dep.get("commit")
+    tag = dep.get("tag")
+    branch = dep.get("branch")
+
+    refs = []
+    if isinstance(commit, str) and commit.strip():
+        refs.append(("commit", commit.strip()))
+    if isinstance(tag, str) and tag.strip():
+        refs.append(("tag", tag.strip()))
+    if isinstance(branch, str) and branch.strip():
+        refs.append(("branch", branch.strip()))
+
+    if len(refs) > 1:
+        raise RuntimeError(
+            f"Dependency '{dep.get('id', dep.get('repo', 'unknown'))}' must declare only one of commit/tag/branch"
+        )
+    if len(refs) == 1:
+        return refs[0]
+    return ("branch", "main")
+
+
+def ensure_origin(path: Path, repo: str) -> int:
+    try:
+        existing = run_capture(["git", "-C", str(path), "remote", "get-url", "origin"])
+    except subprocess.CalledProcessError:
+        existing = ""
+
+    if existing == repo:
         return 0
 
-    rc = run(["git", "-C", str(path), "fetch", "origin", branch])
+    if existing:
+        return run(["git", "-C", str(path), "remote", "set-url", "origin", repo])
+
+    return run(["git", "-C", str(path), "remote", "add", "origin", repo])
+
+
+def clone_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if ref_type in {"branch", "tag"}:
+        return run(["git", "clone", "--depth", "1", "--branch", ref_value, repo, str(path)])
+
+    rc = run(["git", "clone", "--no-checkout", "--depth", "1", repo, str(path)])
     if rc != 0:
         return rc
 
-    try:
-        current_branch = run_capture(["git", "-C", str(path), "rev-parse", "--abbrev-ref", "HEAD"])
-    except subprocess.CalledProcessError:
-        current_branch = "HEAD"
+    rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", ref_value])
+    if rc != 0:
+        return rc
+    return run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"])
 
-    if current_branch != branch:
-        rc = run(["git", "-C", str(path), "checkout", branch])
+
+def update_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
+    if not (path / ".git").exists():
+        return 1
+
+    rc = ensure_origin(path, repo)
+    if rc != 0:
+        return rc
+
+    if ref_type == "branch":
+        rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", ref_value])
         if rc != 0:
-            rc = run(["git", "-C", str(path), "checkout", "-B", branch, f"origin/{branch}"])
+            return rc
+        rc = run(["git", "-C", str(path), "checkout", ref_value])
+        if rc != 0:
+            rc = run(["git", "-C", str(path), "checkout", "-B", ref_value, f"origin/{ref_value}"])
             if rc != 0:
                 return rc
+        return run(["git", "-C", str(path), "pull", "--ff-only", "origin", ref_value])
 
-    rc = run(["git", "-C", str(path), "pull", "--ff-only", "origin", branch])
-    return rc
+    if ref_type == "tag":
+        rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", "tag", ref_value])
+        if rc != 0:
+            return rc
+        return run(["git", "-C", str(path), "checkout", "--detach", f"tags/{ref_value}"])
+
+    rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", ref_value])
+    if rc != 0:
+        return rc
+    return run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"])
 
 
 def resolve_env() -> Env:
@@ -197,70 +262,88 @@ def update_deps(env: Env) -> int:
     deps = load_deps_yaml(env.deps_file)
     lock = load_lock(env.lock_file)
     lock_deps_raw: dict[str, Any] = lock.setdefault("dependencies", {})
-    lock_deps: dict[str, Any] = migrate_lock_by_repo(lock_deps_raw, deps)
+    lock_deps: dict[str, Any] = migrate_lock_by_id(lock_deps_raw, deps)
     lock["dependencies"] = lock_deps
 
     now = datetime.now(timezone.utc).isoformat()
 
-    active_repos = set()
+    active_ids = set()
     for dep in deps:
         repo = dep["repo"]
         dep_id = dep["id"]
-        active_repos.add(repo)
+        ref_type, ref_value = configured_ref(dep)
+        active_ids.add(dep_id)
         dep_path = resolve_dep_path(env, dep["path"])
         installed = dep_path.is_dir() and (dep_path / ".git").exists()
 
-        entry = lock_deps.get(repo, {})
+        entry = lock_deps.get(dep_id, {})
         if not isinstance(entry, dict):
             entry = {}
 
-        entry["key"] = repo
+        entry["key"] = dep_id
         entry["id"] = dep_id
         entry["repo"] = repo
         entry["path"] = dep["path"]
-        entry["branch"] = dep.get("branch", "main")
+        entry["ref_type"] = ref_type
+        entry["ref_value"] = ref_value
+        entry["branch"] = dep.get("branch")
+        entry["tag"] = dep.get("tag")
+        entry["commit"] = dep.get("commit")
         entry["installed"] = installed
-        entry["metadata"] = {k: v for k, v in dep.items() if k not in {"id", "repo", "path", "branch"}}
+        entry["metadata"] = {k: v for k, v in dep.items() if k not in {"id", "repo", "path", "branch", "tag", "commit"}}
 
-        lock_deps[repo] = entry
+        lock_deps[dep_id] = entry
 
-    for repo in list(lock_deps.keys()):
-        if repo not in active_repos:
-            del lock_deps[repo]
+    for dep_id in list(lock_deps.keys()):
+        if dep_id not in active_ids:
+            del lock_deps[dep_id]
 
     for dep in deps:
         repo = dep["repo"]
         dep_id = dep["id"]
-        entry = lock_deps[repo]
-        if not entry.get("installed"):
-            entry["status"] = "not_installed"
-            entry["updated_at"] = now
-            entry["current_commit"] = None
-            continue
-
-        dep_path = env.zde_path / entry["path"]
-        branch = str(entry.get("branch") or "main")
+        entry = lock_deps[dep_id]
+        ref_type = str(entry.get("ref_type") or "branch")
+        ref_value = str(entry.get("ref_value") or "main")
         dep_path = resolve_dep_path(env, entry["path"])
+        has_git = dep_path.is_dir() and (dep_path / ".git").exists()
 
-        rc = update_repo(dep_path, branch)
+        if dep_path.exists() and not has_git:
+            try:
+                has_entries = next(dep_path.iterdir(), None) is not None
+            except OSError:
+                has_entries = True
+            if has_entries:
+                entry["status"] = "path_conflict"
+                entry["updated_at"] = now
+                entry["current_commit"] = None
+                lock["updated_at"] = now
+                write_lock(env.lock_file, lock)
+                print(
+                    f"Dependency path exists but is not a git repo: {dep_id} ({dep_path})",
+                    file=sys.stderr,
+                )
+                return 1
+
+        if not has_git:
+            rc = clone_repo(dep_path, repo, ref_type, ref_value)
+        else:
+            rc = update_repo(dep_path, repo, ref_type, ref_value)
+
         if rc != 0:
-            entry["status"] = "update_failed"
+            entry["status"] = "sync_failed"
             entry["updated_at"] = now
             lock["updated_at"] = now
-            with env.lock_file.open("w", encoding="utf-8") as f:
-                json.dump(lock, f, indent=2, sort_keys=True)
-                f.write("\n")
-            print(f"Failed updating dependency: {dep_id}", file=sys.stderr)
+            write_lock(env.lock_file, lock)
+            print(f"Failed syncing dependency: {dep_id}", file=sys.stderr)
             return rc
 
-        entry["status"] = "updated"
+        entry["installed"] = True
+        entry["status"] = "synced"
         entry["updated_at"] = now
         entry["current_commit"] = current_commit(dep_path)
 
     lock["updated_at"] = now
-    with env.lock_file.open("w", encoding="utf-8") as f:
-        json.dump(lock, f, indent=2, sort_keys=True)
-        f.write("\n")
+    write_lock(env.lock_file, lock)
 
     print(f"Dependency lock updated: {env.lock_file}")
     return 0
