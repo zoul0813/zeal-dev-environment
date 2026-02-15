@@ -101,3 +101,46 @@ stop_container() {
     "$CONTAINER_CMD" rm -f "$CONTAINER_NAME" >/dev/null
   fi
 }
+
+dep_installed() {
+  local dep_id="$1"
+  local lock_file="${ZDE_USER_PATH:-$HOME/.zeal8bit}/deps-lock.yml"
+  if [ ! -f "$lock_file" ]; then
+    return 1
+  fi
+
+  if command -v yq >/dev/null 2>&1; then
+    local repo
+    repo=$(yq -r ".dependencies.\"$dep_id\".repo // \"\"" "$lock_file" 2>/dev/null || true)
+    [ -n "$repo" ] && [ "$repo" != "null" ]
+    return $?
+  fi
+
+  local escaped
+  escaped=$(printf '%s' "$dep_id" | sed 's/[.[\\*^$()+?{|]/\\&/g')
+  grep -Eq "^[[:space:]]{2}${escaped}:" "$lock_file"
+}
+
+require_deps() {
+  local missing=()
+  local dep_id
+  for dep_id in "$@"; do
+    if ! dep_installed "$dep_id"; then
+      missing+=("$dep_id")
+    fi
+  done
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  echo "Missing required dependencies for this command:"
+  for dep_id in "${missing[@]}"; do
+    echo "  - $dep_id"
+  done
+  echo "Install with:"
+  for dep_id in "${missing[@]}"; do
+    echo "  zde deps install \"$dep_id\""
+  done
+  return 1
+}

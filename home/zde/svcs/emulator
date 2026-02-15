@@ -9,11 +9,16 @@ SERVER_PORT=1145
 # Shared container lifecycle helpers for service scripts.
 source "$ZDE_PATH/home/zde/svcs/common.sh"
 
+REQUIRED_DEPS=(
+  "Zeal8bit/Zeal-WebEmulator"
+)
+
 CMD="${1:-start}"
 case "$CMD" in
   start)
     shift || true
     QUERY="${1:-}"
+    require_deps "${REQUIRED_DEPS[@]}" || exit 1
     start_container
     PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1145/?r=latest&${QUERY}"
     ;;
@@ -22,6 +27,7 @@ case "$CMD" in
     ;;
   *)
     QUERY="$CMD"
+    require_deps "${REQUIRED_DEPS[@]}" || exit 1
     start_container
     PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1145/?r=latest&${QUERY}"
     ;;

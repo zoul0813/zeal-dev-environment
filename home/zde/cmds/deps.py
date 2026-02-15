@@ -25,6 +25,17 @@ def _deps_by_id() -> tuple[dict[str, dict], object]:
     return dep_map, env
 
 
+def _lookup_dep(dep_map: dict[str, dict], raw_id: str) -> tuple[str, dict] | None:
+    if raw_id in dep_map:
+        return raw_id, dep_map[raw_id]
+
+    wanted = raw_id.casefold()
+    for dep_id, dep in dep_map.items():
+        if dep_id.casefold() == wanted:
+            return dep_id, dep
+    return None
+
+
 def _dependency_chain(dep_map: dict[str, dict], dep_id: str) -> list[str]:
     visiting: set[str] = set()
     visited: set[str] = set()
@@ -101,12 +112,13 @@ def subcmd_install(args: list[str]) -> int:
         print("Usage: zde deps install <id>")
         return 1
 
-    dep_id = args[0]
+    raw_id = args[0]
     dep_map, env = _deps_by_id()
-    target_dep = dep_map.get(dep_id)
-    if target_dep is None:
-        print(f"Unknown dependency id: {dep_id}")
+    resolved = _lookup_dep(dep_map, raw_id)
+    if resolved is None:
+        print(f"Unknown dependency id: {raw_id}")
         return 1
+    dep_id, target_dep = resolved
 
     if bool(target_dep.get("required", False)):
         print(f"Dependency is required and managed by update: {dep_id}")
@@ -147,12 +159,13 @@ def subcmd_remove(args: list[str]) -> int:
         print("Usage: zde deps remove <id>")
         return 1
 
-    dep_id = args[0]
+    raw_id = args[0]
     dep_map, env = _deps_by_id()
-    dep = dep_map.get(dep_id)
-    if dep is None:
-        print(f"Unknown dependency id: {dep_id}")
+    resolved = _lookup_dep(dep_map, raw_id)
+    if resolved is None:
+        print(f"Unknown dependency id: {raw_id}")
         return 1
+    dep_id, dep = resolved
 
     if bool(dep.get("required", False)):
         print(f"Cannot remove required dependency: {dep_id}")
