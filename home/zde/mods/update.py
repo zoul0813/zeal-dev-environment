@@ -76,11 +76,48 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         metadata = dep.get("metadata")
         if metadata is not None and not isinstance(metadata, dict):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-map metadata")
+        depends_on = dep.get("depends_on")
+        if depends_on is not None:
+            if not isinstance(depends_on, list) or any(not isinstance(item, str) or not item.strip() for item in depends_on):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid depends_on list")
         dep_id = dep["id"]
         if dep_id in ids:
             raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")
         ids.add(dep_id)
+
+    for dep in deps:
+        dep_id = dep["id"]
+        for parent in dep.get("depends_on", []):
+            if parent not in ids:
+                raise RuntimeError(f"Dependency '{dep_id}' depends on unknown id '{parent}'")
+            if parent == dep_id:
+                raise RuntimeError(f"Dependency '{dep_id}' cannot depend on itself")
     return deps
+
+
+def order_deps_by_dependency(deps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    dep_map = {dep["id"]: dep for dep in deps}
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    ordered: list[dict[str, Any]] = []
+
+    def visit(dep_id: str) -> None:
+        if dep_id in visited:
+            return
+        if dep_id in visiting:
+            raise RuntimeError(f"Dependency cycle detected at '{dep_id}'")
+        visiting.add(dep_id)
+        dep = dep_map[dep_id]
+        for parent in dep.get("depends_on", []):
+            visit(parent)
+        visiting.remove(dep_id)
+        visited.add(dep_id)
+        ordered.append(dep)
+
+    for dep in deps:
+        visit(dep["id"])
+
+    return ordered
 
 
 def load_lock(lock_file: Path) -> dict[str, Any]:
@@ -296,13 +333,16 @@ def build_lock_entry(
     metadata = dep.get("metadata")
     if isinstance(metadata, dict) and metadata:
         entry["metadata"] = metadata
+    depends_on = dep.get("depends_on")
+    if isinstance(depends_on, list) and depends_on:
+        entry["depends_on"] = depends_on
     return entry
 
 
 def update_deps(env: Env) -> int:
     env.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
-    deps = load_deps_yaml(env.deps_file)
+    deps = order_deps_by_dependency(load_deps_yaml(env.deps_file))
     lock = load_lock(env.lock_file)
     lock.setdefault("dependencies", {})
     lock_deps: dict[str, Any] = {}

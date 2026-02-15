@@ -45,6 +45,8 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-game-dev-kit.git
     path: home/zeal-game-dev-kit
     branch: main
+    depends_on:
+      - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
       name: Zeal Game Dev Kit
       description: Game development kit
@@ -69,6 +71,8 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-coreutils.git
     path: home/zeal-coreutils
     branch: main
+    depends_on:
+      - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
       name: Zeal Coreutils
       description: Core utility programs for Zeal
