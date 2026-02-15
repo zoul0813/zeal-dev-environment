@@ -41,34 +41,37 @@ def has_legacy_submodules(
     return False
 
 
-def migrate_broken_submodule_checkout(path: Path, migrate_enabled: bool) -> bool:
+def migrate_broken_submodule_checkout(path: Path, migrate_enabled: bool) -> Path | None:
     missing_target = broken_submodule_gitdir(path)
     if missing_target is None:
-        return False
+        return None
 
     if migrate_enabled:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-        backup = path.with_name(f"{path.name}.zde-backup-{ts}")
+        backup_root = path.parent / "backup" / "migrate"
+        backup_root.mkdir(parents=True, exist_ok=True)
+        backup = backup_root / f"{path.name}.zde-backup-{ts}"
         shutil.move(str(path), str(backup))
         print(
             f"Detected broken legacy submodule checkout at {path}; moved to {backup} "
             f"(missing gitdir: {missing_target})"
         )
-        return True
+        return backup
 
     shutil.rmtree(path)
     print(
         f"Detected broken legacy submodule checkout at {path}; removed because migrate=false "
         f"(missing gitdir: {missing_target})"
     )
-    return False
+    return None
 
 
 def migrate_legacy_submodules(
     deps: list[dict],
     resolve_dep_path: Callable[[str], Path],
-) -> set[str]:
+) -> tuple[set[str], list[Path]]:
     force_install_ids: set[str] = set()
+    backup_paths: list[Path] = []
     for dep in deps:
         migrate_field = dep.get("migrate")
         if migrate_field is not None and not isinstance(migrate_field, bool):
@@ -77,10 +80,11 @@ def migrate_legacy_submodules(
         if not dep_path.exists():
             continue
         migrate_enabled = bool(migrate_field) if migrate_field is not None else False
-        migrated = migrate_broken_submodule_checkout(dep_path, migrate_enabled)
-        if migrated:
+        backup_path = migrate_broken_submodule_checkout(dep_path, migrate_enabled)
+        if backup_path is not None:
             force_install_ids.add(dep["id"])
-    return force_install_ids
+            backup_paths.append(backup_path)
+    return force_install_ids, backup_paths
 
 
 def migrate_and_install_legacy_submodules(
@@ -94,7 +98,7 @@ def migrate_and_install_legacy_submodules(
     if not has_legacy_submodules(deps, resolve_dep_path):
         return 0
 
-    migrated_ids = migrate_legacy_submodules(deps, resolve_dep_path)
+    migrated_ids, backup_paths = migrate_legacy_submodules(deps, resolve_dep_path)
     if not migrated_ids:
         return 0
 
@@ -111,6 +115,13 @@ def migrate_and_install_legacy_submodules(
             rc = clone_repo(dep_path, dep["repo"], ref_type, ref_value)
         if rc != 0:
             return rc
+
+    backup_roots = sorted({str(path.parent) for path in backup_paths})
+    if backup_roots:
+        print("Legacy dependency backups were saved to:")
+        for root in backup_roots:
+            print(f"  {root}")
+        print("Review these backups and remove them when no longer needed.")
 
     return 0
 
