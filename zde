@@ -54,7 +54,16 @@ case "$COMMAND" in
     "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]}"
     exit $?
     ;;
-  update|status|start|stop|restart|rebuild)
+  update)
+    "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]}"
+    exit $?
+    ;;
+  start|stop|restart|status)
+    echo "Command removed: $COMMAND"
+    echo "ZDE now runs containers/services on demand and manages lifecycle automatically."
+    exit 1
+    ;;
+  rebuild)
     echo "Host-only command pending reimplementation in /zde: $COMMAND"
     echo "TODO(host): implement $COMMAND in this bash wrapper."
     exit 1

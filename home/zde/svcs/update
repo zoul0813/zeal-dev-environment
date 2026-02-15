@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -euo pipefail
+
+ZDE_BRANCH="${ZDE_BRANCH:-main}"
+
+echo "Pulling latest Zeal 8-bit repositories"
+git -C "$ZDE_PATH" checkout "$ZDE_BRANCH"
+git -C "$ZDE_PATH" submodule init
+git -C "$ZDE_PATH" pull --recurse-submodules origin "$ZDE_BRANCH"
+
+"$CONTAINER_CMD" image pull "$ZDE_IMAGE_REF"
+
+echo "Running in-container update tasks"
+CONTAINER_EXEC=(
+  "$CONTAINER_CMD" compose -f "$ZDE_PATH/docker-compose.yml" run -i --rm
+  -e "HOST_UID=${HOST_UID}"
+  -e "HOST_GID=${HOST_GID}"
+)
+
+"${CONTAINER_EXEC[@]}" zeal8bit-dev-env /home/zeal8bit/zde/zde.py update "$@"
