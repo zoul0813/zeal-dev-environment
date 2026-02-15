@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -euo pipefail
+
+CONTAINER_NAME=zeal8bit-playground
+SERVER_DIR=/home/zeal8bit/Zeal-Playground
+SERVER_PORT=1155
+
+# Shared container lifecycle helpers for service scripts.
+source "$ZDE_PATH/home/zde/svcs/common.sh"
+
+build_manifest() {
+  "$CONTAINER_CMD" run --rm \
+    --platform linux/amd64 \
+    -v "$ZDE_PATH/home:/home/zeal8bit" \
+    "$ZDE_IMAGE_REF" \
+    /home/zeal8bit/Zeal-Playground/tools/build_manifest.py \
+    /home/zeal8bit/Zeal-Playground/files \
+    /home/zeal8bit/Zeal-Playground/files/manifest.json >/dev/null
+}
+
+CMD="${1:-start}"
+case "$CMD" in
+  start)
+    shift || true
+    QUERY="${1:-}"
+    build_manifest
+    start_container
+    PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1155/?r=latest&${QUERY}"
+    ;;
+  stop)
+    stop_container
+    ;;
+  *)
+    QUERY="$CMD"
+    build_manifest
+    start_container
+    PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1155/?r=latest&${QUERY}"
+    ;;
+esac

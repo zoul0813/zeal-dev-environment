@@ -1,0 +1,28 @@
+#!/bin/bash
+
+set -euo pipefail
+
+CONTAINER_NAME=zeal8bit-emulator
+SERVER_DIR=/home/zeal8bit/Zeal-WebEmulator
+SERVER_PORT=1145
+
+# Shared container lifecycle helpers for service scripts.
+source "$ZDE_PATH/home/zde/svcs/common.sh"
+
+CMD="${1:-start}"
+case "$CMD" in
+  start)
+    shift || true
+    QUERY="${1:-}"
+    start_container
+    PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1145/?r=latest&${QUERY}"
+    ;;
+  stop)
+    stop_container
+    ;;
+  *)
+    QUERY="$CMD"
+    start_container
+    PATH=$PATH:"$ZDE_PATH"/bin "$ZDE_PATH"/bin/xdg-open "http://127.0.0.1:1145/?r=latest&${QUERY}"
+    ;;
+esac

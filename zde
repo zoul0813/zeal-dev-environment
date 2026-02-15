@@ -5,6 +5,8 @@ set +x
 ZDE_PATH=$(dirname "$0")
 COMPOSE_PATH="$ZDE_PATH/docker-compose.yml"
 CONTAINER_SERVICE=zeal8bit-dev-env
+ZDE_USER_PATH="${ZDE_USER_PATH:-$HOME/.zeal8bit}"
+mkdir -p "$ZDE_USER_PATH"
 
 export ZDE_IMAGE=${ZDE_IMAGE:-zoul0813/zeal-dev-environment}
 export ZDE_VERSION=${ZDE_VERSION:-latest}
@@ -22,10 +24,37 @@ HOST_UID=$(id -u)
 HOST_GID=$(id -g)
 
 ZEAL_KERNEL_VERSION=$(git -C "$ZDE_PATH/home/Zeal-8-bit-OS" describe --tags 2>/dev/null || true)
-
 COMMAND="$1"
+HOST_ARGS=("${@:2}")
+
+ZDE_IMAGE_REF="${ZDE_IMAGE}:${ZDE_VERSION}"
+LAUNCH_PWD="$PWD"
+
+export CONTAINER_CMD
+export ZDE_PATH
+export ZDE_IMAGE_REF
+export HOST_UID
+export HOST_GID
+export LAUNCH_PWD
+
 case "$COMMAND" in
-  activate|update|status|start|stop|restart|rebuild)
+  activate)
+    if [ -t 1 ]; then
+      echo "⚠️  This script must be run with: eval \"\$(zde activate)\"" >&2
+    else
+      "$ZDE_PATH/bin/activate"
+    fi
+    exit 0
+    ;;
+  emu|emulator)
+    "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]}"
+    exit $?
+    ;;
+  playground)
+    "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]}"
+    exit $?
+    ;;
+  update|status|start|stop|restart|rebuild)
     echo "Host-only command pending reimplementation in /zde: $COMMAND"
     echo "TODO(host): implement $COMMAND in this bash wrapper."
     exit 1
