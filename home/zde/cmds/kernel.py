@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import shutil
 
-from common import HOME_DIR, USER_STATE_DIR
-from process import run
+from mods.common import HOME_DIR, USER_STATE_DIR
+from mods.process import run
 
 
 def run_kernel(args: list[str]) -> int:

@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable
 from types import ModuleType
 
-from common import HELP_TEXT
+from mods.common import HELP_TEXT
 
 MODULE_ALIASES = {
     "-i": "shell",
@@ -48,12 +48,13 @@ def main(argv: list[str]) -> int:
 
     command_name = argv[0]
     module_name = MODULE_ALIASES.get(command_name, command_name).replace("-", "_")
+    module_path = f"cmds.{module_name}"
     module_args = argv[1:]
 
     try:
-        module = importlib.import_module(module_name)
+        module = importlib.import_module(module_path)
     except ModuleNotFoundError as exc:
-        if exc.name == module_name:
+        if exc.name in {module_path, module_name}:
             print(f"Unknown command module: {module_name}")
             return print_top_help()
         raise

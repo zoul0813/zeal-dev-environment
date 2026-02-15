@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from common import HOME_DIR, MNT_DIR
-from process import run
+from mods.common import HOME_DIR, MNT_DIR
+from mods.process import run
 
 
 def main(args: list[str]) -> int:

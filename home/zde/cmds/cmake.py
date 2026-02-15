@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from process import run
+from mods.process import run
 
 
 def main(args: list[str]) -> int:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from _service import start as start_supervised_service
-from _service import stop as stop_supervised_service
+from ._service import start as start_supervised_service
+from ._service import stop as stop_supervised_service
 
 
 def subcmd_start(args: list[str]) -> int:

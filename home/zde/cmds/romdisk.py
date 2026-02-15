@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from common import ROMDISK_DIR
+from mods.common import ROMDISK_DIR
 
 
 def copy_path_to_romdisk(path: Path) -> None:

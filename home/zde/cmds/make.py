@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 
-from common import HOME_DIR
-from process import run
+from mods.common import HOME_DIR
+from mods.process import run
 
 
 def main(args: list[str]) -> int:

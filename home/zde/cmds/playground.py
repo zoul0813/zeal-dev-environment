@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from _service import start as start_supervised_service
-from _service import stop as stop_supervised_service
-from common import HOME_DIR
-from process import run_checked
+from ._service import start as start_supervised_service
+from ._service import stop as stop_supervised_service
+from mods.common import HOME_DIR
+from mods.process import run_checked
 
 
 def subcmd_start(args: list[str]) -> int:

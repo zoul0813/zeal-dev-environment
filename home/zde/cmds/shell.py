@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from process import run
+from mods.process import run
 
 
 def main(args: list[str]) -> int:
