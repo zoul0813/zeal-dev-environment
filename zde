@@ -7,6 +7,14 @@ source "$ZDE_PATH/home/zde/svcs/common.sh"
 zde_init "$@" || exit 1
 
 case "$COMMAND" in
+  -i)
+    if [ "${HOST_ARGS[0]-}" = "-b" ]; then
+      zde_shell "${ZDE_BUILD_SERVICE:-zeal8bit-build-env}"
+    else
+      zde_shell "$CONTAINER_SERVICE"
+    fi
+    exit $?
+    ;;
   activate)
     if [ -t 1 ]; then
       echo "⚠️  This script must be run with: eval \"\$(zde activate)\"" >&2

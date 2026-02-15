@@ -11,7 +11,6 @@ from types import ModuleType
 from mods.common import HELP_TEXT
 
 MODULE_ALIASES = {
-    "-i": "shell",
     "emu": "emulator",
 }
 

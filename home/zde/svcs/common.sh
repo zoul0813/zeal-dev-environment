@@ -70,6 +70,33 @@ zde_command() {
   "${CONTAINER_EXEC[@]}" "$CONTAINER_SERVICE" /home/zeal8bit/zde/zde.py "$@"
 }
 
+zde_service_exists() {
+  local service_name="$1"
+  "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" config --services 2>/dev/null | grep -xq "$service_name"
+}
+
+zde_shell() {
+  local service_name="${1:-$CONTAINER_SERVICE}"
+  if ! zde_service_exists "$service_name"; then
+    if [ "$service_name" != "$CONTAINER_SERVICE" ]; then
+      echo "Service '$service_name' not found in docker-compose.yml, falling back to '$CONTAINER_SERVICE'"
+      service_name="$CONTAINER_SERVICE"
+    fi
+  fi
+
+  CONTAINER_EXEC=(
+    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
+    -e "HOST_UID=${HOST_UID}"
+    -e "HOST_GID=${HOST_GID}"
+  )
+
+  if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then
+    CONTAINER_EXEC+=( -e "ZEAL_KERNEL_VERSION=${ZEAL_KERNEL_VERSION}" )
+  fi
+
+  "${CONTAINER_EXEC[@]}" "$service_name" /bin/bash
+}
+
 container_running() {
   "$CONTAINER_CMD" ps --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"
 }
