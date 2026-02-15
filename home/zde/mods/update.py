@@ -39,6 +39,12 @@ def run_capture(cmd: list[str], cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
+def is_git_repo(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    return run(["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"]) == 0
+
+
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     if not deps_file.is_file():
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
@@ -367,14 +373,13 @@ def update_deps(env: Env) -> int:
     lock["dependencies"] = lock_deps
 
     now = datetime.now(timezone.utc).isoformat()
-
     for dep in deps:
         repo = dep["repo"]
         dep_id = dep["id"]
         ref_type, ref_value = configured_ref(dep)
         required = bool(dep.get("required", False))
         dep_path = resolve_dep_path(env, dep["path"])
-        has_git = dep_path.is_dir() and (dep_path / ".git").exists()
+        has_git = is_git_repo(dep_path)
 
         if not has_git and not required:
             continue

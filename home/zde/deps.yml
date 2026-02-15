@@ -5,6 +5,7 @@ dependencies:
     path: home/Zeal-8-bit-OS
     branch: main
     required: true
+    migrate: true
     aliases:
       - zos
       - zealos
@@ -16,6 +17,7 @@ dependencies:
     repo: https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git
     path: home/Zeal-VideoBoard-SDK
     branch: main
+    migrate: true
     aliases:
       - zvb
       - video
@@ -57,6 +59,7 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-game-dev-kit.git
     path: home/zeal-game-dev-kit
     branch: main
+    migrate: true
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
@@ -89,6 +92,7 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-coreutils.git
     path: home/zeal-coreutils
     branch: main
+    migrate: true
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:

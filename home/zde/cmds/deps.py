@@ -5,11 +5,13 @@ import shutil
 import sys
 from datetime import datetime, timezone
 
+from mods.migrate import migrate_broken_submodule_checkout
 from mods.update import (
     build_lock_entry,
     clone_repo,
     configured_ref,
     current_commit,
+    is_git_repo,
     load_deps_yaml,
     load_lock,
     order_deps_by_dependency,
@@ -87,7 +89,7 @@ def _dependency_chain(dep_map: dict[str, dict], dep_id: str) -> list[str]:
 
 
 def _is_git_repo(dep_path) -> bool:
-    return dep_path.is_dir() and (dep_path / ".git").exists()
+    return is_git_repo(dep_path)
 
 
 def _write_dep_lock_entry(env, dep_id: str, dep: dict, status: str) -> None:
@@ -241,6 +243,10 @@ def subcmd_install(args: list[str]) -> int:
         dep = dep_map[install_id]
         dep_path = resolve_dep_path(env, dep["path"])
         has_git = _is_git_repo(dep_path)
+        if not has_git and dep_path.exists():
+            migrated = migrate_broken_submodule_checkout(dep_path, True)
+            if migrated:
+                has_git = False
         ref_type, ref_value = configured_ref(dep)
 
         if dep_path.exists() and not has_git:
