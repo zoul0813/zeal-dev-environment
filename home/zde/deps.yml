@@ -5,6 +5,9 @@ dependencies:
     path: home/Zeal-8-bit-OS
     branch: main
     required: true
+    aliases:
+      - zos
+      - zealos
     metadata:
       name: Zeal 8-bit OS
       description: Zeal 8-bit operating system source
@@ -13,6 +16,9 @@ dependencies:
     repo: https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git
     path: home/Zeal-VideoBoard-SDK
     branch: main
+    aliases:
+      - zvb
+      - video
     metadata:
       name: Zeal VideoBoard SDK
       description: VideoBoard SDK and tools
@@ -24,6 +30,8 @@ dependencies:
     metadata:
       name: Zeal Bootloader
       description: Zeal bootloader source
+    aliases:
+      - bootloader
 
   - id: Zeal8bit/ZealFS
     repo: https://github.com/Zeal8bit/ZealFS.git
@@ -32,6 +40,8 @@ dependencies:
     metadata:
       name: ZealFS
       description: Zeal file system tools/source
+    aliases:
+      - zealfs
 
   - id: Zeal8bit/Zeal-WebEmulator
     repo: https://github.com/Zeal8bit/Zeal-WebEmulator.git
@@ -40,6 +50,8 @@ dependencies:
     metadata:
       name: Zeal Web Emulator
       description: Browser-based Zeal emulator
+    aliases:
+      - emulator
 
   - id: zoul0813/zeal-game-dev-kit
     repo: https://github.com/zoul0813/zeal-game-dev-kit.git
@@ -50,6 +62,8 @@ dependencies:
     metadata:
       name: Zeal Game Dev Kit
       description: Game development kit
+    aliases:
+      - zgdk
 
   - id: zoul0813/zeal-archiver
     repo: https://github.com/zoul0813/zeal-archiver.git
@@ -58,6 +72,8 @@ dependencies:
     metadata:
       name: Zeal Archiver
       description: Zeal archiving tools
+    aliases:
+      - zar
 
   - id: Zeal8bit/Zeal-Playground
     repo: https://github.com/Zeal8bit/Zeal-Playground.git
@@ -66,6 +82,8 @@ dependencies:
     metadata:
       name: Zeal Playground
       description: Playground web app and files
+    aliases:
+      - playground
 
   - id: zoul0813/zeal-coreutils
     repo: https://github.com/zoul0813/zeal-coreutils.git
@@ -76,3 +94,5 @@ dependencies:
     metadata:
       name: Zeal Coreutils
       description: Core utility programs for Zeal
+    aliases:
+      - coreutils

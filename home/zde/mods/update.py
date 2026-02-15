@@ -64,6 +64,7 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         raise RuntimeError("deps.yml must contain a top-level 'dependencies' list")
 
     ids: set[str] = set()
+    alias_owner: dict[str, str] = {}
     for dep in deps:
         if not isinstance(dep, dict):
             raise RuntimeError("Each dependency entry must be a map")
@@ -76,6 +77,10 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         metadata = dep.get("metadata")
         if metadata is not None and not isinstance(metadata, dict):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-map metadata")
+        aliases = dep.get("aliases")
+        if aliases is not None:
+            if not isinstance(aliases, list) or any(not isinstance(item, str) or not item.strip() for item in aliases):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid aliases list")
         depends_on = dep.get("depends_on")
         if depends_on is not None:
             if not isinstance(depends_on, list) or any(not isinstance(item, str) or not item.strip() for item in depends_on):
@@ -84,6 +89,19 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         if dep_id in ids:
             raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")
         ids.add(dep_id)
+
+    for dep in deps:
+        dep_id = dep["id"]
+        dep_id_fold = dep_id.casefold()
+        if dep_id_fold in alias_owner and alias_owner[dep_id_fold] != dep_id:
+            raise RuntimeError(f"Dependency id '{dep_id}' conflicts with alias '{dep_id}' on '{alias_owner[dep_id_fold]}'")
+        alias_owner[dep_id_fold] = dep_id
+        for alias in dep.get("aliases", []):
+            alias_fold = alias.casefold()
+            owner = alias_owner.get(alias_fold)
+            if owner is not None and owner != dep_id:
+                raise RuntimeError(f"Alias '{alias}' on '{dep_id}' conflicts with '{owner}'")
+            alias_owner[alias_fold] = dep_id
 
     for dep in deps:
         dep_id = dep["id"]

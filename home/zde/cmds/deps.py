@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import shutil
+import sys
 from datetime import datetime, timezone
 
 from mods.update import (
@@ -25,15 +27,39 @@ def _deps_by_id() -> tuple[dict[str, dict], object]:
     return dep_map, env
 
 
+def _repo_name_from_id(dep_id: str) -> str:
+    if "/" in dep_id:
+        return dep_id.split("/", 1)[1]
+    return dep_id
+
+
 def _lookup_dep(dep_map: dict[str, dict], raw_id: str) -> tuple[str, dict] | None:
     if raw_id in dep_map:
         return raw_id, dep_map[raw_id]
 
     wanted = raw_id.casefold()
+    matches: list[tuple[str, dict]] = []
     for dep_id, dep in dep_map.items():
         if dep_id.casefold() == wanted:
-            return dep_id, dep
-    return None
+            matches.append((dep_id, dep))
+        for alias in dep.get("aliases", []):
+            if alias.casefold() == wanted:
+                matches.append((dep_id, dep))
+        if _repo_name_from_id(dep_id).casefold() == wanted:
+            matches.append((dep_id, dep))
+
+    # Deduplicate by canonical dependency ID.
+    by_id: dict[str, dict] = {}
+    for dep_id, dep in matches:
+        by_id[dep_id] = dep
+
+    if len(by_id) == 0:
+        return None
+    if len(by_id) > 1:
+        choices = ", ".join(sorted(by_id.keys()))
+        raise RuntimeError(f"Ambiguous dependency identifier '{raw_id}'. Matches: {choices}")
+    dep_id, dep = next(iter(by_id.items()))
+    return dep_id, dep
 
 
 def _dependency_chain(dep_map: dict[str, dict], dep_id: str) -> list[str]:
@@ -91,19 +117,101 @@ def _remove_dep_lock_entry(env, dep_id: str) -> None:
     write_lock(env.lock_file, lock)
 
 
+def _colors_enabled() -> bool:
+    if os.environ.get("NO_COLOR"):
+        return False
+    term = os.environ.get("TERM", "")
+    if term.lower() == "dumb":
+        return False
+    return sys.stdout.isatty()
+
+
+def _paint(text: str, color: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    codes = {
+        "red": "\033[31m",
+        "yellow": "\033[33m",
+        "green": "\033[32m",
+    }
+    return f"{codes[color]}{text}\033[0m"
+
+
+def _preferred_dep_label(dep: dict) -> str:
+    aliases = dep.get("aliases", [])
+    if isinstance(aliases, list) and aliases:
+        return aliases[0]
+    return dep["id"]
+
+
 def subcmd_list(args: list[str]) -> int:
     dep_map, env = _deps_by_id()
     lock = load_lock(env.lock_file)
     lock_deps = lock.get("dependencies", {})
+    use_color = _colors_enabled()
 
-    print("ID                               REQUIRED  INSTALLED  TRACKED")
+    installed_by_id: dict[str, bool] = {}
+    for dep_id, dep in dep_map.items():
+        dep_path = resolve_dep_path(env, dep["path"])
+        installed_by_id[dep_id] = _is_git_repo(dep_path)
+
+    id_w = 34
+    state_w = 12
+    req_w = 8
+    inst_w = 9
+    track_w = 7
+    print(f"{'ID':<{id_w}} {'STATE':<{state_w}} {'REQUIRED':<{req_w}} {'INSTALLED':<{inst_w}} {'TRACKED':<{track_w}} ALIASES")
     for dep_id in sorted(dep_map.keys()):
         dep = dep_map[dep_id]
         required = bool(dep.get("required", False))
-        dep_path = resolve_dep_path(env, dep["path"])
-        installed = _is_git_repo(dep_path)
+        installed = installed_by_id[dep_id]
         tracked = dep_id in lock_deps
-        print(f"{dep_id:<32}  {'yes' if required else 'no ':<8}  {'yes' if installed else 'no ':<9}  {'yes' if tracked else 'no'}")
+        missing_deps = [parent for parent in dep.get("depends_on", []) if not installed_by_id.get(parent, False)]
+        aliases = dep.get("aliases", [])
+        alias_text = ", ".join(aliases) if isinstance(aliases, list) and aliases else "-"
+        req_s = "yes" if required else "no"
+        inst_s = "yes" if installed else "no"
+        track_s = "yes" if tracked else "no"
+        if required and not installed:
+            state_plain = "required-miss"
+            state_colored = state_plain
+        elif installed and missing_deps:
+            labels = [_preferred_dep_label(dep_map[parent]) for parent in missing_deps if parent in dep_map]
+            if labels:
+                label_text = ",".join(labels)
+                state_plain = f"broken({label_text})"
+                state_colored = state_plain
+                if use_color:
+                    state_colored = state_colored.replace(label_text, _paint(label_text, "yellow", True), 1)
+            else:
+                state_plain = "broken-deps"
+                state_colored = state_plain
+        elif installed and not tracked:
+            state_plain = "untracked"
+            state_colored = state_plain
+        elif installed:
+            state_plain = "ok"
+            state_colored = state_plain
+        else:
+            state_plain = "-"
+            state_colored = state_plain
+
+        state_cell = state_plain.ljust(state_w)
+        if use_color and state_colored != state_plain:
+            state_cell = state_cell.replace(state_plain, state_colored, 1)
+
+        row = f"{dep_id:<{id_w}} {state_cell} {req_s:<{req_w}} {inst_s:<{inst_w}} {track_s:<{track_w}} {alias_text}"
+
+        if required and not installed:
+            print(_paint(row, "red", use_color))
+        elif installed and missing_deps:
+            print(row)
+        elif installed and not tracked:
+            print(_paint(row, "yellow", use_color))
+        elif installed:
+            print(_paint(row, "green", use_color))
+        else:
+            print(row)
     return 0
 
 
@@ -114,7 +222,11 @@ def subcmd_install(args: list[str]) -> int:
 
     raw_id = args[0]
     dep_map, env = _deps_by_id()
-    resolved = _lookup_dep(dep_map, raw_id)
+    try:
+        resolved = _lookup_dep(dep_map, raw_id)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
     if resolved is None:
         print(f"Unknown dependency id: {raw_id}")
         return 1
@@ -161,7 +273,11 @@ def subcmd_remove(args: list[str]) -> int:
 
     raw_id = args[0]
     dep_map, env = _deps_by_id()
-    resolved = _lookup_dep(dep_map, raw_id)
+    try:
+        resolved = _lookup_dep(dep_map, raw_id)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
     if resolved is None:
         print(f"Unknown dependency id: {raw_id}")
         return 1
