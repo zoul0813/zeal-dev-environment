@@ -3,6 +3,8 @@ from __future__ import annotations
 from mods.common import HOME_DIR, MNT_DIR
 from mods.process import run
 
+REQUIRED_DEPS = ["Zeal8bit/ZealFS"]
+
 
 def main(args: list[str]) -> int:
     if len(args) < 1:

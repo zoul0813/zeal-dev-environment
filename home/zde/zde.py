@@ -8,6 +8,8 @@ import sys
 from collections.abc import Callable
 from types import ModuleType
 
+from mods.requirements import require_deps
+
 HELP_TEXT = "Help: update, deps, activate, make, cmake, kernel, image, create, romdisk, emu[lator], playground"
 
 
@@ -71,6 +73,10 @@ def main(argv: list[str]) -> int:
             return int(module_help())
         if subcommands:
             return infer_module_help(command_name, subcommands)
+
+    required = getattr(module, "REQUIRED_DEPS", [])
+    if required and not require_deps(list(required)):
+        return 1
 
     if module_args:
         subcmd = module_args[0]
