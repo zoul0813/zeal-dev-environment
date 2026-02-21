@@ -97,6 +97,8 @@ dependencies:
     migrate: true
     build:
       tool: cmake
+      artifacts:
+        - bin/
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
@@ -112,6 +114,8 @@ dependencies:
     migrate: true
     build:
       tool: cmake
+      artifacts:
+        - bin/
     depends_on:
       - zoul0813/zeal-coreutils
     metadata:

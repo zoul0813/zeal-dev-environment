@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -10,7 +11,9 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from cmds import deps as deps_cmd
+from cmds import image as image_cmd
 from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen
+from mods.tui.screens.prompt_modal import PromptModal
 
 
 class DepsInfoModal(ModalScreen[None]):
@@ -47,6 +50,7 @@ class DepsMenuScreen(ItemActionScreen):
         ("f3", "run_info", "Info"),
         ("f5", "run_install", "Install"),
         ("f6", "run_build", "Build"),
+        ("f7", "run_stage", "Stage"),
         ("f8", "run_remove", "Remove"),
         ("f2", "run_refresh", "Refresh"),
     ]
@@ -58,12 +62,14 @@ class DepsMenuScreen(ItemActionScreen):
             items_title="Packages",
             actions_title="Actions",
         )
+        self._pending_stage_target: str | None = None
 
     def get_actions(self) -> list[ItemAction]:
         return [
             ItemAction("info", "info"),
             ItemAction("install", "install"),
             ItemAction("build", "build"),
+            ItemAction("stage", "stage"),
             ItemAction("remove", "remove"),
             ItemAction("refresh", "refresh", requires_item=False),
         ]
@@ -96,6 +102,73 @@ class DepsMenuScreen(ItemActionScreen):
             rc = int(fn(*args))
         return rc, out.getvalue().rstrip()
 
+    def _dep_for_id(self, dep_id: str) -> tuple[dict | None, Path | None]:
+        dep_map, env = deps_cmd._deps_by_id()  # noqa: SLF001 - internal reuse
+        dep = dep_map.get(dep_id)
+        if dep is None:
+            return None, None
+        return dep, deps_cmd.resolve_dep_path(env, dep["path"])
+
+    def _artifact_paths(self, dep: dict, dep_path: Path) -> list[Path]:
+        build = dep.get("build")
+        if not isinstance(build, dict):
+            return []
+        artifacts = build.get("artifacts")
+        if not isinstance(artifacts, list):
+            return []
+        paths: list[Path] = []
+        for raw in artifacts:
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            p = Path(raw)
+            paths.append(p if p.is_absolute() else dep_path / p)
+        return paths
+
+    def _stage_artifacts(self, dep_id: str, target: str) -> ActionResult:
+        dep, dep_path = self._dep_for_id(dep_id)
+        if dep is None or dep_path is None:
+            return ActionResult(rc=1, status=f"[error] Unknown dependency: {dep_id}")
+        artifact_paths = self._artifact_paths(dep, dep_path)
+        if not artifact_paths:
+            return ActionResult(rc=1, status=f"[warn] No build.artifacts configured for {dep_id}")
+
+        out = io.StringIO()
+        failures = 0
+        with redirect_stdout(out), redirect_stderr(out):
+            for path in artifact_paths:
+                image_cmd.copy_path_to_target(path, target)
+                if not path.exists():
+                    failures += 1
+        output = out.getvalue().rstrip()
+        if failures:
+            return ActionResult(
+                rc=1,
+                output=output,
+                status=f"[error] Staging had missing artifacts for {dep_id}",
+                refresh_items=False,
+                preferred_item_id=dep_id,
+            )
+        target_label = "romdisk" if target == "romdisk" else f"image {target}"
+        return ActionResult(
+            rc=0,
+            output=output,
+            status=f"[ok] staged artifacts for {dep_id} -> {target_label}",
+            preferred_item_id=dep_id,
+        )
+
+    def _on_stage_target(self, dep_id: str, value: str | None) -> None:
+        if value is None:
+            self._set_status("")
+            return
+        target = value.strip().lower()
+        if target.startswith("image "):
+            target = target.split(" ", 1)[1].strip()
+        if target in {"romdisk", "tf", "cf", "eeprom"}:
+            self._pending_stage_target = target
+            self._execute_action("stage", dep_id)
+            return
+        self._set_status("[warn] Target must be one of: romdisk, tf, cf, eeprom")
+
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
         if action_id == "refresh":
             return ActionResult(status="[ok] refreshed", refresh_items=True, preferred_item_id=self._last_item_id)
@@ -120,6 +193,22 @@ class DepsMenuScreen(ItemActionScreen):
                 except EOFError:
                     pass
             return ActionResult(rc=rc, refresh_items=True, preferred_item_id=item_id)
+        if action_id == "stage":
+            if self._pending_stage_target is None:
+                self.app.push_screen(
+                    PromptModal(
+                        title="Stage Artifacts Target",
+                        detail="Enter target: romdisk, tf, cf, or eeprom",
+                        placeholder="romdisk",
+                        submit_label="Stage",
+                        cancel_label="Cancel",
+                    ),
+                    lambda value: self._on_stage_target(item_id, value),
+                )
+                return ActionResult(status="")
+            target = self._pending_stage_target
+            self._pending_stage_target = None
+            return self._stage_artifacts(item_id, target)
         return ActionResult(rc=0)
 
     def action_run_info(self) -> None:
@@ -130,6 +219,9 @@ class DepsMenuScreen(ItemActionScreen):
 
     def action_run_build(self) -> None:
         self._run_shortcut_action("build")
+
+    def action_run_stage(self) -> None:
+        self._run_shortcut_action("stage")
 
     def action_run_remove(self) -> None:
         self._run_shortcut_action("remove")

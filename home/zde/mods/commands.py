@@ -10,6 +10,7 @@ import cmds
 
 DEFAULT_MODULE_ALIASES: dict[str, list[str]] = {
     "emulator": ["emu"],
+    "image": ["romdisk"],
 }
 
 

@@ -17,6 +17,12 @@ from mods.commands import (
 )
 from mods.requirements import require_deps
 
+COMMAND_REDIRECTS: dict[str, tuple[str, list[str]]] = {
+    # Legacy top-level romdisk command now lives under image.
+    "romdisk": ("image", ["romdisk"]),
+}
+
+
 def print_top_help() -> int:
     module_names = discover_command_modules()
 
@@ -46,9 +52,15 @@ def main(argv: list[str]) -> int:
         return print_top_help()
 
     command_name = argv[0]
+    normalized_command = command_name.replace("-", "_")
+    redirected = COMMAND_REDIRECTS.get(normalized_command)
+    prepend_args: list[str] = []
+    if redirected is not None:
+        command_name = redirected[0]
+        prepend_args = list(redirected[1])
     module_name = command_to_module_name(command_name, DEFAULT_MODULE_ALIASES)
     module_path = f"cmds.{module_name}"
-    module_args = argv[1:]
+    module_args = [*prepend_args, *argv[1:]]
 
     try:
         module = import_command_module(module_name)
