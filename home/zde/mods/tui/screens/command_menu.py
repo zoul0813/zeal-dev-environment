@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
@@ -23,9 +23,18 @@ class CommandMenuScreen(Screen[None]):
         yield Header()
         yield Vertical(
             Static("Select a command and press Enter"),
-            ListView(id="commands"),
-            Static("", id="status"),
+            Horizontal(
+                Vertical(
+                    Static("Commands"),
+                    ListView(id="commands"),
+                    id="commands-list-panel",
+                ),
+                id="commands-layout",
+            ),
+            Static("", id="status", classes="status-line"),
+            classes="main-body",
         )
+        yield Static("", id="cwd-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -36,6 +45,7 @@ class CommandMenuScreen(Screen[None]):
         if self._commands:
             commands.index = 0
         commands.focus()
+        self.query_one("#commands-list-panel", Vertical).add_class("active-panel")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.list_view.id != "commands" or event.item is None:
@@ -64,13 +74,20 @@ class CommandMenuScreen(Screen[None]):
             self.app.refresh(layout=True, repaint=True)
             self.refresh(layout=True, repaint=True)
             self.query_one("#commands", ListView).focus()
-            status = self.query_one("#status", Static)
             if rc == 0:
-                status.update(f"[ok] Completed: {command.name} {action.id}")
+                self._set_status(f"[ok] Completed: {command.name} {action.id}")
                 return
-            status.update(f"[error] Failed ({rc}): {command.name} {action.id}")
+            self._set_status(f"[error] Failed ({rc}): {command.name} {action.id}")
             return
         self.app.push_screen(ActionMenuScreen(command))
+
+    def _set_status(self, text: str) -> None:
+        status = self.query_one("#status", Static)
+        status.update(text)
+        if text:
+            status.add_class("show")
+        else:
+            status.remove_class("show")
 
     def action_quit_prompt(self) -> None:
         self.app.push_screen(

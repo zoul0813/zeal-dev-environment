@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import os
+from pathlib import Path
 from typing import Any
 
 from textual.app import App
 from textual.screen import Screen
+from textual.widgets import Static
 
 from mods.tui.catalog import build_catalog
 from mods.tui.screens.command_menu import CommandMenuScreen
@@ -18,6 +21,9 @@ class ZDEApp(App[None]):
     CSS = """
     Screen {
       padding: 1;
+    }
+    .main-body {
+      height: 1fr;
     }
     HeaderIcon {
       display: none;
@@ -61,9 +67,22 @@ class ZDEApp(App[None]):
       color: $text;
       text-style: bold;
     }
-    #status {
-      margin-top: 1;
+    .status-line {
       color: $text;
+      display: none;
+      height: auto;
+      margin-top: 0;
+    }
+    .status-line.show {
+      display: block;
+    }
+    #cwd-bar {
+      margin-top: 0;
+      color: $text;
+      background: $surface;
+      padding: 0 1 0 1;
+      border: none;
+      height: 1;
     }
     ConfirmModal {
       align: center middle;
@@ -106,12 +125,63 @@ class ZDEApp(App[None]):
       padding: 0 1;
       margin-right: 1;
     }
+    #deps-list-panel {
+      width: 1fr;
+    }
     #deps-actions-panel {
+      width: 24;
       margin-right: 0;
     }
     #deps-list-panel.active-panel,
     #deps-actions-panel.active-panel {
       border: round $primary;
+    }
+    #deps-layout {
+      height: 1fr;
+    }
+    #commands-layout {
+      height: 1fr;
+    }
+    #commands-list-panel {
+      width: 1fr;
+      border: round $panel-darken-2;
+      padding: 0 1;
+      margin-right: 0;
+    }
+    #commands-list-panel.active-panel {
+      border: round $primary;
+    }
+    #actions-layout {
+      height: 1fr;
+    }
+    #actions-list-panel {
+      width: 1fr;
+      border: round $panel-darken-2;
+      padding: 0 1;
+      margin-right: 0;
+    }
+    #actions-list-panel.active-panel {
+      border: round $primary;
+    }
+    #romdisk-entries-panel,
+    #romdisk-actions-panel {
+      border: round $panel-darken-2;
+      padding: 0 1;
+      margin-right: 1;
+    }
+    #romdisk-entries-panel {
+      width: 1fr;
+    }
+    #romdisk-actions-panel {
+      width: 24;
+      margin-right: 0;
+    }
+    #romdisk-entries-panel.active-panel,
+    #romdisk-actions-panel.active-panel {
+      border: round $primary;
+    }
+    #romdisk-layout {
+      height: 1fr;
     }
     #deps-list ListItem.deps-selected {
       background: $primary;
@@ -139,6 +209,38 @@ class ZDEApp(App[None]):
             self.dark = dark
         commands = build_catalog()
         self.push_screen(CommandMenuScreen(commands))
+        self._refresh_cwd_bar()
+        self.set_interval(1.0, self._refresh_cwd_bar)
+
+    def _format_cwd(self, cwd: Path) -> str:
+        home_override = os.environ.get("HOST_HOME", "").strip()
+        home = Path(home_override) if home_override else Path.home()
+        try:
+            rel = cwd.relative_to(home)
+            parts = list(rel.parts)
+            if not parts:
+                return "~"
+            if len(parts) <= 2:
+                return "~/" + "/".join(parts)
+            return "~/.../" + "/".join(parts[-2:])
+        except ValueError:
+            parts = list(cwd.parts)
+            if len(parts) <= 3:
+                return str(cwd)
+            return "/.../" + "/".join(parts[-2:])
+
+    def _cwd_text(self) -> str:
+        host_cwd = os.environ.get("HOST_CWD", "").strip()
+        cwd = Path(host_cwd) if host_cwd else Path.cwd()
+        display = self._format_cwd(cwd)
+        return f"CWD: {display}"
+
+    def _refresh_cwd_bar(self) -> None:
+        text = self._cwd_text()
+        for widget in self.screen.query("#cwd-bar"):
+            if not isinstance(widget, Static):
+                continue
+            widget.update(text)
 
     def get_system_commands(self, screen: Screen) -> Iterable[Any]:
         for command in super().get_system_commands(screen):

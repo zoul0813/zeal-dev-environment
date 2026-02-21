@@ -44,9 +44,11 @@ zde_init() {
 
   HOST_UID="${HOST_UID:-$(id -u)}"
   HOST_GID="${HOST_GID:-$(id -g)}"
+  HOST_HOME="${HOST_HOME:-$HOME}"
   ZEAL_KERNEL_VERSION="${ZEAL_KERNEL_VERSION:-$(git -C "$ZDE_PATH/home/Zeal-8-bit-OS" describe --tags 2>/dev/null || true)}"
   ZDE_IMAGE_REF="${ZDE_IMAGE_REF:-${ZDE_IMAGE}:${ZDE_VERSION}}"
   LAUNCH_PWD="${LAUNCH_PWD:-$PWD}"
+  HOST_CWD="${HOST_CWD:-$LAUNCH_PWD}"
 
   if [ "${#}" -gt 0 ]; then
     COMMAND="${1:-}"
@@ -68,8 +70,10 @@ zde_init() {
   export ZDE_IMAGE_REF
   export HOST_UID
   export HOST_GID
+  export HOST_HOME
   export ZEAL_KERNEL_VERSION
   export LAUNCH_PWD
+  export HOST_CWD
 }
 
 zde_command() {
@@ -77,6 +81,8 @@ zde_command() {
     "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
     -e "HOST_UID=${HOST_UID}"
     -e "HOST_GID=${HOST_GID}"
+    -e "HOST_HOME=${HOST_HOME}"
+    -e "HOST_CWD=${HOST_CWD}"
   )
 
   if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then
@@ -104,6 +110,8 @@ zde_shell() {
     "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
     -e "HOST_UID=${HOST_UID}"
     -e "HOST_GID=${HOST_GID}"
+    -e "HOST_HOME=${HOST_HOME}"
+    -e "HOST_CWD=${HOST_CWD}"
   )
 
   if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
@@ -21,9 +21,18 @@ class ActionMenuScreen(Screen[None]):
         yield Vertical(
             Static(f"Command: {self._command.label}"),
             Static("Select an action and press Enter"),
-            ListView(id="actions"),
-            Static("", id="status"),
+            Horizontal(
+                Vertical(
+                    Static("Actions"),
+                    ListView(id="actions"),
+                    id="actions-list-panel",
+                ),
+                id="actions-layout",
+            ),
+            Static("", id="status", classes="status-line"),
+            classes="main-body",
         )
+        yield Static("", id="cwd-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -34,6 +43,7 @@ class ActionMenuScreen(Screen[None]):
         if self._command.actions:
             actions.index = 0
         actions.focus()
+        self.query_one("#actions-list-panel", Vertical).add_class("active-panel")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.list_view.id != "actions" or event.item is None:
@@ -52,8 +62,15 @@ class ActionMenuScreen(Screen[None]):
         self.app.refresh(layout=True, repaint=True)
         self.refresh(layout=True, repaint=True)
         self.query_one("#actions", ListView).focus()
-        status = self.query_one("#status", Static)
         if rc == 0:
-            status.update(f"[ok] Completed: {self._command.name} {action.id}")
+            self._set_status(f"[ok] Completed: {self._command.name} {action.id}")
             return
-        status.update(f"[error] Failed ({rc}): {self._command.name} {action.id}")
+        self._set_status(f"[error] Failed ({rc}): {self._command.name} {action.id}")
+
+    def _set_status(self, text: str) -> None:
+        status = self.query_one("#status", Static)
+        status.update(text)
+        if text:
+            status.add_class("show")
+        else:
+            status.remove_class("show")

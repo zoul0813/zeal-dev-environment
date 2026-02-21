@@ -8,6 +8,27 @@ from mods.common import ROMDISK_DIR
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
+def _romdisk_rows() -> list[tuple[str, str]]:
+    ROMDISK_DIR.mkdir(parents=True, exist_ok=True)
+    rows: list[tuple[str, str]] = []
+    for entry in sorted(ROMDISK_DIR.iterdir(), key=lambda p: p.name):
+        stat = entry.stat()
+        is_dir = "d" if entry.is_dir() else "-"
+        readable = "r"
+        writable = "w" if os.access(entry, os.W_OK) else "-"
+        executable = "x" if (entry.suffix == ".bin" or "." not in entry.name) else "-"
+
+        size = stat.st_size
+        suffix = "B"
+        if size > 64 * 1024:
+            size = size // 1024
+            suffix = "K"
+
+        line = f"{is_dir}{readable}{writable}{executable} {entry.name[:16]:<16}  {size:>8}{suffix}"
+        rows.append((entry.name, line))
+    return rows
+
+
 def copy_path_to_romdisk(path: Path) -> None:
     if not path.exists():
         print(f"Warning: '{path}' does not exist, skipping")
@@ -69,21 +90,8 @@ def subcmd_rm(args: list[str]) -> int:
 
 
 def subcmd_ls(args: list[str]) -> int:
-    ROMDISK_DIR.mkdir(parents=True, exist_ok=True)
-    for entry in sorted(ROMDISK_DIR.iterdir(), key=lambda p: p.name):
-        stat = entry.stat()
-        is_dir = "d" if entry.is_dir() else "-"
-        readable = "r"
-        writable = "w" if os.access(entry, os.W_OK) else "-"
-        executable = "x" if (entry.suffix == ".bin" or "." not in entry.name) else "-"
-
-        size = stat.st_size
-        suffix = "B"
-        if size > 64 * 1024:
-            size = size // 1024
-            suffix = "K"
-
-        print(f"{is_dir}{readable}{writable}{executable} {entry.name[:16]:<16}  {size:>8}{suffix}")
+    for _, line in _romdisk_rows():
+        print(line)
     return 0
 
 
@@ -102,11 +110,15 @@ def get_tui_spec() -> CommandSpec:
         label="romdisk",
         help="Romdisk file staging",
         actions=[
-            ActionSpec(id="ls", label="ls", help="List romdisk files", pause_after_run=True),
-            ActionSpec(id="add", label="add", help="Copy files into romdisk"),
-            ActionSpec(id="rm", label="rm", help="Remove files from romdisk"),
+            ActionSpec(id="open", label="open", help="Open romdisk manager"),
         ],
     )
+
+
+def get_tui_screen():
+    from mods.tui.screens.romdisk_menu import RomdiskMenuScreen
+
+    return RomdiskMenuScreen()
 
 
 def main(args: list[str]) -> int:

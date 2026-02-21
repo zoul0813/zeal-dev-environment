@@ -43,6 +43,11 @@ class DepsMenuScreen(Screen[None]):
         ("escape", "app.pop_screen", "Back"),
         ("left", "focus_packages", "Packages"),
         ("right", "focus_actions", "Actions"),
+        ("f3", "run_info", "Info"),
+        ("f5", "run_install", "Install"),
+        ("f6", "run_build", "Build"),
+        ("f8", "run_remove", "Remove"),
+        ("f2", "run_refresh", "Refresh"),
     ]
 
     def __init__(self) -> None:
@@ -67,9 +72,11 @@ class DepsMenuScreen(Screen[None]):
                 ),
                 id="deps-layout",
             ),
-            Static("", id="deps-status"),
-            Static("", id="deps-output"),
+            Static("", id="deps-status", classes="status-line"),
+            Static("", id="deps-output", classes="status-line"),
+            classes="main-body",
         )
+        yield Static("", id="cwd-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -113,10 +120,15 @@ class DepsMenuScreen(Screen[None]):
             dep = dep_map[dep_id]
             dep_path = deps_cmd.resolve_dep_path(env, dep["path"])
             installed = deps_cmd.is_git_repo(dep_path)
-            alias = dep.get("aliases", [])
-            label_id = alias[0] if isinstance(alias, list) and alias else dep_id
+            metadata = dep.get("metadata", {})
+            display_name = ""
+            if isinstance(metadata, dict):
+                raw_name = metadata.get("name")
+                if isinstance(raw_name, str):
+                    display_name = raw_name.strip()
+            label = f"{display_name} ({dep_id})" if display_name else dep_id
             marker = "[x]" if installed else "[ ]"
-            deps_list.append(ListItem(Label(Text(f"{marker} {label_id}")), name=dep_id))
+            deps_list.append(ListItem(Label(Text(f"{marker} {label}")), name=dep_id))
 
         if not deps_list.children:
             self._last_dep_id = None
@@ -173,10 +185,20 @@ class DepsMenuScreen(Screen[None]):
                 child.add_class("deps-selected")
 
     def _set_status(self, text: str) -> None:
-        self.query_one("#deps-status", Static).update(text)
+        status = self.query_one("#deps-status", Static)
+        status.update(text)
+        if text:
+            status.add_class("show")
+        else:
+            status.remove_class("show")
 
     def _set_output(self, text: str) -> None:
-        self.query_one("#deps-output", Static).update(text)
+        output = self.query_one("#deps-output", Static)
+        output.update(text)
+        if text:
+            output.add_class("show")
+        else:
+            output.remove_class("show")
 
     def _run_capture(self, fn, *args) -> tuple[int, str]:
         out = io.StringIO()
@@ -251,3 +273,58 @@ class DepsMenuScreen(Screen[None]):
     def action_focus_actions(self) -> None:
         self.query_one("#deps-actions", ListView).focus()
         self._set_active_panel("deps-actions")
+
+    def _page_move_list(self, list_view: ListView, down: bool) -> None:
+        if not list_view.children:
+            return
+        row_count = len(list_view.children)
+        current_index = max(0, min(row_count - 1, int(list_view.index or 0)))
+        page_rows = max(1, int(list_view.size.height))
+        top = max(0, int(list_view.scroll_y))
+        offset = current_index - top
+        if offset < 0:
+            offset = 0
+        if offset >= page_rows:
+            offset = page_rows - 1
+        if down:
+            target_top = min(int(list_view.max_scroll_y), top + page_rows)
+        else:
+            target_top = max(0, top - page_rows)
+        new_index = max(0, min(row_count - 1, target_top + offset))
+        list_view.index = new_index
+        list_view.scroll_to(y=target_top, animate=False, force=True)
+
+    def on_key(self, event) -> None:
+        if event.key not in {"pageup", "pagedown"}:
+            return
+        focused = self.app.focused
+        if not isinstance(focused, ListView):
+            return
+        self._page_move_list(focused, down=event.key == "pagedown")
+        event.stop()
+        event.prevent_default()
+
+    def _run_shortcut_action(self, action_id: str) -> None:
+        if action_id == "refresh":
+            self._run_action("refresh", "-")
+            return
+        dep_id = self._selected_dep_id()
+        if dep_id is None:
+            self._set_status("[warn] No dependency selected")
+            return
+        self._run_action(action_id, dep_id)
+
+    def action_run_info(self) -> None:
+        self._run_shortcut_action("info")
+
+    def action_run_install(self) -> None:
+        self._run_shortcut_action("install")
+
+    def action_run_build(self) -> None:
+        self._run_shortcut_action("build")
+
+    def action_run_remove(self) -> None:
+        self._run_shortcut_action("remove")
+
+    def action_run_refresh(self) -> None:
+        self._run_shortcut_action("refresh")
