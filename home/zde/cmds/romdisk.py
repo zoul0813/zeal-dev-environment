@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from mods.common import ROMDISK_DIR
+from mods.tui.contract import ActionSpec, CommandSpec
 
 
 def copy_path_to_romdisk(path: Path) -> None:
@@ -93,6 +94,17 @@ def help() -> int:
     print("  add <path1> [path2] [path3] ...")
     print("  rm <path1> [path2] [path3] ...")
     return 0
+
+
+def get_tui_spec() -> CommandSpec:
+    return CommandSpec(
+        name="romdisk",
+        label="romdisk",
+        help="Romdisk file staging",
+        actions=[
+            ActionSpec(id="ls", label="ls", pause_after_run=True),
+        ],
+    )
 
 
 def main(args: list[str]) -> int:

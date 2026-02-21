@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from mods.depbuild import run_dep_build
 from mods.migrate import migrate_broken_submodule_checkout
 from mods.requirements import require_deps
+from mods.tui.contract import ActionSpec, CommandSpec
 from mods.update import (
     build_lock_entry,
     clone_repo,
@@ -426,6 +427,18 @@ def help() -> int:
     print("  build <id>")
     print("  remove <id>")
     return 0
+
+
+def get_tui_spec() -> CommandSpec:
+    return CommandSpec(
+        name="deps",
+        label="deps",
+        help="Dependency management",
+        actions=[
+            ActionSpec(id="list", label="list", pause_after_run=True),
+            ActionSpec(id="info", label="info", pause_after_run=True),
+        ],
+    )
 
 
 def main(args: list[str]) -> int:
