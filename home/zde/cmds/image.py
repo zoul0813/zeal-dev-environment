@@ -12,6 +12,12 @@ from mods.tui.contract import ActionSpec, CommandSpec
 
 
 IMAGE_TYPES = ("eeprom", "cf", "tf", "romdisk")
+IMAGE_SUPPORTS_DIRECTORIES: dict[str, bool] = {
+    "eeprom": True,
+    "cf": False,
+    "tf": True,
+    "romdisk": False,
+}
 
 
 def _validate_image_type(image_type: str) -> None:
@@ -19,9 +25,29 @@ def _validate_image_type(image_type: str) -> None:
         raise ValueError(f"Unknown image type: {image_type}")
 
 
+def available_stage_targets() -> list[str]:
+    return list(IMAGE_TYPES)
+
+
+def target_supports_directories(image_type: str) -> bool:
+    _validate_image_type(image_type)
+    return bool(IMAGE_SUPPORTS_DIRECTORIES.get(image_type, False))
+
+
 def image_root(image_type: str) -> Path:
     _validate_image_type(image_type)
     return MNT_DIR / image_type
+
+
+def _normalize_stage_root(stage_root: str | None) -> Path:
+    if not isinstance(stage_root, str) or not stage_root.strip():
+        return Path(".")
+    raw = stage_root.strip()
+    as_path = Path(raw)
+    parts = [part for part in as_path.parts if part not in {"/", "\\"}]
+    if not parts:
+        return Path(".")
+    return Path(*parts)
 
 
 def _pack_cf_image() -> int:
@@ -114,6 +140,52 @@ def _rows_for_dir(base_dir: Path) -> list[tuple[str, str]]:
 def copy_path_to_target(path: Path, image_type: str) -> None:
     _validate_image_type(image_type)
     _copy_path_to_image(path, image_type)
+
+
+def stage_artifacts_to_target(
+    artifacts: list[tuple[Path, Path]],
+    image_type: str,
+    stage_root: str | None = None,
+) -> None:
+    _validate_image_type(image_type)
+    target_dir = image_root(image_type)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    supports_dirs = target_supports_directories(image_type)
+    root_rel = _normalize_stage_root(stage_root)
+    root_base = target_dir / root_rel
+    root_base.mkdir(parents=True, exist_ok=True)
+
+    for source_path, rel_hint in artifacts:
+        if not source_path.exists():
+            print(f"Warning: '{source_path}' does not exist, skipping")
+            continue
+
+        if source_path.is_file():
+            if supports_dirs:
+                dest_path = root_base / rel_hint
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                print(f"  Copying file: {source_path} -> {dest_path}")
+                shutil.copy2(source_path, dest_path)
+            else:
+                dest_path = target_dir / source_path.name
+                print(f"  Copying file: {source_path} -> {dest_path}")
+                shutil.copy2(source_path, dest_path)
+            continue
+
+        if source_path.is_dir():
+            if supports_dirs:
+                dest_dir = root_base / rel_hint
+                dest_dir.parent.mkdir(parents=True, exist_ok=True)
+                print(f"  Copying directory tree: {source_path} -> {dest_dir}")
+                shutil.copytree(source_path, dest_dir, dirs_exist_ok=True)
+            else:
+                print(f"  Copying directory contents (top-level files only): {source_path}")
+                for child in source_path.iterdir():
+                    if child.is_file():
+                        shutil.copy2(child, target_dir / child.name)
+            continue
+
+        print(f"Warning: '{source_path}' is not a file or directory, skipping")
 
 
 def image_entries(image_type: str, relative_dir: Path | str = Path(".")) -> list[tuple[str, str, bool]]:

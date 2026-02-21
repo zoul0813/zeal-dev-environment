@@ -96,6 +96,9 @@ class ZDEApp(App[None]):
     PromptModal {
       align: center middle;
     }
+    ChoiceModal {
+      align: center middle;
+    }
     #quit-dialog {
       width: 44;
       height: auto;
@@ -158,6 +161,17 @@ class ZDEApp(App[None]):
       color: $warning;
       height: auto;
     }
+    #choice-dialog {
+      width: 56;
+      height: auto;
+      border: round $accent;
+      background: $panel;
+      padding: 1 2;
+    }
+    #choice-options {
+      margin-top: 1;
+      height: 12;
+    }
     #item-list-panel,
     #item-actions-panel {
       border: round $panel-darken-2;
@@ -208,6 +222,15 @@ class ZDEApp(App[None]):
       text-style: bold;
     }
     #item-list ListItem.item-selected Label {
+      color: $text;
+      text-style: bold;
+    }
+    #item-actions ListItem.action-selected {
+      background: $primary;
+      color: $text;
+      text-style: bold;
+    }
+    #item-actions ListItem.action-selected Label {
       color: $text;
       text-style: bold;
     }

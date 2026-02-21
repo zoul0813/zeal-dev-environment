@@ -13,7 +13,7 @@ from textual.widgets import Static
 from cmds import deps as deps_cmd
 from cmds import image as image_cmd
 from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen
-from mods.tui.screens.prompt_modal import PromptModal
+from mods.tui.screens.choice_modal import ChoiceModal
 
 
 class DepsInfoModal(ModalScreen[None]):
@@ -63,6 +63,7 @@ class DepsMenuScreen(ItemActionScreen):
             actions_title="Actions",
         )
         self._pending_stage_target: str | None = None
+        self._stage_targets = set(image_cmd.available_stage_targets())
 
     def get_actions(self) -> list[ItemAction]:
         return [
@@ -76,6 +77,16 @@ class DepsMenuScreen(ItemActionScreen):
 
     def get_default_action_id(self) -> str | None:
         return "info"
+
+    def is_action_visible(self, action_id: str, item_id: str | None) -> bool:
+        if action_id != "stage":
+            return True
+        if not isinstance(item_id, str):
+            return False
+        dep, dep_path = self._dep_for_id(item_id)
+        if dep is None or dep_path is None:
+            return False
+        return len(self._artifact_paths(dep, dep_path)) > 0
 
     def get_items(self) -> list[tuple[str, Text]]:
         rows: list[tuple[str, Text]] = []
@@ -109,19 +120,29 @@ class DepsMenuScreen(ItemActionScreen):
             return None, None
         return dep, deps_cmd.resolve_dep_path(env, dep["path"])
 
-    def _artifact_paths(self, dep: dict, dep_path: Path) -> list[Path]:
+    def _artifact_paths(self, dep: dict, dep_path: Path) -> list[tuple[Path, Path]]:
         build = dep.get("build")
         if not isinstance(build, dict):
             return []
         artifacts = build.get("artifacts")
         if not isinstance(artifacts, list):
             return []
-        paths: list[Path] = []
+        paths: list[tuple[Path, Path]] = []
         for raw in artifacts:
             if not isinstance(raw, str) or not raw.strip():
                 continue
-            p = Path(raw)
-            paths.append(p if p.is_absolute() else dep_path / p)
+            raw_text = raw.strip()
+            copy_contents = raw_text.endswith(("/", "\\"))
+            normalized = raw_text.rstrip("/\\")
+            if not normalized:
+                continue
+            p = Path(normalized)
+            source = p if p.is_absolute() else dep_path / p
+            if p.is_absolute():
+                rel_hint = Path(".") if copy_contents else Path(source.name)
+            else:
+                rel_hint = p.parent if copy_contents else p
+            paths.append((source, rel_hint))
         return paths
 
     def _stage_artifacts(self, dep_id: str, target: str) -> ActionResult:
@@ -131,12 +152,14 @@ class DepsMenuScreen(ItemActionScreen):
         artifact_paths = self._artifact_paths(dep, dep_path)
         if not artifact_paths:
             return ActionResult(rc=1, status=f"[warn] No build.artifacts configured for {dep_id}")
+        build = dep.get("build")
+        stage_root = build.get("root") if isinstance(build, dict) else None
 
         out = io.StringIO()
         failures = 0
         with redirect_stdout(out), redirect_stderr(out):
-            for path in artifact_paths:
-                image_cmd.copy_path_to_target(path, target)
+            image_cmd.stage_artifacts_to_target(artifact_paths, target, stage_root=stage_root)
+            for path, _ in artifact_paths:
                 if not path.exists():
                     failures += 1
         output = out.getvalue().rstrip()
@@ -161,13 +184,12 @@ class DepsMenuScreen(ItemActionScreen):
             self._set_status("")
             return
         target = value.strip().lower()
-        if target.startswith("image "):
-            target = target.split(" ", 1)[1].strip()
-        if target in {"romdisk", "tf", "cf", "eeprom"}:
+        if target in self._stage_targets:
             self._pending_stage_target = target
             self._execute_action("stage", dep_id)
             return
-        self._set_status("[warn] Target must be one of: romdisk, tf, cf, eeprom")
+        supported = ", ".join(sorted(self._stage_targets))
+        self._set_status(f"[warn] Target must be one of: {supported}")
 
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
         if action_id == "refresh":
@@ -196,12 +218,10 @@ class DepsMenuScreen(ItemActionScreen):
         if action_id == "stage":
             if self._pending_stage_target is None:
                 self.app.push_screen(
-                    PromptModal(
+                    ChoiceModal(
                         title="Stage Artifacts Target",
-                        detail="Enter target: romdisk, tf, cf, or eeprom",
-                        placeholder="romdisk",
-                        submit_label="Stage",
-                        cancel_label="Cancel",
+                        detail="Select destination",
+                        options=[(target, target) for target in image_cmd.available_stage_targets()],
                     ),
                     lambda value: self._on_stage_target(item_id, value),
                 )

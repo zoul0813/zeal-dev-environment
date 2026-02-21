@@ -99,6 +99,7 @@ dependencies:
       tool: cmake
       artifacts:
         - bin/
+      root: /bin
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
@@ -116,6 +117,7 @@ dependencies:
       tool: cmake
       artifacts:
         - bin/
+      root: /apps
     depends_on:
       - zoul0813/zeal-coreutils
     metadata:

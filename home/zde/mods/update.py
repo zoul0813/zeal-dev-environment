@@ -114,6 +114,10 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
             if artifacts is not None:
                 if not isinstance(artifacts, list) or any(not isinstance(item, str) or not item.strip() for item in artifacts):
                     raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.artifacts list")
+            build_root = build.get("root")
+            if build_root is not None:
+                if not isinstance(build_root, str) or not build_root.strip():
+                    raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.root")
         dep_id = dep["id"]
         if dep_id in ids:
             raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")

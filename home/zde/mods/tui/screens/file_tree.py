@@ -18,6 +18,7 @@ class FileTreeScreen(ItemActionScreen):
         ("escape", "app.pop_screen", "Back"),
         ("left", "focus_items", "Entries"),
         ("right", "focus_actions", "Actions"),
+        ("f3", "run_open", "Open"),
         ("f8", "run_remove", "Remove"),
         ("f2", "run_refresh", "Refresh"),
     ]
@@ -35,11 +36,24 @@ class FileTreeScreen(ItemActionScreen):
 
     def get_actions(self) -> list[ItemAction]:
         return [
+            ItemAction("open", "open"),
             ItemAction("remove", "remove"),
             ItemAction("refresh", "refresh", requires_item=False),
         ]
 
     def get_default_action_id(self) -> str | None:
+        return "refresh"
+
+    def is_action_visible(self, action_id: str, item_id: str | None) -> bool:
+        if action_id == "open":
+            return isinstance(item_id, str) and self._entry_is_dir.get(item_id, False)
+        if action_id == "remove":
+            return item_id != ".."
+        return True
+
+    def preferred_action_id(self, item_id: str | None) -> str | None:
+        if isinstance(item_id, str) and self._entry_is_dir.get(item_id, False):
+            return "open"
         return "refresh"
 
     def get_items(self) -> list[tuple[str, str]]:
@@ -76,6 +90,17 @@ class FileTreeScreen(ItemActionScreen):
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
         if action_id == "refresh":
             return ActionResult(status="[ok] refreshed", refresh_items=True, preferred_item_id=self._last_item_id)
+        if action_id == "open" and item_id is not None:
+            if self._navigate_to(item_id):
+                self._last_item_id = None
+                location = "." if self._current_dir == Path(".") else str(self._current_dir)
+                return ActionResult(
+                    rc=0,
+                    status=f"[ok] opened {location}",
+                    refresh_items=True,
+                    preferred_item_id=None,
+                )
+            return ActionResult(rc=1, status="[warn] Selected item is not a directory")
         if item_id == "..":
             return ActionResult(rc=1, status="[warn] Select a file or directory entry")
         if action_id == "remove" and item_id is not None:
@@ -106,22 +131,8 @@ class FileTreeScreen(ItemActionScreen):
         self._current_dir = self._current_dir / item_id
         return True
 
-    def on_key(self, event) -> None:
-        if event.key == "enter":
-            focused = self.app.focused
-            focused_id = getattr(focused, "id", "")
-            if focused_id == "item-list":
-                selected = self._selected_item_id()
-                if isinstance(selected, str) and self._navigate_to(selected):
-                    self._last_item_id = None
-                    self._refresh_items()
-                    self.action_focus_items()
-                    location = "." if self._current_dir == Path(".") else str(self._current_dir)
-                    self._set_status(f"[ok] opened {location}")
-                    event.stop()
-                    event.prevent_default()
-                    return
-        super().on_key(event)
+    def action_run_open(self) -> None:
+        self._run_shortcut_action("open")
 
     def action_run_refresh(self) -> None:
         self._run_shortcut_action("refresh")

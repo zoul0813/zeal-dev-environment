@@ -52,7 +52,9 @@ class ItemActionScreen(Screen[None]):
         self._items_title = items_title
         self._actions_title = actions_title
         self._last_item_id: str | None = None
+        self._all_actions: list[ItemAction] = []
         self._action_defs: dict[str, ItemAction] = {}
+        self._visible_action_ids: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -80,22 +82,10 @@ class ItemActionScreen(Screen[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._action_defs = {action.id: action for action in self.get_actions()}
-        actions = self.query_one("#item-actions", ListView)
-        for action in self._action_defs.values():
-            actions.append(ListItem(Label(action.label), name=action.id))
-        if actions.children:
-            default_id = self.get_default_action_id()
-            if default_id is not None:
-                for idx, child in enumerate(actions.children):
-                    if child.name == default_id:
-                        actions.index = idx
-                        break
-                else:
-                    actions.index = 0
-            else:
-                actions.index = 0
+        self._all_actions = self.get_actions()
+        self._action_defs = {action.id: action for action in self._all_actions}
         self._refresh_items()
+        self._refresh_actions()
         self.action_focus_items()
 
     def get_items(self) -> list[tuple[str, Any]]:
@@ -112,6 +102,12 @@ class ItemActionScreen(Screen[None]):
 
     def get_default_action_id(self) -> str | None:
         return None
+
+    def is_action_visible(self, action_id: str, item_id: str | None) -> bool:
+        return True
+
+    def preferred_action_id(self, item_id: str | None) -> str | None:
+        return self.get_default_action_id()
 
     def _refresh_items(self, preferred_item_id: str | None = None) -> None:
         items = self.query_one("#item-list", ListView)
@@ -204,7 +200,45 @@ class ItemActionScreen(Screen[None]):
         else:
             item_panel.add_class("active-panel")
 
+    def _refresh_actions(self, preferred_action_id: str | None = None) -> None:
+        actions_view = self.query_one("#item-actions", ListView)
+        selected_item_id = self._selected_item_id()
+        previously_selected = self._selected_action_id()
+        visible_actions = [a for a in self._all_actions if self.is_action_visible(a.id, selected_item_id)]
+        self._visible_action_ids = [a.id for a in visible_actions]
+
+        clear_fn = getattr(actions_view, "clear", None)
+        if callable(clear_fn):
+            clear_fn()
+        else:
+            while actions_view.children:
+                actions_view.remove(actions_view.children[0])
+
+        for action in visible_actions:
+            actions_view.append(ListItem(Label(action.label), name=action.id))
+
+        if not actions_view.children:
+            self._sync_action_selection_visual()
+            return
+
+        wanted = preferred_action_id or self.preferred_action_id(selected_item_id) or previously_selected
+        if isinstance(wanted, str) and wanted in self._visible_action_ids:
+            actions_view.index = self._visible_action_ids.index(wanted)
+            self._sync_action_selection_visual()
+            return
+        actions_view.index = 0
+        self._sync_action_selection_visual()
+
+    def _sync_action_selection_visual(self) -> None:
+        actions = self.query_one("#item-actions", ListView)
+        selected_name = actions.highlighted_child.name if actions.highlighted_child is not None else None
+        for child in actions.children:
+            child.remove_class("action-selected")
+            if selected_name is not None and child.name == selected_name:
+                child.add_class("action-selected")
+
     def _execute_action(self, action_id: str, item_id: str | None) -> None:
+        selected_action = self._selected_action_id()
         result = self.run_action(action_id, item_id)
         self.app.refresh(layout=True, repaint=True)
         self.refresh(layout=True, repaint=True)
@@ -212,6 +246,7 @@ class ItemActionScreen(Screen[None]):
             preferred = result.preferred_item_id if result.preferred_item_id is not None else item_id
             self._refresh_items(preferred_item_id=preferred)
         self._ensure_item_selection()
+        self._refresh_actions(preferred_action_id=selected_action)
         if result.focus_items:
             self.action_focus_items()
         if result.status is not None:
@@ -225,6 +260,9 @@ class ItemActionScreen(Screen[None]):
         self._set_output(result.output)
 
     def _run_action_by_id(self, action_id: str) -> None:
+        if self._visible_action_ids and action_id not in self._visible_action_ids:
+            self._set_status(f"[warn] Action not available: {action_id}")
+            return
         action = self._action_defs.get(action_id)
         if action is None:
             return
@@ -260,9 +298,9 @@ class ItemActionScreen(Screen[None]):
         actions = self.query_one("#item-actions", ListView)
         if actions.highlighted_child is not None and isinstance(actions.highlighted_child.name, str):
             return actions.highlighted_child.name
-        default_action = self.get_default_action_id()
-        if default_action is not None and default_action in self._action_defs:
-            return default_action
+        preferred = self.preferred_action_id(self._selected_item_id())
+        if preferred is not None and preferred in self._visible_action_ids:
+            return preferred
         if actions.children and isinstance(actions.children[0].name, str):
             return actions.children[0].name
         return None
@@ -274,9 +312,12 @@ class ItemActionScreen(Screen[None]):
         self._run_action_by_id(action_id)
 
     def on_list_view_highlighted(self, event) -> None:
-        if event.list_view.id != "item-list":
+        if event.list_view.id == "item-list":
+            self._ensure_item_selection()
+            self._refresh_actions()
             return
-        self._ensure_item_selection()
+        if event.list_view.id == "item-actions":
+            self._sync_action_selection_visual()
 
     def on_descendant_focus(self, event) -> None:
         widget = getattr(event, "widget", None)
