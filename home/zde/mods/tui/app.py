@@ -68,6 +68,9 @@ class ZDEApp(App[None]):
     ConfirmModal {
       align: center middle;
     }
+    DepsInfoModal {
+      align: center middle;
+    }
     #quit-dialog {
       width: 44;
       height: auto;
@@ -84,11 +87,48 @@ class ZDEApp(App[None]):
       width: 12;
       margin: 0 1;
     }
+    #deps-info-dialog {
+      width: 85%;
+      height: 85%;
+      border: round $accent;
+      background: $panel;
+      padding: 1 2;
+    }
+    #deps-info-body {
+      height: 1fr;
+      margin-top: 1;
+      border: round $panel-darken-1;
+      padding: 0 1;
+    }
+    #deps-list-panel,
+    #deps-actions-panel {
+      border: round $panel-darken-2;
+      padding: 0 1;
+      margin-right: 1;
+    }
+    #deps-actions-panel {
+      margin-right: 0;
+    }
+    #deps-list-panel.active-panel,
+    #deps-actions-panel.active-panel {
+      border: round $primary;
+    }
+    #deps-list ListItem.deps-selected {
+      background: $primary;
+      color: $text;
+      text-style: bold;
+    }
+    #deps-list ListItem.deps-selected Label {
+      color: $text;
+      text-style: bold;
+    }
     """
 
     def on_mount(self) -> None:
         prefs = load_tui_preferences()
         theme = prefs.get("theme")
+        if not isinstance(theme, str) or not theme:
+            theme = "solarized-dark"
         if isinstance(theme, str) and theme:
             try:
                 self.theme = theme

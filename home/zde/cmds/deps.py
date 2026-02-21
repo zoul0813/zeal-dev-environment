@@ -321,7 +321,7 @@ def subcmd_info(args: list[str]) -> int:
         return 1
 
     raw_id = args[0]
-    dep_map, _env = _deps_by_id()
+    dep_map, env = _deps_by_id()
     try:
         resolved = _lookup_dep(dep_map, raw_id)
     except RuntimeError as exc:
@@ -361,7 +361,10 @@ def subcmd_info(args: list[str]) -> int:
         print(f"{indent}{value}")
 
     dep_id, dep = resolved
+    dep_path = resolve_dep_path(env, dep["path"])
+    installed = _is_git_repo(dep_path)
     print(f"Id: {dep_id}")
+    print(f"Installed: {'yes' if installed else 'no'}")
     for key in sorted(dep.keys()):
         if key == "id":
             continue
@@ -435,13 +438,15 @@ def get_tui_spec() -> CommandSpec:
         label="deps",
         help="Dependency management",
         actions=[
-            ActionSpec(id="list", label="list", help="Show dependency status table", pause_after_run=True),
-            # ActionSpec(id="install", label="install", help="Install missing dependency and chain"),
-            # ActionSpec(id="info", label="info", help="Show dependency details from deps.yml", pause_after_run=True),
-            # ActionSpec(id="build", label="build", help="Run build for an installed dependency"),
-            # ActionSpec(id="remove", label="remove", help="Remove optional installed dependency"),
+            ActionSpec(id="open", label="open", help="Open dependency manager screen"),
         ],
     )
+
+
+def get_tui_screen():
+    from mods.tui.screens.deps_menu import DepsMenuScreen
+
+    return DepsMenuScreen()
 
 
 def main(args: list[str]) -> int:
