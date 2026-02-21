@@ -119,24 +119,24 @@ class ZDEApp(App[None]):
       border: round $panel-darken-1;
       padding: 0 1;
     }
-    #deps-list-panel,
-    #deps-actions-panel {
+    #item-list-panel,
+    #item-actions-panel {
       border: round $panel-darken-2;
       padding: 0 1;
       margin-right: 1;
     }
-    #deps-list-panel {
+    #item-list-panel {
       width: 1fr;
     }
-    #deps-actions-panel {
+    #item-actions-panel {
       width: 24;
       margin-right: 0;
     }
-    #deps-list-panel.active-panel,
-    #deps-actions-panel.active-panel {
+    #item-list-panel.active-panel,
+    #item-actions-panel.active-panel {
       border: round $primary;
     }
-    #deps-layout {
+    #item-layout {
       height: 1fr;
     }
     #commands-layout {
@@ -163,32 +163,12 @@ class ZDEApp(App[None]):
     #actions-list-panel.active-panel {
       border: round $primary;
     }
-    #romdisk-entries-panel,
-    #romdisk-actions-panel {
-      border: round $panel-darken-2;
-      padding: 0 1;
-      margin-right: 1;
-    }
-    #romdisk-entries-panel {
-      width: 1fr;
-    }
-    #romdisk-actions-panel {
-      width: 24;
-      margin-right: 0;
-    }
-    #romdisk-entries-panel.active-panel,
-    #romdisk-actions-panel.active-panel {
-      border: round $primary;
-    }
-    #romdisk-layout {
-      height: 1fr;
-    }
-    #deps-list ListItem.deps-selected {
+    #item-list ListItem.item-selected {
       background: $primary;
       color: $text;
       text-style: bold;
     }
-    #deps-list ListItem.deps-selected Label {
+    #item-list ListItem.item-selected Label {
       color: $text;
       text-style: bold;
     }
