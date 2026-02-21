@@ -90,6 +90,12 @@ class ZDEApp(App[None]):
     DepsInfoModal {
       align: center middle;
     }
+    TextViewModal {
+      align: center middle;
+    }
+    PromptModal {
+      align: center middle;
+    }
     #quit-dialog {
       width: 44;
       height: auto;
@@ -118,6 +124,39 @@ class ZDEApp(App[None]):
       margin-top: 1;
       border: round $panel-darken-1;
       padding: 0 1;
+    }
+    #text-view-dialog {
+      width: 85%;
+      height: 85%;
+      border: round $accent;
+      background: $panel;
+      padding: 1 2;
+    }
+    #text-view-body {
+      height: 1fr;
+      margin-top: 1;
+      border: round $panel-darken-1;
+      padding: 0 1;
+    }
+    #prompt-dialog {
+      width: 56;
+      height: auto;
+      border: round $accent;
+      background: $panel;
+      padding: 1 2;
+    }
+    #prompt-actions {
+      margin-top: 1;
+      align-horizontal: center;
+      height: auto;
+    }
+    #prompt-actions Button {
+      width: 12;
+      margin: 0 1;
+    }
+    #prompt-error {
+      color: $warning;
+      height: auto;
     }
     #item-list-panel,
     #item-actions-panel {

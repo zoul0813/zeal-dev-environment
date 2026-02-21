@@ -35,6 +35,9 @@ class RomdiskMenuScreen(ItemActionScreen):
             ItemAction("refresh", "refresh", requires_item=False),
         ]
 
+    def get_default_action_id(self) -> str | None:
+        return "refresh"
+
     def get_items(self) -> list[tuple[str, str]]:
         return romdisk_cmd._romdisk_rows()  # noqa: SLF001 - shared formatter
 
@@ -62,7 +65,7 @@ class RomdiskMenuScreen(ItemActionScreen):
             rc, output = self._run_capture(romdisk_cmd.subcmd_rm, [item_id])
             return ActionResult(
                 rc=rc,
-                output=output,
+                output="",
                 refresh_items=True,
                 preferred_item_id=item_id,
                 status=f"[ok] removed {item_id}" if rc == 0 else None,

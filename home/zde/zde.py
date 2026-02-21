@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Callable
 
@@ -84,4 +85,7 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    rc = int(main(sys.argv[1:]))
+    if rc != 0 and os.environ.get("ZDE_SOFT_EXIT", "0") == "1":
+        rc = 0
+    sys.exit(rc)

@@ -45,6 +45,11 @@ zde_init() {
   HOST_UID="${HOST_UID:-$(id -u)}"
   HOST_GID="${HOST_GID:-$(id -g)}"
   HOST_HOME="${HOST_HOME:-$HOME}"
+  if [ -t 1 ]; then
+    ZDE_SOFT_EXIT="${ZDE_SOFT_EXIT:-1}"
+  else
+    ZDE_SOFT_EXIT="${ZDE_SOFT_EXIT:-0}"
+  fi
   ZEAL_KERNEL_VERSION="${ZEAL_KERNEL_VERSION:-$(git -C "$ZDE_PATH/home/Zeal-8-bit-OS" describe --tags 2>/dev/null || true)}"
   ZDE_IMAGE_REF="${ZDE_IMAGE_REF:-${ZDE_IMAGE}:${ZDE_VERSION}}"
   LAUNCH_PWD="${LAUNCH_PWD:-$PWD}"
@@ -71,6 +76,7 @@ zde_init() {
   export HOST_UID
   export HOST_GID
   export HOST_HOME
+  export ZDE_SOFT_EXIT
   export ZEAL_KERNEL_VERSION
   export LAUNCH_PWD
   export HOST_CWD
@@ -83,6 +89,7 @@ zde_command() {
     -e "HOST_GID=${HOST_GID}"
     -e "HOST_HOME=${HOST_HOME}"
     -e "HOST_CWD=${HOST_CWD}"
+    -e "ZDE_SOFT_EXIT=${ZDE_SOFT_EXIT}"
   )
 
   if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then
@@ -112,6 +119,7 @@ zde_shell() {
     -e "HOST_GID=${HOST_GID}"
     -e "HOST_HOME=${HOST_HOME}"
     -e "HOST_CWD=${HOST_CWD}"
+    -e "ZDE_SOFT_EXIT=${ZDE_SOFT_EXIT}"
   )
 
   if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then

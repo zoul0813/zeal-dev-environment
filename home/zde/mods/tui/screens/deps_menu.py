@@ -68,6 +68,9 @@ class DepsMenuScreen(ItemActionScreen):
             ItemAction("refresh", "refresh", requires_item=False),
         ]
 
+    def get_default_action_id(self) -> str | None:
+        return "info"
+
     def get_items(self) -> list[tuple[str, Text]]:
         rows: list[tuple[str, Text]] = []
         dep_map, env = deps_cmd._deps_by_id()  # noqa: SLF001 - internal reuse within same project

@@ -85,7 +85,16 @@ class ItemActionScreen(Screen[None]):
         for action in self._action_defs.values():
             actions.append(ListItem(Label(action.label), name=action.id))
         if actions.children:
-            actions.index = 0
+            default_id = self.get_default_action_id()
+            if default_id is not None:
+                for idx, child in enumerate(actions.children):
+                    if child.name == default_id:
+                        actions.index = idx
+                        break
+                else:
+                    actions.index = 0
+            else:
+                actions.index = 0
         self._refresh_items()
         self.action_focus_items()
 
@@ -100,6 +109,9 @@ class ItemActionScreen(Screen[None]):
 
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
         return ActionResult(rc=0)
+
+    def get_default_action_id(self) -> str | None:
+        return None
 
     def _refresh_items(self, preferred_item_id: str | None = None) -> None:
         items = self.query_one("#item-list", ListView)
@@ -224,6 +236,15 @@ class ItemActionScreen(Screen[None]):
         if confirm is None:
             self._execute_action(action_id, item_id)
             return
+
+        def _after_confirm(confirmed: bool | None) -> None:
+            if confirmed:
+                self._execute_action(action_id, item_id)
+            # Always restore interaction state after modal dismissal.
+            self.action_focus_items()
+            self.app.refresh(layout=True, repaint=True)
+            self.refresh(layout=True, repaint=True)
+
         self.app.push_screen(
             ConfirmModal(
                 title=confirm.title,
@@ -232,8 +253,19 @@ class ItemActionScreen(Screen[None]):
                 no_label=confirm.no_label,
                 default_no=confirm.default_no,
             ),
-            lambda yes: self._execute_action(action_id, item_id) if yes else None,
+            _after_confirm,
         )
+
+    def _selected_action_id(self) -> str | None:
+        actions = self.query_one("#item-actions", ListView)
+        if actions.highlighted_child is not None and isinstance(actions.highlighted_child.name, str):
+            return actions.highlighted_child.name
+        default_action = self.get_default_action_id()
+        if default_action is not None and default_action in self._action_defs:
+            return default_action
+        if actions.children and isinstance(actions.children[0].name, str):
+            return actions.children[0].name
+        return None
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.list_view.id != "item-actions" or event.item is None:
@@ -281,6 +313,16 @@ class ItemActionScreen(Screen[None]):
         list_view.scroll_to(y=target_top, animate=False, force=True)
 
     def on_key(self, event) -> None:
+        if event.key == "enter":
+            focused = self.app.focused
+            focused_id = getattr(focused, "id", "")
+            if focused_id == "item-list":
+                action_id = self._selected_action_id()
+                if action_id:
+                    self._run_action_by_id(action_id)
+                    event.stop()
+                    event.prevent_default()
+                return
         if event.key not in {"pageup", "pagedown"}:
             return
         focused = self.app.focused

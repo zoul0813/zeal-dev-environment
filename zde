@@ -6,6 +6,17 @@ ZDE_PATH=$(dirname "$0")
 source "$ZDE_PATH/home/zde/svcs/common.sh"
 zde_init "$@" || exit 1
 
+finalize_exit() {
+  local rc="$1"
+  # In interactive terminals, ZDE already prints actionable errors.
+  # Returning 0 avoids outer wrappers printing redundant "Error: executing ..." noise.
+  # Set ZDE_STRICT_EXIT=1 to preserve non-zero exit codes interactively.
+  if [ "$rc" -ne 0 ] && [ -t 1 ] && [ "${ZDE_STRICT_EXIT:-0}" != "1" ]; then
+    exit 0
+  fi
+  exit "$rc"
+}
+
 case "$COMMAND" in
   -i)
     if [ "${HOST_ARGS[0]-}" = "-b" ]; then
@@ -13,7 +24,7 @@ case "$COMMAND" in
     else
       zde_shell "$CONTAINER_SERVICE"
     fi
-    exit $?
+    finalize_exit $?
     ;;
   activate)
     if [ -t 1 ]; then
@@ -25,15 +36,15 @@ case "$COMMAND" in
     ;;
   emu|emulator)
     "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]-}"
-    exit $?
+    finalize_exit $?
     ;;
   playground)
     "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]-}"
-    exit $?
+    finalize_exit $?
     ;;
   update)
     "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]-}"
-    exit $?
+    finalize_exit $?
     ;;
   rebuild)
     echo "Host-only command pending reimplementation in /zde: $COMMAND"
@@ -43,3 +54,4 @@ case "$COMMAND" in
 esac
 
 zde_command "$@"
+finalize_exit $?
