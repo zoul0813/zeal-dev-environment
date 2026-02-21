@@ -39,6 +39,8 @@ dependencies:
     repo: https://github.com/Zeal8bit/ZealFS.git
     path: home/ZealFS
     branch: main
+    build:
+      tool: cmake
     metadata:
       name: ZealFS
       description: Zeal file system tools/source
@@ -93,6 +95,8 @@ dependencies:
     path: home/zeal-coreutils
     branch: main
     migrate: true
+    build:
+      tool: cmake
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
@@ -100,3 +104,18 @@ dependencies:
       description: Core utility programs for Zeal
     aliases:
       - coreutils
+
+  - id: zoul0813/zeal-zshell
+    repo: https://github.com/zoul0813/zeal-zshell.git
+    path: home/zeal-zshell
+    branch: main
+    migrate: true
+    build:
+      tool: cmake
+    depends_on:
+      - zoul0813/zeal-coreutils
+    metadata:
+      name: ZShell
+      description: A Shell for Zeal 8-bit OS
+    aliases:
+      - zshell

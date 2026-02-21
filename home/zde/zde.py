@@ -3,23 +3,31 @@
 
 from __future__ import annotations
 
-import importlib
 import sys
 from collections.abc import Callable
-from types import ModuleType
 
+from mods.commands import (
+    DEFAULT_MODULE_ALIASES,
+    command_to_module_name,
+    discover_command_modules,
+    discover_subcommands,
+    import_command_module,
+    module_name_to_command,
+)
 from mods.requirements import require_deps
 
-HELP_TEXT = "Help: update, deps, activate, make, cmake, kernel, image, create, romdisk, emu[lator], playground"
-
-
-MODULE_ALIASES = {
-    "emu": "emulator",
-}
-
-
 def print_top_help() -> int:
-    print(HELP_TEXT)
+    module_names = discover_command_modules()
+
+    rendered: list[str] = []
+    for module_name in module_names:
+        name = module_name_to_command(module_name)
+        aliases = DEFAULT_MODULE_ALIASES.get(module_name, [])
+        if aliases:
+            rendered.append(f"{name} ({', '.join(sorted(aliases))})")
+        else:
+            rendered.append(name)
+    print(f"Help: {', '.join(rendered)}")
     return 0
 
 
@@ -32,29 +40,17 @@ def infer_module_help(module_name: str, subcommands: dict[str, Callable[[list[st
     return 0
 
 
-def discover_subcommands(module: ModuleType) -> dict[str, Callable[[list[str]], int]]:
-    subcommands: dict[str, Callable[[list[str]], int]] = {}
-    for name in dir(module):
-        if not name.startswith("subcmd_"):
-            continue
-        handler = getattr(module, name)
-        if not callable(handler):
-            continue
-        subcommands[name.removeprefix("subcmd_")] = handler
-    return subcommands
-
-
 def main(argv: list[str]) -> int:
     if not argv or argv[0] == "help":
         return print_top_help()
 
     command_name = argv[0]
-    module_name = MODULE_ALIASES.get(command_name, command_name).replace("-", "_")
+    module_name = command_to_module_name(command_name, DEFAULT_MODULE_ALIASES)
     module_path = f"cmds.{module_name}"
     module_args = argv[1:]
 
     try:
-        module = importlib.import_module(module_path)
+        module = import_command_module(module_name)
     except ModuleNotFoundError as exc:
         if exc.name in {module_path, module_name}:
             print(f"Unknown command module: {module_name}")

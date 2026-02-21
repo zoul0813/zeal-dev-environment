@@ -1,54 +1,43 @@
 from __future__ import annotations
 
 import argparse
+from types import ModuleType
+
+from mods.commands import (
+    DEFAULT_MODULE_ALIASES,
+    discover_command_modules,
+    discover_subcommands,
+    import_command_module,
+    module_name_to_command,
+)
+
+
+def _configure_module_parser(module: ModuleType, parser: argparse.ArgumentParser, module_name: str) -> None:
+    custom = getattr(module, "configure_parser", None)
+    if callable(custom):
+        custom(parser)
+        return
+
+    subcommands = sorted(discover_subcommands(module).keys())
+    if subcommands:
+        sub = parser.add_subparsers(dest=f"{module_name}_subcommand")
+        for subcommand in subcommands:
+            sub_p = sub.add_parser(subcommand)
+            sub_p.add_argument("args", nargs=argparse.REMAINDER)
+        return
+
+    parser.add_argument("args", nargs=argparse.REMAINDER)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="zde")
     sub = parser.add_subparsers(dest="command")
 
-    make_p = sub.add_parser("make")
-    make_p.add_argument("make_args", nargs=argparse.REMAINDER)
-
-    cmake_p = sub.add_parser("cmake")
-    cmake_p.add_argument("cmake_args", nargs=argparse.REMAINDER)
-
-    kernel_p = sub.add_parser("kernel")
-    kernel_p.add_argument("kernel_config", nargs="?")
-
-    image_p = sub.add_parser("image")
-    image_p.add_argument("image_type", choices=["eeprom", "cf", "tf"])
-    image_p.add_argument("size", nargs="?")
-
-    create_p = sub.add_parser("create")
-    create_p.add_argument("create_args", nargs=argparse.REMAINDER)
-
-    romdisk_p = sub.add_parser("romdisk")
-    rom_sub = romdisk_p.add_subparsers(dest="romdisk_cmd")
-
-    rom_add = rom_sub.add_parser("add")
-    rom_add.add_argument("paths", nargs="+")
-
-    rom_rm = rom_sub.add_parser("rm")
-    rom_rm.add_argument("paths", nargs="+")
-
-    rom_sub.add_parser("ls")
-
-    emu_p = sub.add_parser("emu")
-    emu_p.add_argument("mode", nargs="?", default="start", choices=["start", "stop"])
-    emu_p.add_argument("query", nargs="?")
-
-    emulator_p = sub.add_parser("emulator")
-    emulator_p.add_argument("mode", nargs="?", default="start", choices=["start", "stop"])
-    emulator_p.add_argument("query", nargs="?")
-
-    pg_p = sub.add_parser("playground")
-    pg_p.add_argument("mode", nargs="?", default="start", choices=["start", "stop"])
-    pg_p.add_argument("query", nargs="?")
-
-    sub.add_parser("activate")
-
-    for name in ["update", "status", "start", "stop", "restart", "rebuild"]:
-        sub.add_parser(name)
+    for module_name in discover_command_modules():
+        module = import_command_module(module_name)
+        command_name = module_name_to_command(module_name)
+        aliases = DEFAULT_MODULE_ALIASES.get(module_name, [])
+        cmd_parser = sub.add_parser(command_name, aliases=aliases)
+        _configure_module_parser(module, cmd_parser, module_name)
 
     return parser

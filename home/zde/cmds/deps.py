@@ -5,7 +5,9 @@ import shutil
 import sys
 from datetime import datetime, timezone
 
+from mods.depbuild import run_dep_build
 from mods.migrate import migrate_broken_submodule_checkout
+from mods.requirements import require_deps
 from mods.update import (
     build_lock_entry,
     clone_repo,
@@ -17,7 +19,6 @@ from mods.update import (
     order_deps_by_dependency,
     resolve_dep_path,
     resolve_env,
-    update_repo,
     write_lock,
 )
 
@@ -258,13 +259,21 @@ def subcmd_install(args: list[str]) -> int:
                 print(f"Dependency path exists but is not a git repo: {dep_path}")
                 return 1
 
-        if not has_git:
-            rc = clone_repo(dep_path, dep["repo"], ref_type, ref_value)
-        else:
-            rc = update_repo(dep_path, dep["repo"], ref_type, ref_value)
+        if has_git:
+            _write_dep_lock_entry(env, install_id, dep, "synced")
+            print(f"Dependency already installed: {install_id}")
+            continue
+
+        rc = clone_repo(dep_path, dep["repo"], ref_type, ref_value)
 
         if rc != 0:
             print(f"Failed installing dependency: {install_id}")
+            return rc
+
+        rc = run_dep_build(dep, dep_path)
+        if rc != 0:
+            _write_dep_lock_entry(env, install_id, dep, "build_failed")
+            print(f"Failed building dependency: {install_id}")
             return rc
 
         _write_dep_lock_entry(env, install_id, dep, "synced")
@@ -305,14 +314,124 @@ def subcmd_remove(args: list[str]) -> int:
     return 0
 
 
+def subcmd_info(args: list[str]) -> int:
+    if not args:
+        print("Usage: zde deps info <id>")
+        return 1
+
+    raw_id = args[0]
+    dep_map, _env = _deps_by_id()
+    try:
+        resolved = _lookup_dep(dep_map, raw_id)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
+    if resolved is None:
+        print(f"Unknown dependency id: {raw_id}")
+        return 1
+
+    def _pretty_label(key: str) -> str:
+        return key.replace("_", " ").title()
+
+    def _print_value(value, indent: str = "  ") -> None:
+        if isinstance(value, list):
+            if not value:
+                print(f"{indent}-")
+                return
+            for item in value:
+                if isinstance(item, (list, dict)):
+                    print(f"{indent}-")
+                    _print_value(item, indent + "  ")
+                else:
+                    print(f"{indent}- {item}")
+            return
+        if isinstance(value, dict):
+            if not value:
+                print(f"{indent}-")
+                return
+            for k in sorted(value.keys()):
+                v = value[k]
+                if isinstance(v, (list, dict)):
+                    print(f"{indent}{_pretty_label(str(k))}:")
+                    _print_value(v, indent + "  ")
+                else:
+                    print(f"{indent}{_pretty_label(str(k))}: {v}")
+            return
+        print(f"{indent}{value}")
+
+    dep_id, dep = resolved
+    print(f"Id: {dep_id}")
+    for key in sorted(dep.keys()):
+        if key == "id":
+            continue
+        label = _pretty_label(key)
+        value = dep[key]
+        if isinstance(value, (dict, list)):
+            print(f"{label}:")
+            _print_value(value)
+            continue
+        print(f"{label}: {value}")
+
+    return 0
+
+
+def subcmd_build(args: list[str]) -> int:
+    if not args:
+        print("Usage: zde deps build <id>")
+        return 1
+
+    raw_id = args[0]
+    dep_map, env = _deps_by_id()
+    try:
+        resolved = _lookup_dep(dep_map, raw_id)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
+    if resolved is None:
+        print(f"Unknown dependency id: {raw_id}")
+        return 1
+    dep_id, dep = resolved
+
+    needed_ids = [dep_id, *dep.get("depends_on", [])]
+    if not require_deps(needed_ids):
+        return 1
+
+    dep_path = resolve_dep_path(env, dep["path"])
+    if not _is_git_repo(dep_path):
+        print(f"Dependency not installed: {dep_id}")
+        return 1
+
+    if not isinstance(dep.get("build"), dict):
+        print(f"No build configured for dependency: {dep_id}")
+        _write_dep_lock_entry(env, dep_id, dep, "synced")
+        return 0
+
+    rc = run_dep_build(dep, dep_path)
+    if rc != 0:
+        _write_dep_lock_entry(env, dep_id, dep, "build_failed")
+        print(f"Failed building dependency: {dep_id}")
+        return rc
+
+    _write_dep_lock_entry(env, dep_id, dep, "synced")
+    print(f"Built dependency: {dep_id}")
+    return 0
+
+
 def help() -> int:
     print("Usage: zde deps <subcommand> [args]")
     print("Subcommands:")
     print("  list")
     print("  install <id>")
+    print("  info <id>")
+    print("  build <id>")
     print("  remove <id>")
     return 0
 
 
 def main(args: list[str]) -> int:
-    return subcmd_list(args)
+    if args:
+        return subcmd_list(args)
+
+    help()
+    print()
+    return subcmd_list([])

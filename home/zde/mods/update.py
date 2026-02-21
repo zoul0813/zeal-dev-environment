@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from mods.depbuild import run_dep_build
+
 try:
     import yaml
 except ModuleNotFoundError:
@@ -97,6 +99,17 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         if depends_on is not None:
             if not isinstance(depends_on, list) or any(not isinstance(item, str) or not item.strip() for item in depends_on):
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid depends_on list")
+        build = dep.get("build")
+        if build is not None:
+            if not isinstance(build, dict):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid build config")
+            tool = build.get("tool")
+            if tool not in {"cmake", "make"}:
+                raise RuntimeError(f"Dependency '{dep['id']}' build.tool must be one of: cmake, make")
+            build_args = build.get("args")
+            if build_args is not None:
+                if not isinstance(build_args, list) or any(not isinstance(item, str) for item in build_args):
+                    raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.args list")
         dep_id = dep["id"]
         if dep_id in ids:
             raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")
@@ -403,7 +416,8 @@ def update_deps(env: Env) -> int:
                 )
                 return 1
 
-        if not has_git:
+        newly_installed = not has_git
+        if newly_installed:
             rc = clone_repo(dep_path, repo, ref_type, ref_value)
         else:
             rc = update_repo(dep_path, repo, ref_type, ref_value)
@@ -422,6 +436,22 @@ def update_deps(env: Env) -> int:
             write_lock(env.lock_file, lock)
             print(f"Failed syncing dependency: {dep_id}", file=sys.stderr)
             return rc
+
+        if newly_installed:
+            rc = run_dep_build(dep, dep_path)
+            if rc != 0:
+                lock_deps[dep_id] = build_lock_entry(
+                    dep=dep,
+                    ref_type=ref_type,
+                    ref_value=ref_value,
+                    status="build_failed",
+                    updated_at=now,
+                    current_commit_value=current_commit(dep_path),
+                )
+                lock["updated_at"] = now
+                write_lock(env.lock_file, lock)
+                print(f"Failed building dependency: {dep_id}", file=sys.stderr)
+                return rc
 
         lock_deps[dep_id] = build_lock_entry(
             dep=dep,
