@@ -32,6 +32,7 @@ RUN echo "Installing prerequisites" \
   && pip3 install kconfiglib \
   && pip3 install cookiecutter \
   && pip3 install pillow \
+  && pip3 install textual \
   && pip3 install --upgrade "setuptools<81" supervisor \
   && mkdir -p /var/log/supervisor
 
@@ -59,4 +60,3 @@ RUN chmod +x /entrypoint.sh
 
 WORKDIR /src/
 ENTRYPOINT ["/entrypoint.sh"]
-
