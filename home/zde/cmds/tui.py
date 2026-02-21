@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from mods.tui.contract import ActionSpec, CommandSpec
+
 
 def main(args: list[str]) -> int:
     try:
@@ -15,3 +17,14 @@ def main(args: list[str]) -> int:
     app = ZDEApp()
     app.run()
     return 0
+
+
+def get_tui_spec() -> CommandSpec:
+    return CommandSpec(
+        name="tui",
+        label="tui",
+        help="Launch the interactive terminal UI",
+        actions=[
+            ActionSpec(id="__main__", label="run", help="Open ZDE Textual interface"),
+        ],
+    )

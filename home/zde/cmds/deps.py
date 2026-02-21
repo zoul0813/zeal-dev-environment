@@ -435,8 +435,11 @@ def get_tui_spec() -> CommandSpec:
         label="deps",
         help="Dependency management",
         actions=[
-            ActionSpec(id="list", label="list", pause_after_run=True),
-            ActionSpec(id="info", label="info", pause_after_run=True),
+            ActionSpec(id="list", label="list", help="Show dependency status table", pause_after_run=True),
+            # ActionSpec(id="install", label="install", help="Install missing dependency and chain"),
+            # ActionSpec(id="info", label="info", help="Show dependency details from deps.yml", pause_after_run=True),
+            # ActionSpec(id="build", label="build", help="Run build for an installed dependency"),
+            # ActionSpec(id="remove", label="remove", help="Remove optional installed dependency"),
         ],
     )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ._service import start as start_supervised_service
 from ._service import stop as stop_supervised_service
+from mods.tui.contract import ActionSpec, CommandSpec
 
 
 def subcmd_start(args: list[str]) -> int:
@@ -28,3 +29,15 @@ def help() -> int:
 
 def main(args: list[str]) -> int:
     return subcmd_start(args)
+
+
+def get_tui_spec() -> CommandSpec:
+    return CommandSpec(
+        name="emulator",
+        label="emulator",
+        help="Manage Zeal Web Emulator service",
+        actions=[
+            ActionSpec(id="start", label="start", help="Start emulator service and print URL"),
+            ActionSpec(id="stop", label="stop", help="Stop emulator service"),
+        ],
+    )

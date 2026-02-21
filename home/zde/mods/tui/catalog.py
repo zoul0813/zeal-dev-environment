@@ -55,71 +55,13 @@ def _infer_command_spec(module_name: str, module: ModuleType) -> CommandSpec:
     return CommandSpec(name=command_name, label=command_name, actions=actions)
 
 
-def _merge_action(base: ActionSpec, override: ActionSpec) -> ActionSpec:
-    label = override.label if override.label else base.label
-    help_text = override.help if override.help else base.help
-    default_args = override.default_args if override.default_args else base.default_args
-    pause_after_run = override.pause_after_run if override.pause_after_run != base.pause_after_run else base.pause_after_run
-    return ActionSpec(
-        id=base.id,
-        label=label,
-        help=help_text,
-        default_args=list(default_args),
-        pause_after_run=pause_after_run,
-        excluded=bool(override.excluded),
-    )
-
-
-def _merge_specs(inferred: CommandSpec, explicit: CommandSpec) -> CommandSpec:
-    merged_actions: list[ActionSpec] = []
-    overrides_by_id = {action.id: action for action in explicit.actions}
-    seen: set[str] = set()
-
-    for action in inferred.actions:
-        override = overrides_by_id.get(action.id)
-        if override is None:
-            merged_actions.append(action)
-            seen.add(action.id)
-            continue
-        merged = _merge_action(action, override)
-        seen.add(action.id)
-        if merged.excluded:
-            continue
-        merged_actions.append(merged)
-
-    for action in explicit.actions:
-        if action.id in seen:
-            continue
-        if action.excluded:
-            continue
-        label = action.label if action.label else action.id
-        merged_actions.append(
-            ActionSpec(
-                id=action.id,
-                label=label,
-                help=action.help,
-                default_args=list(action.default_args),
-                pause_after_run=action.pause_after_run,
-                excluded=False,
-            )
-        )
-
-    return CommandSpec(
-        name=inferred.name,
-        label=explicit.label if explicit.label else inferred.label,
-        help=explicit.help if explicit.help else inferred.help,
-        actions=merged_actions,
-    )
-
-
 def _command_spec_from_module(module_name: str, module: ModuleType) -> CommandSpec | None:
-    inferred = _infer_command_spec(module_name, module)
     provider = getattr(module, "get_tui_spec", None)
     if callable(provider):
         spec = provider()
         if isinstance(spec, CommandSpec):
-            return _merge_specs(inferred, spec)
-    return inferred
+            return spec
+    return _infer_command_spec(module_name, module)
 
 
 def build_catalog() -> list[CommandSpec]:

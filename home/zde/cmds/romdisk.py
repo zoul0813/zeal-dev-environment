@@ -102,7 +102,9 @@ def get_tui_spec() -> CommandSpec:
         label="romdisk",
         help="Romdisk file staging",
         actions=[
-            ActionSpec(id="ls", label="ls", pause_after_run=True),
+            ActionSpec(id="ls", label="ls", help="List romdisk files", pause_after_run=True),
+            ActionSpec(id="add", label="add", help="Copy files into romdisk"),
+            ActionSpec(id="rm", label="rm", help="Remove files from romdisk"),
         ],
     )
 

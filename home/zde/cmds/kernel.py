@@ -4,6 +4,7 @@ import shutil
 
 from mods.common import HOME_DIR, USER_STATE_DIR
 from mods.process import run
+from mods.tui.contract import ActionSpec, CommandSpec
 
 
 def run_kernel(args: list[str]) -> int:
@@ -41,3 +42,16 @@ def subcmd_menuconfig(args: list[str]) -> int:
 
 def main(args: list[str]) -> int:
     return run_kernel(args)
+
+
+def get_tui_spec() -> CommandSpec:
+    return CommandSpec(
+        name="kernel",
+        label="kernel",
+        help="Build kernel with target/user configs",
+        actions=[
+            ActionSpec(id="__main__", label="run", help="Build kernel with default or provided config"),
+            ActionSpec(id="user", label="user", help="Build using saved user os.conf"),
+            ActionSpec(id="menuconfig", label="menuconfig", help="Open kernel menuconfig and persist user config"),
+        ],
+    )

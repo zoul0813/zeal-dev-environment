@@ -8,6 +8,7 @@ from pathlib import Path
 from mods.common import HOME_DIR, MNT_DIR
 from mods.process import run
 from mods.requirements import require_deps
+from mods.tui.contract import ActionSpec, CommandSpec
 
 def _pack_cf_image() -> int:
     pack_script = HOME_DIR / "Zeal-8-bit-OS" / "tools" / "pack.py"
@@ -227,3 +228,16 @@ def help() -> int:
 
 def main(args: list[str]) -> int:
     return help()
+
+
+def get_tui_spec() -> CommandSpec:
+    return CommandSpec(
+        name="image",
+        label="image",
+        help="Manage and build EEPROM/CF/TF images",
+        actions=[
+            ActionSpec(id="eeprom", label="eeprom", help="Manage EEPROM image staging/build"),
+            ActionSpec(id="cf", label="cf", help="Manage CF image staging/build"),
+            ActionSpec(id="tf", label="tf", help="Manage TF image staging/build"),
+        ],
+    )
