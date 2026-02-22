@@ -159,12 +159,12 @@ def subcmd_list(args: list[str]) -> int:
         dep_path = resolve_dep_path(env, dep["path"])
         installed_by_id[dep_id] = _is_git_repo(dep_path)
 
+    mark_w = 3
     id_w = 34
     state_w = 12
     req_w = 8
-    inst_w = 9
     track_w = 7
-    print(f"{'ID':<{id_w}} {'STATE':<{state_w}} {'REQUIRED':<{req_w}} {'INSTALLED':<{inst_w}} {'TRACKED':<{track_w}} ALIASES")
+    print(f"{'[?]':<{mark_w}} {'ID':<{id_w}} {'STATE':<{state_w}} {'REQUIRED':<{req_w}} {'TRACKED':<{track_w}} ALIASES")
     for dep_id in sorted(dep_map.keys()):
         dep = dep_map[dep_id]
         required = bool(dep.get("required", False))
@@ -174,8 +174,8 @@ def subcmd_list(args: list[str]) -> int:
         aliases = dep.get("aliases", [])
         alias_text = ", ".join(aliases) if isinstance(aliases, list) and aliases else "-"
         req_s = "yes" if required else "no"
-        inst_s = "yes" if installed else "no"
         track_s = "yes" if tracked else "no"
+        inst_mark = "[x]" if installed else "[ ]"
         if required and not installed:
             state_plain = "required-miss"
             state_colored = state_plain
@@ -204,7 +204,7 @@ def subcmd_list(args: list[str]) -> int:
         if use_color and state_colored != state_plain:
             state_cell = state_cell.replace(state_plain, state_colored, 1)
 
-        row = f"{dep_id:<{id_w}} {state_cell} {req_s:<{req_w}} {inst_s:<{inst_w}} {track_s:<{track_w}} {alias_text}"
+        row = f"{inst_mark:<{mark_w}} {dep_id:<{id_w}} {state_cell} {req_s:<{req_w}} {track_s:<{track_w}} {alias_text}"
 
         if required and not installed:
             print(_paint(row, "red", use_color))
@@ -363,8 +363,12 @@ def subcmd_info(args: list[str]) -> int:
     dep_id, dep = resolved
     dep_path = resolve_dep_path(env, dep["path"])
     installed = _is_git_repo(dep_path)
+    lock = load_lock(env.lock_file)
+    lock_deps = lock.get("dependencies", {})
+    tracked = dep_id in lock_deps
     print(f"Id: {dep_id}")
     print(f"Installed: {'yes' if installed else 'no'}")
+    print(f"Tracked: {'yes' if tracked else 'no'}")
     for key in sorted(dep.keys()):
         if key == "id":
             continue

@@ -57,7 +57,8 @@ class CreateMenuScreen(ItemActionScreen):
                 TextViewModal(
                     title=f"Create Failed ({item_id})",
                     content=output or "Create failed with no output.",
-                )
+                ),
+                lambda _result: self.action_focus_items(),
             )
         return ActionResult(rc=rc, preferred_item_id=item_id)
 
@@ -67,6 +68,7 @@ class CreateMenuScreen(ItemActionScreen):
     def _on_project_name(self, template_id: str, value: str | None) -> None:
         if value is None:
             self._set_status("")
+            self.action_focus_items()
             return
         self._pending_project_name = value
         self._execute_action("create", template_id)

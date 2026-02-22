@@ -44,7 +44,10 @@ class CommandMenuScreen(Screen[None]):
             commands.append(ListItem(Label(label), name=command.name))
         if self._commands:
             commands.index = 0
-        commands.focus()
+        self._focus_commands()
+
+    def _focus_commands(self) -> None:
+        self.query_one("#commands", ListView).focus()
         self.query_one("#commands-list-panel", Vertical).add_class("active-panel")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
@@ -60,7 +63,7 @@ class CommandMenuScreen(Screen[None]):
         if callable(custom_screen):
             screen = custom_screen()
             if isinstance(screen, Screen):
-                self.app.push_screen(screen)
+                self.app.push_screen(screen, lambda _result: self._focus_commands())
                 return
         if len(command.actions) == 1:
             action = command.actions[0]
@@ -73,13 +76,13 @@ class CommandMenuScreen(Screen[None]):
                         pass
             self.app.refresh(layout=True, repaint=True)
             self.refresh(layout=True, repaint=True)
-            self.query_one("#commands", ListView).focus()
+            self._focus_commands()
             if rc == 0:
                 self._set_status(f"[ok] Completed: {command.name} {action.id}")
                 return
             self._set_status(f"[error] Failed ({rc}): {command.name} {action.id}")
             return
-        self.app.push_screen(ActionMenuScreen(command))
+        self.app.push_screen(ActionMenuScreen(command), lambda _result: self._focus_commands())
 
     def _set_status(self, text: str) -> None:
         status = self.query_one("#status", Static)
@@ -104,3 +107,5 @@ class CommandMenuScreen(Screen[None]):
     def _handle_quit_prompt(self, should_quit: bool) -> None:
         if should_quit:
             self.app.exit()
+            return
+        self._focus_commands()

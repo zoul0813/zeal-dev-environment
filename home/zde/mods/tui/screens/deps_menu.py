@@ -182,6 +182,7 @@ class DepsMenuScreen(ItemActionScreen):
     def _on_stage_target(self, dep_id: str, value: str | None) -> None:
         if value is None:
             self._set_status("")
+            self.action_focus_items()
             return
         target = value.strip().lower()
         if target in self._stage_targets:
@@ -190,6 +191,7 @@ class DepsMenuScreen(ItemActionScreen):
             return
         supported = ", ".join(sorted(self._stage_targets))
         self._set_status(f"[warn] Target must be one of: {supported}")
+        self.action_focus_items()
 
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
         if action_id == "refresh":
@@ -199,7 +201,7 @@ class DepsMenuScreen(ItemActionScreen):
         if action_id == "info":
             rc, output = self._run_capture(deps_cmd.subcmd_info, [item_id])
             if output:
-                self.app.push_screen(DepsInfoModal(item_id, output))
+                self.app.push_screen(DepsInfoModal(item_id, output), lambda _result: self.action_focus_items())
             return ActionResult(rc=rc, output="")
         if action_id == "install":
             rc, output = self._run_capture(deps_cmd.subcmd_install, [item_id])

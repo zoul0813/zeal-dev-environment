@@ -36,7 +36,7 @@ class ImageMenuScreen(ItemActionScreen):
 
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
         if action_id == "open" and item_id is not None:
-            self.app.push_screen(FileTreeScreen(item_id))
+            self.app.push_screen(FileTreeScreen(item_id), lambda _result: self.action_focus_items())
             return ActionResult(status="", focus_items=False)
         return ActionResult(rc=0)
 
