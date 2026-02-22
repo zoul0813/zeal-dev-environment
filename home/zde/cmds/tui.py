@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from mods.runtime import use_mode
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
@@ -15,7 +16,8 @@ def main(args: list[str]) -> int:
         raise
 
     app = ZDEApp()
-    app.run()
+    with use_mode("tui"):
+        app.run()
     return 0
 
 

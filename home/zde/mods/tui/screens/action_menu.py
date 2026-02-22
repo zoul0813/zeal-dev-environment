@@ -6,7 +6,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.tui.contract import CommandSpec
-from mods.tui.exec import clear_terminal, run_action
+from mods.tui.exec import run_action, suspend_for_external_output
 
 
 class ActionMenuScreen(Screen[None]):
@@ -52,8 +52,7 @@ class ActionMenuScreen(Screen[None]):
         action = next((item for item in self._command.actions if item.id == action_id), None)
         if action is None:
             return
-        with self.app.suspend():
-            clear_terminal()
+        with suspend_for_external_output(self.app):
             rc = run_action(self._command.name, action.id, action.default_args)
             if action.pause_after_run:
                 try:

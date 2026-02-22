@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from mods.process import run as process_run
+from mods.process import run_capture as process_run_capture
 
 try:
     import yaml
@@ -24,31 +25,24 @@ class Env:
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> int:
-    return subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=False).returncode
+    return process_run(cmd, cwd=cwd)
 
 
 def run_capture(cmd: list[str], cwd: Path | None = None) -> str:
-    result = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return result.stdout.strip()
+    return process_run_capture(cmd, cwd=cwd)
 
 
 def is_git_repo(path: Path) -> bool:
     if not path.is_dir():
         return False
-    result = subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    return (
+        process_run(
+            ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
     )
-    return result.returncode == 0
 
 
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
@@ -61,13 +55,7 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
             doc = yaml.safe_load(f) or {}
         deps = doc.get("dependencies")
     else:
-        yq_check = subprocess.run(
-            ["yq", "--version"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if yq_check.returncode != 0:
+        if process_run(["yq", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
             raise RuntimeError("PyYAML or yq is required to parse deps.yml")
         raw = run_capture(["yq", "-o=json", ".dependencies", str(deps_file)])
         deps = json.loads(raw)
@@ -177,13 +165,7 @@ def load_lock(lock_file: Path) -> dict[str, Any]:
         with lock_file.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     else:
-        yq_check = subprocess.run(
-            ["yq", "--version"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if yq_check.returncode != 0:
+        if process_run(["yq", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
             raise RuntimeError("PyYAML or yq is required to parse deps-lock.yml")
         raw = run_capture(["yq", "-o=json", ".", str(lock_file)])
         data = json.loads(raw)
@@ -212,25 +194,12 @@ def write_lock(lock_file: Path, lock: dict[str, Any]) -> None:
             yaml.safe_dump(lock, f, sort_keys=True)
         return
 
-    yq_check = subprocess.run(
-        ["yq", "--version"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    if yq_check.returncode != 0:
+    if process_run(["yq", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
         raise RuntimeError("PyYAML or yq is required to write deps-lock.yml")
 
     payload = json.dumps(lock, sort_keys=True)
-    result = subprocess.run(
-        ["yq", "-P", "-o=yaml", ".", "-"],
-        check=True,
-        input=payload,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    lock_file.write_text(result.stdout, encoding="utf-8")
+    rendered = process_run_capture(["yq", "-P", "-o=yaml", ".", "-"], input_text=payload)
+    lock_file.write_text(rendered + ("\n" if rendered and not rendered.endswith("\n") else ""), encoding="utf-8")
 
 
 def configured_ref(dep: dict[str, Any]) -> tuple[str, str]:

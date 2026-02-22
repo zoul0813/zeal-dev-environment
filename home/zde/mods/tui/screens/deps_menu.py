@@ -10,8 +10,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from cmds import image as image_cmd
-from mods.deps import Dep, DepCatalog
-from mods.tui.exec import clear_terminal
+from mods.deps import Dep, DepCatalog, get_skip_sync_installed_config, set_skip_sync_installed_config
+from mods.tui.exec import suspend_for_external_output
 from mods.tui.screens.choice_modal import ChoiceModal
 from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen
 
@@ -52,6 +52,7 @@ class DepsMenuScreen(ItemActionScreen):
         ("f6", "run_build", "Build"),
         ("f7", "run_stage", "Stage"),
         ("f8", "run_remove", "Remove"),
+        ("f9", "toggle_skip_sync_installed", "Local Mode"),
         ("f2", "run_refresh", "Refresh"),
     ]
 
@@ -72,6 +73,7 @@ class DepsMenuScreen(ItemActionScreen):
             ItemAction("build", "build"),
             ItemAction("stage", "stage"),
             ItemAction("remove", "remove"),
+            ItemAction("toggle-skip-sync-installed", "toggle skip-sync-installed", requires_item=False),
             ItemAction("refresh", "refresh", requires_item=False),
         ]
 
@@ -158,8 +160,7 @@ class DepsMenuScreen(ItemActionScreen):
             return ActionResult(rc=0, output="")
 
         if action_id == "install":
-            with self.app.suspend():
-                clear_terminal()
+            with suspend_for_external_output(self.app):
                 rc = int(dep.install())
             return ActionResult(rc=rc, output="", refresh_items=True, preferred_item_id=item_id)
 
@@ -168,8 +169,7 @@ class DepsMenuScreen(ItemActionScreen):
             return ActionResult(rc=rc, output=output, refresh_items=True, preferred_item_id=item_id)
 
         if action_id == "build":
-            with self.app.suspend():
-                clear_terminal()
+            with suspend_for_external_output(self.app):
                 rc = int(dep.build())
                 try:
                     input("\nPress Enter to return to ZDE TUI...")
@@ -193,6 +193,17 @@ class DepsMenuScreen(ItemActionScreen):
             rc, output = self._run_capture(dep.stage, target)
             return ActionResult(rc=rc, output=output, preferred_item_id=item_id)
 
+        if action_id == "toggle-skip-sync-installed":
+            new_value = not get_skip_sync_installed_config()
+            set_skip_sync_installed_config(new_value)
+            state = "on" if new_value else "off"
+            return ActionResult(
+                rc=0,
+                status=f"[ok] skip-sync-installed: {state}",
+                refresh_items=True,
+                preferred_item_id=item_id,
+            )
+
         return ActionResult(rc=0)
 
     def action_run_info(self) -> None:
@@ -212,3 +223,6 @@ class DepsMenuScreen(ItemActionScreen):
 
     def action_run_refresh(self) -> None:
         self._run_shortcut_action("refresh")
+
+    def action_toggle_skip_sync_installed(self) -> None:
+        self._run_shortcut_action("toggle-skip-sync-installed")

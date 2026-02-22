@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 from mods.common import HOME_DIR
+from mods.process import run
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
@@ -147,11 +147,7 @@ def main(args: list[str]) -> int:
         f"name={project_name}",
         *extras,
     ]
-    try:
-        return subprocess.run(cmd, check=False, env=env).returncode
-    except FileNotFoundError as exc:
-        print(f"Command not found: {exc.filename}")
-        return 127
+    return run(cmd, env=env)
 
 
 def get_tui_spec() -> CommandSpec:

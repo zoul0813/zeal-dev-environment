@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from mods.migrate import migrate_broken_submodule_checkout
+from mods.config import Config
 from mods.update import (
     build_lock_entry,
     clone_repo,
@@ -30,6 +31,18 @@ def _wrap_config_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_wrap_config_value(item) for item in value]
     return value
+
+
+def get_skip_sync_installed_config() -> bool:
+    cfg = Config.load()
+    value = cfg.get("deps.skip-sync-installed")
+    return bool(value)
+
+
+def set_skip_sync_installed_config(enabled: bool) -> None:
+    cfg = Config.load()
+    cfg.set("deps.skip-sync-installed", bool(enabled))
+    cfg.save()
 
 
 @dataclass(frozen=True)
@@ -441,6 +454,8 @@ class DepCatalog:
         lock_deps: dict[str, Any] = {}
         lock["dependencies"] = lock_deps
 
+        skip_installed_sync = self._skip_sync_for_installed()
+        announced_skip_mode = False
         now = datetime.now(timezone.utc).isoformat()
         for dep in self.deps:
             ref_type, ref_value = configured_ref(dep.raw)
@@ -465,6 +480,20 @@ class DepCatalog:
                         file=sys.stderr,
                     )
                     return 1
+
+            if has_git and skip_installed_sync:
+                if not announced_skip_mode:
+                    print("Local dep mode enabled: skipping git sync for already-installed dependencies.")
+                    announced_skip_mode = True
+                lock_deps[dep.id] = build_lock_entry(
+                    dep=dep.raw,
+                    ref_type=ref_type,
+                    ref_value=ref_value,
+                    status="local",
+                    updated_at=now,
+                    current_commit_value=current_commit(dep_path),
+                )
+                continue
 
             newly_installed = not has_git
             if newly_installed:
@@ -517,6 +546,9 @@ class DepCatalog:
         self.refresh()
         print(f"Dependency lock updated: {self.env.lock_file}")
         return 0
+
+    def _skip_sync_for_installed(self) -> bool:
+        return get_skip_sync_installed_config()
 
     def _run_build_for_dep(self, dep: Dep) -> int:
         build = dep.raw.get("build")

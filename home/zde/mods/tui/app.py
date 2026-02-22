@@ -9,9 +9,9 @@ from textual.app import App
 from textual.screen import Screen
 from textual.widgets import Static
 
+from mods.config import Config
 from mods.tui.catalog import build_catalog
 from mods.tui.screens.command_menu import CommandMenuScreen
-from mods.tui.settings import load_tui_preferences, save_tui_preferences
 
 
 class ZDEApp(App[None]):
@@ -237,8 +237,8 @@ class ZDEApp(App[None]):
     """
 
     def on_mount(self) -> None:
-        prefs = load_tui_preferences()
-        theme = prefs.get("theme")
+        cfg = Config.load()
+        theme = cfg.get("textual.theme")
         if not isinstance(theme, str) or not theme:
             theme = "solarized-dark"
         if isinstance(theme, str) and theme:
@@ -246,9 +246,6 @@ class ZDEApp(App[None]):
                 self.theme = theme
             except Exception:
                 pass
-        dark = prefs.get("dark")
-        if isinstance(dark, bool):
-            self.dark = dark
         commands = build_catalog()
         self.push_screen(CommandMenuScreen(commands))
         self._refresh_cwd_bar()
@@ -292,4 +289,10 @@ class ZDEApp(App[None]):
             yield command
 
     def on_unmount(self) -> None:
-        save_tui_preferences(getattr(self, "theme", None), bool(getattr(self, "dark", False)))
+        cfg = Config.load()
+        theme = getattr(self, "theme", None)
+        if isinstance(theme, str) and theme:
+            cfg.set("textual.theme", theme)
+        else:
+            cfg.unset("textual.theme")
+        cfg.save()

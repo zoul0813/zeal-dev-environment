@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import sys
+from contextlib import contextmanager
 
 from mods.commands import command_to_module_name, discover_subcommands, import_command_module
+from mods.process import with_run_options
 from mods.requirements import require_deps
 
 
-def clear_terminal() -> None:
-    # Clear screen + move cursor home before printing raw command output.
-    sys.stdout.write("\x1b[2J\x1b[H")
-    sys.stdout.flush()
+@contextmanager
+def suspend_for_external_output(app):
+    # Hand terminal control to external commands and clear once at handoff.
+    with app.suspend():
+        with with_run_options(clear_before_run=True, clear_before_run_once=True):
+            yield
 
 
 def run_action(command_name: str, action_id: str, args: list[str] | None = None) -> int:
