@@ -17,7 +17,6 @@ services:
       - ./home:/home/zeal8bit
       - ~/.zeal8bit:/home/zeal8bit/.zeal8bit
       - ./mnt:/mnt
-      - ./etc/supervisor.d:/etc/supervisor.d
     ports:
       - 1145:1145
       - 1155:1155

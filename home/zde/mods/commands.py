@@ -8,12 +8,6 @@ from types import ModuleType
 import cmds
 
 
-DEFAULT_MODULE_ALIASES: dict[str, list[str]] = {
-    "emulator": ["emu"],
-    "image": ["romdisk"],
-}
-
-
 def discover_command_modules() -> list[str]:
     names: list[str] = []
     for mod in pkgutil.iter_modules(cmds.__path__):
@@ -48,10 +42,8 @@ def build_alias_lookup(module_aliases: dict[str, list[str]]) -> dict[str, str]:
     return alias_lookup
 
 
-def command_to_module_name(command_name: str, module_aliases: dict[str, list[str]]) -> str:
-    alias_lookup = build_alias_lookup(module_aliases)
-    normalized = command_name.replace("-", "_")
-    return alias_lookup.get(normalized, normalized)
+def command_to_module_name(command_name: str) -> str:
+    return command_name.replace("-", "_")
 
 
 def import_command_module(module_name: str) -> ModuleType:

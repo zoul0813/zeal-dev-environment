@@ -25,6 +25,9 @@ case "$CMD" in
   stop)
     stop_container
     ;;
+  status)
+    echo "emulator: $(container_status)"
+    ;;
   *)
     QUERY="$CMD"
     require_deps "${REQUIRED_DEPS[@]}" || exit 1

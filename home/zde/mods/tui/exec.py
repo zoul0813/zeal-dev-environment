@@ -17,7 +17,7 @@ def suspend_for_external_output(app):
 
 def run_action(command_name: str, action_id: str, args: list[str] | None = None) -> int:
     action_args = list(args or [])
-    module_name = command_to_module_name(command_name, {"emulator": ["emu"]})
+    module_name = command_to_module_name(command_name)
     module = import_command_module(module_name)
 
     required = getattr(module, "REQUIRED_DEPS", [])

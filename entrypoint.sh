@@ -2,8 +2,6 @@
 
 . /opt/penv/bin/activate
 
-supervisord -c /etc/supervisord.conf
-
 cd /src
 
 HOST_UID=${HOST_UID:-1000}

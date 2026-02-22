@@ -33,8 +33,7 @@ RUN echo "Installing prerequisites" \
   && pip3 install cookiecutter \
   && pip3 install pillow \
   && pip3 install textual \
-  && pip3 install --upgrade "setuptools<81" supervisor \
-  && mkdir -p /var/log/supervisor
+  && pip3 install --upgrade "setuptools<81"
 
 ENV \
   ZDE="true" \
@@ -44,9 +43,6 @@ ENV \
   ZGDK_PATH="$HOME/zeal-game-dev-kit" \
   PYTHON_BIN="/opt/penv/bin" \
   PATH="$PATH:${Z88DK_PATH}/bin:${PATH}:${SDCC_PATH}/bin:${GNUAS_PATH}/bin:${HOME}/Zeal-8-bit-OS/tools:${HOME}/Zeal-VideoBoard-SDK/tools/zeal2gif"
-
-COPY etc/ /etc/
-
 
 # ZealFS
 RUN echo "Configuring" \

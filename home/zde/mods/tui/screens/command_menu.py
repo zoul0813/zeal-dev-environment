@@ -5,7 +5,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
-from mods.commands import DEFAULT_MODULE_ALIASES, command_to_module_name, import_command_module
+from mods.commands import command_to_module_name, import_command_module
 from mods.tui.contract import CommandSpec
 from mods.tui.exec import run_action, suspend_for_external_output
 from mods.tui.screens.action_menu import ActionMenuScreen
@@ -57,7 +57,7 @@ class CommandMenuScreen(Screen[None]):
         command = next((item for item in self._commands if item.name == command_name), None)
         if command is None:
             return
-        module_name = command_to_module_name(command.name, DEFAULT_MODULE_ALIASES)
+        module_name = command_to_module_name(command.name)
         module = import_command_module(module_name)
         custom_screen = getattr(module, "get_tui_screen", None)
         if callable(custom_screen):

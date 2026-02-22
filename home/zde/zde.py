@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable
 
 from mods.commands import (
-    DEFAULT_MODULE_ALIASES,
+    build_alias_lookup,
     command_to_module_name,
     discover_command_modules,
     discover_subcommands,
@@ -16,6 +16,19 @@ from mods.commands import (
     module_name_to_command,
 )
 from mods.requirements import require_deps
+
+SERVICE_COMMANDS: dict[str, dict[str, object]] = {
+    "emulator": {
+        "aliases": ["emu"],
+        "help": "Host-only service command (opens Zeal Web Emulator).",
+        "subcommands": ["start", "stop", "status"],
+    },
+    "playground": {
+        "aliases": [],
+        "help": "Host-only service command (opens Zeal Playground).",
+        "subcommands": ["start", "stop", "status"],
+    },
+}
 
 COMMAND_REDIRECTS: dict[str, tuple[str, list[str]]] = {
     # Legacy top-level romdisk command now lives under image.
@@ -29,12 +42,8 @@ def print_top_help() -> int:
     rendered: list[str] = []
     for module_name in module_names:
         name = module_name_to_command(module_name)
-        aliases = DEFAULT_MODULE_ALIASES.get(module_name, [])
-        if aliases:
-            rendered.append(f"{name} ({', '.join(sorted(aliases))})")
-        else:
-            rendered.append(name)
-    print(f"Help: {', '.join(rendered)}")
+        rendered.append(name)
+    print(f"Commands:\n   {', '.join(rendered)}")
     return 0
 
 
@@ -53,12 +62,26 @@ def main(argv: list[str]) -> int:
 
     command_name = argv[0]
     normalized_command = command_name.replace("-", "_")
+    service_aliases = {
+        name: [alias for alias in spec.get("aliases", []) if isinstance(alias, str)]
+        for name, spec in SERVICE_COMMANDS.items()
+    }
+    service_lookup = build_alias_lookup(service_aliases)
+    service_name = service_lookup.get(normalized_command, normalized_command)
+    if service_name in SERVICE_COMMANDS:
+        help_text = SERVICE_COMMANDS.get(service_name, {}).get("help")
+        print(f"'{service_name}' is a host-only service command.")
+        if isinstance(help_text, str) and help_text.strip():
+            print(help_text)
+        print(f"Run it from the host wrapper: ./zde {service_name}")
+        return 0
+
     redirected = COMMAND_REDIRECTS.get(normalized_command)
     prepend_args: list[str] = []
     if redirected is not None:
         command_name = redirected[0]
         prepend_args = list(redirected[1])
-    module_name = command_to_module_name(command_name, DEFAULT_MODULE_ALIASES)
+    module_name = command_to_module_name(command_name)
     module_path = f"cmds.{module_name}"
     module_args = [*prepend_args, *argv[1:]]
 

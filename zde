@@ -17,6 +17,31 @@ finalize_exit() {
   exit "$rc"
 }
 
+print_service_statuses() {
+  local green=""
+  local reset=""
+  if [ -t 1 ]; then
+    green=$'\033[32m'
+    reset=$'\033[0m'
+  fi
+
+  print_service_line() {
+    local label="$1"
+    local container_name="$2"
+    local status
+    status="$(container_status_name "$container_name")"
+    if [ "$status" = "running" ]; then
+      echo "  * ${green}${label}${reset} [start|stop|status]"
+    else
+      echo "    ${label} [start|stop|status]"
+    fi
+  }
+
+  echo "Services:"
+  print_service_line "emulator" "zeal8bit-emulator"
+  print_service_line "playground" "zeal8bit-playground"
+}
+
 case "$COMMAND" in
   -i)
     if [ "${HOST_ARGS[0]-}" = "-b" ]; then
@@ -52,6 +77,13 @@ case "$COMMAND" in
     exit 1
     ;;
 esac
+
+if [ -z "$COMMAND" ] || [ "$COMMAND" = "help" ]; then
+  zde_command "$@"
+  rc=$?
+  print_service_statuses
+  finalize_exit $rc
+fi
 
 zde_command "$@"
 finalize_exit $?

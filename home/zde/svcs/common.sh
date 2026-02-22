@@ -133,6 +133,24 @@ container_running() {
   "$CONTAINER_CMD" ps --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"
 }
 
+container_running_name() {
+  local container_name="$1"
+  "$CONTAINER_CMD" ps --format '{{.Names}}' | grep -xq "$container_name"
+}
+
+container_status_name() {
+  local container_name="$1"
+  if container_running_name "$container_name"; then
+    echo "running"
+  else
+    echo "stopped"
+  fi
+}
+
+container_status() {
+  container_status_name "$CONTAINER_NAME"
+}
+
 container_exists() {
   "$CONTAINER_CMD" ps -a --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"
 }
