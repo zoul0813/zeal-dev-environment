@@ -171,6 +171,12 @@ def get_tui_spec() -> CommandSpec:
         label="config",
         help="View and edit ZDE configuration",
         actions=[
-            ActionSpec(id="list", label="list", help="List current config values"),
+            ActionSpec(id="open", label="open", help="Open config editor screen"),
         ],
     )
+
+
+def get_tui_screen():
+    from mods.tui.screens.config_menu import ConfigMenuScreen
+
+    return ConfigMenuScreen()
