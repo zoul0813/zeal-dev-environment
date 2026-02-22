@@ -4,20 +4,12 @@ from rich.text import Text
 
 from mods.config import Config, ConfigOption
 from mods.tui.screens.choice_modal import ChoiceModal
-from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen
+from mods.tui.screens.item_action_screen import ActionResult, GroupEntry, ItemAction, ItemActionScreen, ItemEntry
 from mods.tui.screens.prompt_modal import PromptModal
 
 
 class ConfigMenuScreen(ItemActionScreen):
-    BINDINGS = [
-        ("escape", "app.pop_screen", "Back"),
-        ("left", "focus_items", "Keys"),
-        ("right", "focus_actions", "Actions"),
-        ("f4", "run_edit", "Edit"),
-        ("f6", "run_toggle", "Toggle"),
-        ("f8", "run_unset", "Unset"),
-        ("f2", "run_refresh", "Refresh"),
-    ]
+    DEFAULT_ACTION_ID = "edit"
 
     def __init__(self) -> None:
         super().__init__(
@@ -29,37 +21,19 @@ class ConfigMenuScreen(ItemActionScreen):
 
     def get_actions(self) -> list[ItemAction]:
         return [
-            ItemAction("edit", "edit"),
-            ItemAction("toggle", "toggle"),
-            ItemAction("unset", "unset"),
-            ItemAction("refresh", "refresh", requires_item=False),
+            ItemAction("edit", "edit", shortcut="f4", callback=self._action_edit),
+            ItemAction("toggle", "toggle", shortcut="f6", callback=self._action_toggle),
+            ItemAction("unset", "unset", shortcut="f8", callback=self._action_unset),
         ]
 
-    def get_default_action_id(self) -> str | None:
-        return "edit"
-
-    def is_action_visible(self, action_id: str, item_id: str | None) -> bool:
-        if action_id == "refresh":
-            return True
-        if not isinstance(item_id, str):
-            return False
-        option = Config.resolve_option(item_id)
-        if option is None:
-            return False
-        if action_id == "toggle":
-            return option.value_type == "bool"
-        if action_id == "unset":
-            cfg = Config.load()
-            return cfg.is_explicit(option.key)
-        return True
-
-    def get_items(self) -> list[tuple[str, Text]]:
-        rows: list[tuple[str, Text]] = []
+    def get_items(self) -> list[GroupEntry]:
+        grouped: dict[str, list[ItemEntry]] = {}
         cfg = Config.load()
         for option in Config.iter_options():
             value, explicit = cfg.get_with_source(option.key)
+            group, leaf = _split_option_key(option.key)
             line = Text()
-            line.append(option.key, style="bold")
+            line.append(f"  {leaf}", style="bold")
             line.append(" = ")
 
             rendered = _format_option_value(option, value)
@@ -74,51 +48,57 @@ class ConfigMenuScreen(ItemActionScreen):
                 line.append(" [explicit]", style="dim")
 
             line.append(f" - {option.description}", style="dim")
-            rows.append((option.key, line))
+            action_ids = ["edit"]
+            if option.value_type == "bool":
+                action_ids.append("toggle")
+            if explicit:
+                action_ids.append("unset")
+            grouped.setdefault(group, []).append(
+                ItemEntry(
+                    id=option.key,
+                    label=line,
+                    action_ids=action_ids,
+                    data=option,
+                )
+            )
+
+        rows: list[GroupEntry] = []
+        for group in sorted(grouped.keys()):
+            rows.append(GroupEntry(label=_format_group_label(group), items=grouped[group]))
         return rows
 
-    def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
-        if action_id == "refresh":
-            return ActionResult(status="[ok] refreshed", refresh_items=True, preferred_item_id=self._last_item_id)
+    def _action_unset(self, item: ItemEntry) -> ActionResult:
+        option = _option_from_item(item)
+        cfg = Config.load()
+        cfg.unset(option.key)
+        cfg.save()
+        return ActionResult(
+            rc=0,
+            status=f"[ok] unset {option.key}",
+            refresh_items=True,
+            preferred_item_id=option.key,
+        )
 
-        if not isinstance(item_id, str):
-            return ActionResult(rc=1, status="[warn] No config key selected")
+    def _action_toggle(self, item: ItemEntry) -> ActionResult:
+        option = _option_from_item(item)
+        if option.value_type != "bool":
+            return ActionResult(rc=1, status=f"[warn] {option.key} is not a boolean key")
+        cfg = Config.load()
+        current = bool(cfg.get(option.key))
+        cfg.set(option.key, not current)
+        cfg.save()
+        state = "on" if not current else "off"
+        return ActionResult(
+            rc=0,
+            status=f"[ok] {option.key}: {state}",
+            refresh_items=True,
+            preferred_item_id=option.key,
+        )
 
-        option = Config.resolve_option(item_id)
-        if option is None:
-            return ActionResult(rc=1, status=f"[error] Unknown config key: {item_id}")
-
-        if action_id == "unset":
-            cfg = Config.load()
-            cfg.unset(option.key)
-            cfg.save()
-            return ActionResult(
-                rc=0,
-                status=f"[ok] unset {option.key}",
-                refresh_items=True,
-                preferred_item_id=item_id,
-            )
-
-        if action_id == "toggle":
-            if option.value_type != "bool":
-                return ActionResult(rc=1, status=f"[warn] {option.key} is not a boolean key")
-            cfg = Config.load()
-            current = bool(cfg.get(option.key))
-            cfg.set(option.key, not current)
-            cfg.save()
-            state = "on" if not current else "off"
-            return ActionResult(
-                rc=0,
-                status=f"[ok] {option.key}: {state}",
-                refresh_items=True,
-                preferred_item_id=item_id,
-            )
-
-        if action_id == "edit":
-            self._open_editor(option)
-            return ActionResult(status="")
-
-        return ActionResult(rc=0)
+    def _action_edit(self, item: ItemEntry) -> ActionResult:
+        option = _option_from_item(item)
+        self._open_editor(option)
+        return ActionResult(status="")
 
     def _open_editor(self, option: ConfigOption) -> None:
         cfg = Config.load()
@@ -186,20 +166,26 @@ class ConfigMenuScreen(ItemActionScreen):
         self.app.refresh(layout=True, repaint=True)
         self.refresh(layout=True, repaint=True)
 
-    def action_run_edit(self) -> None:
-        self._run_shortcut_action("edit")
-
-    def action_run_toggle(self) -> None:
-        self._run_shortcut_action("toggle")
-
-    def action_run_unset(self) -> None:
-        self._run_shortcut_action("unset")
-
-    def action_run_refresh(self) -> None:
-        self._run_shortcut_action("refresh")
-
-
 def _format_option_value(option: ConfigOption, value: object) -> str:
     if option.value_type == "bool":
         return "on" if bool(value) else "off"
     return str(value)
+
+
+def _split_option_key(key: str) -> tuple[str, str]:
+    if "." not in key:
+        return key, key
+    group, leaf = key.split(".", 1)
+    return group, leaf
+
+
+def _format_group_label(group: str) -> str:
+    text = group.replace("-", " ").replace("_", " ").strip()
+    return text.title() if text else group
+
+
+def _option_from_item(item: ItemEntry) -> ConfigOption:
+    option = item.data
+    if not isinstance(option, ConfigOption):
+        raise ValueError(f"Invalid config item payload for {item.id}")
+    return option

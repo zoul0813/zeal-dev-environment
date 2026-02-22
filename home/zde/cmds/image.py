@@ -373,6 +373,6 @@ def get_tui_spec() -> CommandSpec:
 
 
 def get_tui_screen():
-    from mods.tui.screens.image_menu import ImageMenuScreen
+    from scrns.image_menu import ImageMenuScreen
 
     return ImageMenuScreen()

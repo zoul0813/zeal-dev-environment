@@ -225,6 +225,10 @@ class ZDEApp(App[None]):
       color: $text;
       text-style: bold;
     }
+    #item-list ListItem.item-group-heading Label {
+      color: $text;
+      text-style: bold;
+    }
     #item-actions ListItem.action-selected {
       background: $primary;
       color: $text;
@@ -250,6 +254,21 @@ class ZDEApp(App[None]):
         self.push_screen(CommandMenuScreen(commands))
         self._refresh_cwd_bar()
         self.set_interval(1.0, self._refresh_cwd_bar)
+
+    def _persist_theme_preference(self) -> None:
+        cfg = Config.load()
+        theme = getattr(self, "theme", None)
+        if isinstance(theme, str) and theme:
+            cfg.set("textual.theme", theme)
+        else:
+            cfg.unset("textual.theme")
+        cfg.save()
+
+    def watch_theme(self, theme: str) -> None:
+        # Persist immediately when theme changes (e.g. command palette) so crashes
+        # don't lose the selected preference.
+        if isinstance(theme, str) and theme:
+            self._persist_theme_preference()
 
     def _format_cwd(self, cwd: Path) -> str:
         home_override = os.environ.get("HOST_HOME", "").strip()
@@ -289,10 +308,4 @@ class ZDEApp(App[None]):
             yield command
 
     def on_unmount(self) -> None:
-        cfg = Config.load()
-        theme = getattr(self, "theme", None)
-        if isinstance(theme, str) and theme:
-            cfg.set("textual.theme", theme)
-        else:
-            cfg.unset("textual.theme")
-        cfg.save()
+        self._persist_theme_preference()

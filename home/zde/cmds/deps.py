@@ -159,7 +159,7 @@ def get_tui_spec() -> CommandSpec:
 
 
 def get_tui_screen():
-    from mods.tui.screens.deps_menu import DepsMenuScreen
+    from scrns.deps_menu import DepsMenuScreen
 
     return DepsMenuScreen()
 

@@ -177,6 +177,6 @@ def get_tui_spec() -> CommandSpec:
 
 
 def get_tui_screen():
-    from mods.tui.screens.config_menu import ConfigMenuScreen
+    from scrns.config_menu import ConfigMenuScreen
 
     return ConfigMenuScreen()

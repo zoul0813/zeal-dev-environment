@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -10,12 +10,19 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.tui.screens.confirm_modal import ConfirmModal
 
+try:
+    from textual.binding import Binding
+except Exception:  # pragma: no cover - compatibility fallback for older Textual
+    Binding = None
+
 
 @dataclass(frozen=True)
 class ItemAction:
     id: str
     label: str
     requires_item: bool = True
+    shortcut: str = ""
+    callback: Callable[["ItemEntry"], ActionResult | int | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -37,7 +44,31 @@ class ActionResult:
     focus_items: bool = True
 
 
+@dataclass
+class ItemEntry:
+    id: str
+    label: Any
+    action_ids: list[str] = field(default_factory=list)
+    data: Any = None
+
+
+@dataclass
+class GroupEntry:
+    label: str
+    items: list[ItemEntry]
+
+
 class ItemActionScreen(Screen[None]):
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Back"),
+        ("left", "focus_items", "Items"),
+        ("right", "focus_actions", "Actions"),
+    ]
+    REFRESH_ACTION = True
+    DEFAULT_ACTION_ID: str | None = None
+
+    _GROUP_NAME_PREFIX = "__group__:"
+
     def __init__(
         self,
         *,
@@ -55,6 +86,9 @@ class ItemActionScreen(Screen[None]):
         self._all_actions: list[ItemAction] = []
         self._action_defs: dict[str, ItemAction] = {}
         self._visible_action_ids: list[str] = []
+        self._item_entries_by_id: dict[str, ItemEntry] = {}
+        self._base_bindings = None
+        self._dynamic_shortcuts_enabled: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -82,13 +116,20 @@ class ItemActionScreen(Screen[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._all_actions = self.get_actions()
+        self._all_actions = list(self.get_actions())
+        if self.REFRESH_ACTION and all(action.id != "refresh" for action in self._all_actions):
+            self._all_actions.append(ItemAction("refresh", "refresh", requires_item=False, shortcut="f2"))
         self._action_defs = {action.id: action for action in self._all_actions}
+        bindings = getattr(self, "_bindings", None)
+        copy_fn = getattr(bindings, "copy", None)
+        if callable(copy_fn):
+            self._base_bindings = copy_fn()
         self._refresh_items()
         self._refresh_actions()
+        self._sync_footer_shortcuts()
         self.action_focus_items()
 
-    def get_items(self) -> list[tuple[str, Any]]:
+    def get_items(self) -> list[ItemEntry | GroupEntry]:
         raise NotImplementedError
 
     def get_actions(self) -> list[ItemAction]:
@@ -98,16 +139,87 @@ class ItemActionScreen(Screen[None]):
         return None
 
     def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
+        if action_id == "refresh":
+            return ActionResult(status="[ok] refreshed", refresh_items=True, preferred_item_id=self._last_item_id)
+        if item_id is None:
+            return ActionResult(rc=1, status="[warn] No item selected")
+        item = self._item_entries_by_id.get(item_id)
+        if item is None:
+            return ActionResult(rc=0)
+        if item.action_ids and action_id not in item.action_ids:
+            return ActionResult(rc=0)
+        action = self._action_defs.get(action_id)
+        handler = action.callback if isinstance(action, ItemAction) else None
+        if not callable(handler):
+            return ActionResult(rc=0)
+        try:
+            raw = handler(item)
+        except Exception as exc:
+            return ActionResult(rc=1, status=f"[error] {action_id} failed: {exc}")
+        if isinstance(raw, ActionResult):
+            return raw
+        if isinstance(raw, int):
+            return ActionResult(rc=int(raw))
         return ActionResult(rc=0)
 
     def get_default_action_id(self) -> str | None:
-        return None
+        return self.DEFAULT_ACTION_ID
 
     def is_action_visible(self, action_id: str, item_id: str | None) -> bool:
+        action = self._action_defs.get(action_id)
+        if isinstance(action, ItemAction) and not action.requires_item:
+            return True
+        if item_id is not None:
+            item = self._item_entries_by_id.get(item_id)
+            if item is not None and item.action_ids:
+                return action_id in item.action_ids
         return True
 
     def preferred_action_id(self, item_id: str | None) -> str | None:
         return self.get_default_action_id()
+
+    def _is_group_heading_name(self, name: object) -> bool:
+        return isinstance(name, str) and name.startswith(self._GROUP_NAME_PREFIX)
+
+    def _is_selectable_item(self, item: ListItem | None) -> bool:
+        if item is None:
+            return False
+        name = item.name
+        return isinstance(name, str) and not self._is_group_heading_name(name)
+
+    def _find_item_index(self, item_id: str) -> int | None:
+        items = self.query_one("#item-list", ListView)
+        for index, child in enumerate(items.children):
+            if child.name == item_id:
+                return index
+        return None
+
+    def _first_selectable_index(self) -> int | None:
+        items = self.query_one("#item-list", ListView)
+        for index, child in enumerate(items.children):
+            if self._is_selectable_item(child):
+                return index
+        return None
+
+    def _nearest_selectable_index_from(self, start_index: int, prefer_down: bool) -> int | None:
+        items = self.query_one("#item-list", ListView)
+        row_count = len(items.children)
+        if row_count <= 0:
+            return None
+
+        def scan(direction: int) -> int | None:
+            idx = start_index
+            while 0 <= idx < row_count:
+                child = items.children[idx]
+                if self._is_selectable_item(child):
+                    return idx
+                idx += direction
+            return None
+
+        primary = scan(1 if prefer_down else -1)
+        if primary is not None:
+            return primary
+        return scan(-1 if prefer_down else 1)
 
     def _refresh_items(self, preferred_item_id: str | None = None) -> None:
         items = self.query_one("#item-list", ListView)
@@ -118,33 +230,62 @@ class ItemActionScreen(Screen[None]):
             while items.children:
                 items.remove(items.children[0])
 
-        rows = self.get_items()
         names: list[str] = []
-        for item_id, label in rows:
-            names.append(item_id)
-            items.append(ListItem(Label(label), name=item_id))
+        self._item_entries_by_id = {}
+        rows = self.get_items()
+        group_index = 0
+        for row in rows:
+            if isinstance(row, GroupEntry):
+                group_label = row.label
+                group_rows = row.items
+                if not group_rows:
+                    continue
+                heading = ListItem(Label(str(group_label)), name=f"{self._GROUP_NAME_PREFIX}{group_index}")
+                heading.add_class("item-group-heading")
+                items.append(heading)
+                group_index += 1
+                for group_row in group_rows:
+                    self._item_entries_by_id[group_row.id] = group_row
+                    names.append(group_row.id)
+                    items.append(ListItem(Label(group_row.label), name=group_row.id))
+                continue
+            self._item_entries_by_id[row.id] = row
+            names.append(row.id)
+            items.append(ListItem(Label(row.label), name=row.id))
 
-        if not items.children:
+        if not items.children or not names:
             self._last_item_id = None
+            self._sync_item_selection_visual()
             return
+
         wanted = preferred_item_id or self._last_item_id
+        target_index: int | None = None
         if wanted and wanted in names:
-            items.index = names.index(wanted)
-            self._last_item_id = wanted
+            target_index = self._find_item_index(wanted)
+        if target_index is None:
+            target_index = self._first_selectable_index()
+        if target_index is not None:
+            items.index = target_index
+            if self._is_selectable_item(items.highlighted_child):
+                selected = items.highlighted_child.name
+                if isinstance(selected, str):
+                    self._last_item_id = selected
         else:
-            items.index = 0
-            if items.highlighted_child is not None and isinstance(items.highlighted_child.name, str):
-                self._last_item_id = items.highlighted_child.name
+            self._last_item_id = None
         self._sync_item_selection_visual()
 
     def _selected_item_id(self) -> str | None:
         items = self.query_one("#item-list", ListView)
-        if items.highlighted_child is None:
-            return self._last_item_id
-        selected = items.highlighted_child.name
-        if isinstance(selected, str):
-            self._last_item_id = selected
-            return selected
+        highlighted = items.highlighted_child
+        if highlighted is None:
+            if isinstance(self._last_item_id, str) and self._find_item_index(self._last_item_id) is not None:
+                return self._last_item_id
+            return None
+        if self._is_selectable_item(highlighted):
+            selected = highlighted.name
+            if isinstance(selected, str):
+                self._last_item_id = selected
+                return selected
         return None
 
     def _ensure_item_selection(self) -> None:
@@ -153,25 +294,47 @@ class ItemActionScreen(Screen[None]):
             self._last_item_id = None
             self._sync_item_selection_visual()
             return
-        if items.highlighted_child is not None and isinstance(items.highlighted_child.name, str):
-            self._last_item_id = items.highlighted_child.name
+        first_index = self._first_selectable_index()
+        if first_index is None:
+            self._last_item_id = None
             self._sync_item_selection_visual()
             return
-        names = [child.name for child in items.children]
-        if isinstance(self._last_item_id, str) and self._last_item_id in names:
-            items.index = names.index(self._last_item_id)
+        if self._is_selectable_item(items.highlighted_child):
+            selected = items.highlighted_child.name
+            if isinstance(selected, str):
+                self._last_item_id = selected
+            self._sync_item_selection_visual()
+            return
+        current_index = max(0, min(len(items.children) - 1, int(items.index or 0)))
+        last_index: int | None = None
+        if isinstance(self._last_item_id, str):
+            last_index = self._find_item_index(self._last_item_id)
+        prefer_down = True
+        if last_index is not None:
+            prefer_down = current_index >= last_index
+        target_index = self._nearest_selectable_index_from(current_index, prefer_down=prefer_down)
+        if target_index is None:
+            target_index = first_index
+        items.index = target_index
+        highlighted = items.highlighted_child
+        if self._is_selectable_item(highlighted):
+            selected = highlighted.name
+            if isinstance(selected, str):
+                self._last_item_id = selected
         else:
-            items.index = 0
-            if items.highlighted_child is not None:
-                self._last_item_id = items.highlighted_child.name
+            self._last_item_id = None
         self._sync_item_selection_visual()
 
     def _sync_item_selection_visual(self) -> None:
         items = self.query_one("#item-list", ListView)
-        selected_name = items.highlighted_child.name if items.highlighted_child is not None else None
+        selected_name: str | None = None
+        if self._is_selectable_item(items.highlighted_child):
+            name = items.highlighted_child.name
+            if isinstance(name, str):
+                selected_name = name
         for child in items.children:
             child.remove_class("item-selected")
-            if selected_name is not None and child.name == selected_name:
+            if selected_name is not None and self._is_selectable_item(child) and child.name == selected_name:
                 child.add_class("item-selected")
 
     def _set_status(self, text: str) -> None:
@@ -219,15 +382,18 @@ class ItemActionScreen(Screen[None]):
 
         if not actions_view.children:
             self._sync_action_selection_visual()
+            self._sync_footer_shortcuts()
             return
 
         wanted = preferred_action_id or self.preferred_action_id(selected_item_id) or previously_selected
         if isinstance(wanted, str) and wanted in self._visible_action_ids:
             actions_view.index = self._visible_action_ids.index(wanted)
             self._sync_action_selection_visual()
+            self._sync_footer_shortcuts()
             return
         actions_view.index = 0
         self._sync_action_selection_visual()
+        self._sync_footer_shortcuts()
 
     def _sync_action_selection_visual(self) -> None:
         actions = self.query_one("#item-actions", ListView)
@@ -354,6 +520,13 @@ class ItemActionScreen(Screen[None]):
         list_view.scroll_to(y=target_top, animate=False, force=True)
 
     def on_key(self, event) -> None:
+        if not self._dynamic_shortcuts_enabled:
+            shortcut_action = self._shortcut_action_for_key(event.key)
+            if isinstance(shortcut_action, str):
+                self._run_shortcut_action(shortcut_action)
+                event.stop()
+                event.prevent_default()
+                return
         if event.key == "enter":
             focused = self.app.focused
             focused_id = getattr(focused, "id", "")
@@ -375,3 +548,92 @@ class ItemActionScreen(Screen[None]):
 
     def _run_shortcut_action(self, action_id: str) -> None:
         self._run_action_by_id(action_id)
+
+    def action_shortcut(self, action_id: str) -> None:
+        if action_id == "refresh" and not self.REFRESH_ACTION:
+            return
+        self._run_shortcut_action(action_id)
+
+    def _shortcut_action_for_key(self, key: str) -> str | None:
+        token = key.strip().lower()
+        if not token:
+            return None
+        item_id = self._selected_item_id()
+        entry = self._item_entries_by_id.get(item_id) if isinstance(item_id, str) else None
+        for action in self._all_actions:
+            key_name = action.shortcut.strip().lower()
+            target = action.id.strip()
+            if not key_name or not target:
+                continue
+            if key_name != token:
+                continue
+            if entry is not None and (target in entry.action_ids or self.is_action_visible(target, entry.id)):
+                return target
+            if action.requires_item:
+                continue
+            return target
+        return None
+
+    def _sync_footer_shortcuts(self) -> None:
+        base_copy = getattr(self._base_bindings, "copy", None)
+        if not callable(base_copy):
+            self._dynamic_shortcuts_enabled = False
+            return
+
+        dynamic_bindings = base_copy()
+        bind_fn = getattr(dynamic_bindings, "bind", None)
+        if not callable(bind_fn):
+            self._dynamic_shortcuts_enabled = False
+            return
+
+        visible = set(self._visible_action_ids)
+        for action in self._all_actions:
+            if action.id not in visible:
+                continue
+            key_name = action.shortcut.strip().lower()
+            if not key_name:
+                continue
+            label = action.label.strip() if isinstance(action.label, str) else action.id
+            if not label:
+                label = action.id
+            try:
+                if Binding is not None:
+                    bind_fn(
+                        Binding(
+                            key=key_name,
+                            action=f"shortcut('{action.id}')",
+                            description=label,
+                            show=True,
+                            priority=True,
+                        )
+                    )
+                else:
+                    bind_fn(key_name, f"shortcut('{action.id}')", label, show=True, priority=True)
+            except TypeError:
+                try:
+                    bind_fn(key_name, f"shortcut('{action.id}')", label, True, None, True)
+                except TypeError:
+                    try:
+                        bind_fn(key_name, f"shortcut('{action.id}')", label)
+                    except Exception:
+                        continue
+                except Exception:
+                    continue
+            except Exception:
+                continue
+
+        self._bindings = dynamic_bindings
+
+        self._dynamic_shortcuts_enabled = True
+        screen_refresh = getattr(self, "refresh_bindings", None)
+        if callable(screen_refresh):
+            try:
+                screen_refresh()
+            except Exception:
+                pass
+        app_refresh = getattr(self.app, "refresh_bindings", None)
+        if callable(app_refresh):
+            try:
+                app_refresh()
+            except Exception:
+                pass

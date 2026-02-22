@@ -9,19 +9,13 @@ from mods.tui.screens.item_action_screen import (
     ActionResult,
     ConfirmRequest,
     ItemAction,
+    ItemEntry,
     ItemActionScreen,
 )
 
 
 class FileTreeScreen(ItemActionScreen):
-    BINDINGS = [
-        ("escape", "app.pop_screen", "Back"),
-        ("left", "focus_items", "Entries"),
-        ("right", "focus_actions", "Actions"),
-        ("f3", "run_open", "Open"),
-        ("f8", "run_remove", "Remove"),
-        ("f2", "run_refresh", "Refresh"),
-    ]
+    DEFAULT_ACTION_ID = "refresh"
 
     def __init__(self, image_type: str) -> None:
         self._image_type = image_type
@@ -36,13 +30,9 @@ class FileTreeScreen(ItemActionScreen):
 
     def get_actions(self) -> list[ItemAction]:
         return [
-            ItemAction("open", "open"),
-            ItemAction("remove", "remove"),
-            ItemAction("refresh", "refresh", requires_item=False),
+            ItemAction("open", "open", shortcut="f3", callback=self._action_open),
+            ItemAction("remove", "remove", shortcut="f8", callback=self._action_remove),
         ]
-
-    def get_default_action_id(self) -> str | None:
-        return "refresh"
 
     def is_action_visible(self, action_id: str, item_id: str | None) -> bool:
         if action_id == "open":
@@ -56,14 +46,17 @@ class FileTreeScreen(ItemActionScreen):
             return "open"
         return "refresh"
 
-    def get_items(self) -> list[tuple[str, str]]:
-        rows: list[tuple[str, str]] = []
+    def get_items(self) -> list[ItemEntry]:
+        rows: list[ItemEntry] = []
         self._entry_is_dir = {}
         if self._current_dir != Path("."):
-            rows.append(("..", "drwx             .."))
+            rows.append(ItemEntry(id="..", label="drwx ..", action_ids=["open", "refresh"]))
             self._entry_is_dir[".."] = True
         for name, line, is_dir in image_cmd.image_entries(self._image_type, self._current_dir):
-            rows.append((name, line))
+            action_ids = ["remove", "refresh"]
+            if is_dir:
+                action_ids.append("open")
+            rows.append(ItemEntry(id=name, label=line, action_ids=action_ids))
             self._entry_is_dir[name] = is_dir
         return rows
 
@@ -87,33 +80,30 @@ class FileTreeScreen(ItemActionScreen):
             default_no=True,
         )
 
-    def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
-        if action_id == "refresh":
-            return ActionResult(status="[ok] refreshed", refresh_items=True, preferred_item_id=self._last_item_id)
-        if action_id == "open" and item_id is not None:
-            if self._navigate_to(item_id):
-                self._last_item_id = None
-                location = "." if self._current_dir == Path(".") else str(self._current_dir)
-                return ActionResult(
-                    rc=0,
-                    status=f"[ok] opened {location}",
-                    refresh_items=True,
-                    preferred_item_id=None,
-                )
-            return ActionResult(rc=1, status="[warn] Selected item is not a directory")
-        if item_id == "..":
-            return ActionResult(rc=1, status="[warn] Select a file or directory entry")
-        if action_id == "remove" and item_id is not None:
-            target = self._relative_target(item_id)
-            rc, output = self._run_capture(image_cmd.run_image_subcommand, self._image_type, ["rm", target])
+    def _action_open(self, item: ItemEntry) -> ActionResult:
+        if self._navigate_to(item.id):
+            self._last_item_id = None
+            location = "." if self._current_dir == Path(".") else str(self._current_dir)
             return ActionResult(
-                rc=rc,
-                output="",
+                rc=0,
+                status=f"[ok] opened {location}",
                 refresh_items=True,
-                preferred_item_id=item_id,
-                status=f"[ok] removed {target}" if rc == 0 else None,
+                preferred_item_id=None,
             )
-        return ActionResult(rc=0)
+        return ActionResult(rc=1, status="[warn] Selected item is not a directory")
+
+    def _action_remove(self, item: ItemEntry) -> ActionResult:
+        if item.id == "..":
+            return ActionResult(rc=1, status="[warn] Select a file or directory entry")
+        target = self._relative_target(item.id)
+        rc, _output = self._run_capture(image_cmd.run_image_subcommand, self._image_type, ["rm", target])
+        return ActionResult(
+            rc=rc,
+            output="",
+            refresh_items=True,
+            preferred_item_id=item.id,
+            status=f"[ok] removed {target}" if rc == 0 else None,
+        )
 
     def _relative_target(self, item_id: str) -> str:
         if self._current_dir == Path("."):
@@ -130,12 +120,3 @@ class FileTreeScreen(ItemActionScreen):
             return False
         self._current_dir = self._current_dir / item_id
         return True
-
-    def action_run_open(self) -> None:
-        self._run_shortcut_action("open")
-
-    def action_run_refresh(self) -> None:
-        self._run_shortcut_action("refresh")
-
-    def action_run_remove(self) -> None:
-        self._run_shortcut_action("remove")
