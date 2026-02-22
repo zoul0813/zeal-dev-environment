@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import sys
+
 from mods.commands import command_to_module_name, discover_subcommands, import_command_module
 from mods.requirements import require_deps
+
+
+def clear_terminal() -> None:
+    # Clear screen + move cursor home before printing raw command output.
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
 
 
 def run_action(command_name: str, action_id: str, args: list[str] | None = None) -> int:
@@ -30,4 +38,3 @@ def run_action(command_name: str, action_id: str, args: list[str] | None = None)
         print(f"Unsupported action for {command_name}: {action_id}")
         return 1
     return int(handler(action_args))
-

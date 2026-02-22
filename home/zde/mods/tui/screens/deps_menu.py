@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 from contextlib import redirect_stderr, redirect_stdout
-from pathlib import Path
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -10,10 +9,11 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from cmds import deps as deps_cmd
 from cmds import image as image_cmd
-from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen
+from mods.deps import Dep, DepCatalog
+from mods.tui.exec import clear_terminal
 from mods.tui.screens.choice_modal import ChoiceModal
+from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen
 
 
 class DepsInfoModal(ModalScreen[None]):
@@ -83,28 +83,38 @@ class DepsMenuScreen(ItemActionScreen):
             return True
         if not isinstance(item_id, str):
             return False
-        dep, dep_path = self._dep_for_id(item_id)
-        if dep is None or dep_path is None:
+        dep = self._dep_for_id(item_id)
+        if dep is None:
             return False
-        return len(self._artifact_paths(dep, dep_path)) > 0
+        return len(dep.artifact_paths()) > 0
 
     def get_items(self) -> list[tuple[str, Text]]:
         rows: list[tuple[str, Text]] = []
-        dep_map, env = deps_cmd._deps_by_id()  # noqa: SLF001 - internal reuse within same project
-        dep_ids = sorted(dep_map.keys())
-        for dep_id in dep_ids:
-            dep = dep_map[dep_id]
-            dep_path = deps_cmd.resolve_dep_path(env, dep["path"])
-            installed = deps_cmd.is_git_repo(dep_path)
-            metadata = dep.get("metadata", {})
-            display_name = ""
-            if isinstance(metadata, dict):
-                raw_name = metadata.get("name")
-                if isinstance(raw_name, str):
-                    display_name = raw_name.strip()
-            label = f"{display_name} ({dep_id})" if display_name else dep_id
-            marker = "[x]" if installed else "[ ]"
-            rows.append((dep_id, Text(f"{marker} {label}")))
+        catalog = DepCatalog()
+
+        for dep in catalog.deps:
+            line = Text()
+            marker = dep.marker
+            if dep.state == "required-miss":
+                line.append(marker, style="red")
+            elif dep.state.startswith("broken"):
+                line.append(marker, style="yellow")
+            elif dep.installed and dep.tracked:
+                line.append(marker, style="green")
+            elif dep.installed and not dep.tracked:
+                line.append(marker, style="yellow")
+            else:
+                line.append(marker)
+
+            line.append(f" {dep.display_name}")
+            if dep.state == "required-miss":
+                line.append(" [required-miss]", style="red")
+            elif dep.state.startswith("broken"):
+                line.append(f" [{dep.state}]", style="yellow")
+            if dep.installed and not dep.tracked:
+                line.append(" [untracked]", style="yellow")
+
+            rows.append((dep.id, line))
         return rows
 
     def _run_capture(self, fn, *args) -> tuple[int, str]:
@@ -113,71 +123,9 @@ class DepsMenuScreen(ItemActionScreen):
             rc = int(fn(*args))
         return rc, out.getvalue().rstrip()
 
-    def _dep_for_id(self, dep_id: str) -> tuple[dict | None, Path | None]:
-        dep_map, env = deps_cmd._deps_by_id()  # noqa: SLF001 - internal reuse
-        dep = dep_map.get(dep_id)
-        if dep is None:
-            return None, None
-        return dep, deps_cmd.resolve_dep_path(env, dep["path"])
-
-    def _artifact_paths(self, dep: dict, dep_path: Path) -> list[tuple[Path, Path]]:
-        build = dep.get("build")
-        if not isinstance(build, dict):
-            return []
-        artifacts = build.get("artifacts")
-        if not isinstance(artifacts, list):
-            return []
-        paths: list[tuple[Path, Path]] = []
-        for raw in artifacts:
-            if not isinstance(raw, str) or not raw.strip():
-                continue
-            raw_text = raw.strip()
-            copy_contents = raw_text.endswith(("/", "\\"))
-            normalized = raw_text.rstrip("/\\")
-            if not normalized:
-                continue
-            p = Path(normalized)
-            source = p if p.is_absolute() else dep_path / p
-            if p.is_absolute():
-                rel_hint = Path(".") if copy_contents else Path(source.name)
-            else:
-                rel_hint = p.parent if copy_contents else p
-            paths.append((source, rel_hint))
-        return paths
-
-    def _stage_artifacts(self, dep_id: str, target: str) -> ActionResult:
-        dep, dep_path = self._dep_for_id(dep_id)
-        if dep is None or dep_path is None:
-            return ActionResult(rc=1, status=f"[error] Unknown dependency: {dep_id}")
-        artifact_paths = self._artifact_paths(dep, dep_path)
-        if not artifact_paths:
-            return ActionResult(rc=1, status=f"[warn] No build.artifacts configured for {dep_id}")
-        build = dep.get("build")
-        stage_root = build.get("root") if isinstance(build, dict) else None
-
-        out = io.StringIO()
-        failures = 0
-        with redirect_stdout(out), redirect_stderr(out):
-            image_cmd.stage_artifacts_to_target(artifact_paths, target, stage_root=stage_root)
-            for path, _ in artifact_paths:
-                if not path.exists():
-                    failures += 1
-        output = out.getvalue().rstrip()
-        if failures:
-            return ActionResult(
-                rc=1,
-                output=output,
-                status=f"[error] Staging had missing artifacts for {dep_id}",
-                refresh_items=False,
-                preferred_item_id=dep_id,
-            )
-        target_label = "romdisk" if target == "romdisk" else f"image {target}"
-        return ActionResult(
-            rc=0,
-            output=output,
-            status=f"[ok] staged artifacts for {dep_id} -> {target_label}",
-            preferred_item_id=dep_id,
-        )
+    def _dep_for_id(self, dep_id: str) -> Dep | None:
+        catalog = DepCatalog()
+        return catalog.get(dep_id)
 
     def _on_stage_target(self, dep_id: str, value: str | None) -> None:
         if value is None:
@@ -198,25 +146,37 @@ class DepsMenuScreen(ItemActionScreen):
             return ActionResult(status="[ok] refreshed", refresh_items=True, preferred_item_id=self._last_item_id)
         if item_id is None:
             return ActionResult(rc=1, status="[warn] No dependency selected")
+
+        dep = self._dep_for_id(item_id)
+        if dep is None:
+            return ActionResult(rc=1, status=f"[error] Unknown dependency: {item_id}")
+
         if action_id == "info":
-            rc, output = self._run_capture(deps_cmd.subcmd_info, [item_id])
+            output = dep.render_info()
             if output:
                 self.app.push_screen(DepsInfoModal(item_id, output), lambda _result: self.action_focus_items())
-            return ActionResult(rc=rc, output="")
+            return ActionResult(rc=0, output="")
+
         if action_id == "install":
-            rc, output = self._run_capture(deps_cmd.subcmd_install, [item_id])
-            return ActionResult(rc=rc, output=output, refresh_items=True, preferred_item_id=item_id)
+            with self.app.suspend():
+                clear_terminal()
+                rc = int(dep.install())
+            return ActionResult(rc=rc, output="", refresh_items=True, preferred_item_id=item_id)
+
         if action_id == "remove":
-            rc, output = self._run_capture(deps_cmd.subcmd_remove, [item_id])
+            rc, output = self._run_capture(dep.remove)
             return ActionResult(rc=rc, output=output, refresh_items=True, preferred_item_id=item_id)
+
         if action_id == "build":
             with self.app.suspend():
-                rc = int(deps_cmd.subcmd_build([item_id]))
+                clear_terminal()
+                rc = int(dep.build())
                 try:
                     input("\nPress Enter to return to ZDE TUI...")
                 except EOFError:
                     pass
             return ActionResult(rc=rc, refresh_items=True, preferred_item_id=item_id)
+
         if action_id == "stage":
             if self._pending_stage_target is None:
                 self.app.push_screen(
@@ -230,7 +190,9 @@ class DepsMenuScreen(ItemActionScreen):
                 return ActionResult(status="")
             target = self._pending_stage_target
             self._pending_stage_target = None
-            return self._stage_artifacts(item_id, target)
+            rc, output = self._run_capture(dep.stage, target)
+            return ActionResult(rc=rc, output=output, preferred_item_id=item_id)
+
         return ActionResult(rc=0)
 
     def action_run_info(self) -> None:

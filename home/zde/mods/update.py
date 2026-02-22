@@ -9,8 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from mods.depbuild import run_dep_build
-
 try:
     import yaml
 except ModuleNotFoundError:
@@ -388,93 +386,10 @@ def build_lock_entry(
 
 
 def update_deps(env: Env) -> int:
-    env.lock_file.parent.mkdir(parents=True, exist_ok=True)
+    # Local import avoids a module-cycle at import time.
+    from mods.deps import DepCatalog
 
-    deps = order_deps_by_dependency(load_deps_yaml(env.deps_file))
-    lock = load_lock(env.lock_file)
-    lock.setdefault("dependencies", {})
-    lock_deps: dict[str, Any] = {}
-    lock["dependencies"] = lock_deps
-
-    now = datetime.now(timezone.utc).isoformat()
-    for dep in deps:
-        repo = dep["repo"]
-        dep_id = dep["id"]
-        ref_type, ref_value = configured_ref(dep)
-        required = bool(dep.get("required", False))
-        dep_path = resolve_dep_path(env, dep["path"])
-        has_git = is_git_repo(dep_path)
-
-        if not has_git and not required:
-            continue
-
-        if dep_path.exists() and not has_git:
-            try:
-                has_entries = next(dep_path.iterdir(), None) is not None
-            except OSError:
-                has_entries = True
-            if has_entries:
-                if not required:
-                    continue
-                lock["updated_at"] = now
-                write_lock(env.lock_file, lock)
-                print(
-                    f"Dependency path exists but is not a git repo: {dep_id} ({dep_path})",
-                    file=sys.stderr,
-                )
-                return 1
-
-        newly_installed = not has_git
-        if newly_installed:
-            rc = clone_repo(dep_path, repo, ref_type, ref_value)
-        else:
-            rc = update_repo(dep_path, repo, ref_type, ref_value)
-
-        if rc != 0:
-            if has_git:
-                lock_deps[dep_id] = build_lock_entry(
-                    dep=dep,
-                    ref_type=ref_type,
-                    ref_value=ref_value,
-                    status="sync_failed",
-                    updated_at=now,
-                    current_commit_value=current_commit(dep_path),
-                )
-            lock["updated_at"] = now
-            write_lock(env.lock_file, lock)
-            print(f"Failed syncing dependency: {dep_id}", file=sys.stderr)
-            return rc
-
-        if newly_installed:
-            rc = run_dep_build(dep, dep_path)
-            if rc != 0:
-                lock_deps[dep_id] = build_lock_entry(
-                    dep=dep,
-                    ref_type=ref_type,
-                    ref_value=ref_value,
-                    status="build_failed",
-                    updated_at=now,
-                    current_commit_value=current_commit(dep_path),
-                )
-                lock["updated_at"] = now
-                write_lock(env.lock_file, lock)
-                print(f"Failed building dependency: {dep_id}", file=sys.stderr)
-                return rc
-
-        lock_deps[dep_id] = build_lock_entry(
-            dep=dep,
-            ref_type=ref_type,
-            ref_value=ref_value,
-            status="synced",
-            updated_at=now,
-            current_commit_value=current_commit(dep_path),
-        )
-
-    lock["updated_at"] = now
-    write_lock(env.lock_file, lock)
-
-    print(f"Dependency lock updated: {env.lock_file}")
-    return 0
+    return DepCatalog(env).sync_for_update()
 
 
 def main() -> int:

@@ -7,7 +7,7 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.commands import DEFAULT_MODULE_ALIASES, command_to_module_name, import_command_module
 from mods.tui.contract import CommandSpec
-from mods.tui.exec import run_action
+from mods.tui.exec import clear_terminal, run_action
 from mods.tui.screens.action_menu import ActionMenuScreen
 from mods.tui.screens.confirm_modal import ConfirmModal
 
@@ -68,6 +68,7 @@ class CommandMenuScreen(Screen[None]):
         if len(command.actions) == 1:
             action = command.actions[0]
             with self.app.suspend():
+                clear_terminal()
                 rc = run_action(command.name, action.id, action.default_args)
                 if action.pause_after_run:
                     try:
