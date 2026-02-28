@@ -651,6 +651,41 @@ class DepCatalog:
     def _skip_sync_for_installed(self) -> bool:
         return get_skip_sync_installed_config()
 
+    def _build_command_env(self) -> dict[str, str]:
+        env = os.environ.copy()
+        path_parts: list[str] = []
+
+        for key in ("Z88DK_PATH", "SDCC_PATH", "GNUAS_PATH"):
+            raw = env.get(key, "").strip()
+            if not raw:
+                continue
+            path_parts.append(str(Path(raw) / "bin"))
+
+        path_parts.extend(
+            [
+                str(self.env.zde_home / "Zeal-8-bit-OS" / "tools"),
+                str(self.env.zde_home / "Zeal-VideoBoard-SDK" / "tools" / "zeal2gif"),
+                str(self.env.zde_home / "Zeal-VideoBoard-SDK" / "tools" / "tiled2zeal"),
+                str(self.env.zde_home / "zeal-archiver"),
+            ]
+        )
+
+        existing_path = env.get("PATH", "")
+        if existing_path:
+            path_parts.append(existing_path)
+
+        seen: set[str] = set()
+        merged_parts: list[str] = []
+        for part in path_parts:
+            if not part:
+                continue
+            if part in seen:
+                continue
+            seen.add(part)
+            merged_parts.append(part)
+        env["PATH"] = ":".join(merged_parts)
+        return env
+
     def _run_build_for_dep(self, dep: Dep) -> int:
         build = dep.raw.get("build")
         if not isinstance(build, dict):
@@ -667,15 +702,17 @@ class DepCatalog:
                 return 1
 
             print(f"Building dependency: {dep.id} (commands)")
+            command_env = self._build_command_env()
             for command in commands:
                 if not isinstance(command, str):
                     print(f"Invalid non-string build command for dependency: {dep.id}")
                     return 1
                 print(f"$ {command}")
                 rc = subprocess.run(
-                    ["/bin/sh", "-lc", command],
+                    ["/bin/sh", "-c", command],
                     cwd=str(dep.path_resolved),
                     check=False,
+                    env=command_env,
                 ).returncode
                 if rc != 0:
                     return int(rc)
