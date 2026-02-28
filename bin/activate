@@ -15,18 +15,37 @@ set_vars() {
     cat <<EOF
 export ZDE_HOME="$ZDE_HOME"
 export ZDE_PATH="\$ZDE_HOME/.."
-export ZOS_PATH="\$ZDE_HOME/Zeal-8-bit-OS"
-export ZVB_SDK_PATH="\$ZDE_HOME/Zeal-VideoBoard-SDK"
-export ZGDK_PATH="\$ZDE_HOME/zeal-game-dev-kit"
-export ZAR_PATH="\$ZDE_HOME/zeal-archiver"
-export COREUTILS_PATH="\$ZDE_HOME/zeal-coreutils"
+
+_zde_managed_env_file="\${ZDE_USER_PATH:-\$HOME/.zeal8bit}/deps.env"
+if [ -f "\$_zde_managed_env_file" ]; then
+    while IFS= read -r _zde_line || [ -n "\$_zde_line" ]; do
+        case "\$_zde_line" in
+            ""|\#*)
+                continue
+                ;;
+        esac
+
+        _zde_key="\${_zde_line%%=*}"
+        _zde_value="\${_zde_line#*=}"
+        case "\$_zde_value" in
+            /home/zeal8bit)
+                _zde_value="\$ZDE_HOME"
+                ;;
+            /home/zeal8bit/*)
+                _zde_value="\$ZDE_HOME\${_zde_value#/home/zeal8bit}"
+                ;;
+        esac
+        export "\$_zde_key=\$_zde_value"
+    done < "\$_zde_managed_env_file"
+fi
 
 export PATH="\$ZDE_PATH:\$PATH"
-export PATH="\$ZOS_PATH/tools:\$PATH"
-export PATH="\$ZVB_SDK_PATH/tools/zeal2gif:\$PATH"
-export PATH="\$ZVB_SDK_PATH/tools/tiled2zeal:\$PATH"
-export PATH="\$ZDE_HOME/zeal-archiver:\$PATH"
-export PATH="\$ZDE_PATH:\$PATH"
+if [ -n "\${ZOS_PATH:-}" ]; then export PATH="\$ZOS_PATH/tools:\$PATH"; fi
+if [ -n "\${ZVB_SDK_PATH:-}" ]; then export PATH="\$ZVB_SDK_PATH/tools/zeal2gif:\$PATH"; fi
+if [ -n "\${ZVB_SDK_PATH:-}" ]; then export PATH="\$ZVB_SDK_PATH/tools/tiled2zeal:\$PATH"; fi
+if [ -n "\${ZAR_PATH:-}" ]; then export PATH="\$ZAR_PATH:\$PATH"; fi
+
+unset _zde_managed_env_file _zde_line _zde_key _zde_value
 EOF
 }
 

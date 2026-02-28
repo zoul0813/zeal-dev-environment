@@ -6,6 +6,8 @@ dependencies:
     branch: main
     required: true
     migrate: true
+    env:
+      - ZOS_PATH
     aliases:
       - zos
       - zealos
@@ -20,6 +22,8 @@ dependencies:
     path: home/Zeal-VideoBoard-SDK
     branch: main
     migrate: true
+    env:
+      - ZVB_SDK_PATH
     aliases:
       - zvb
       - video
@@ -73,6 +77,8 @@ dependencies:
     path: home/zeal-game-dev-kit
     branch: main
     migrate: true
+    env:
+      - ZGDK_PATH
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
@@ -87,6 +93,8 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-archiver.git
     path: home/zeal-archiver
     branch: main
+    env:
+      - ZAR_PATH
     metadata:
       category:
         - software
@@ -113,6 +121,8 @@ dependencies:
     path: home/zeal-coreutils
     branch: main
     migrate: true
+    env:
+      - COREUTILS_PATH
     build:
       tool: cmake
       artifacts:

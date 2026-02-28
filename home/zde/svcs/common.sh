@@ -11,6 +11,9 @@ zde_init() {
   CONTAINER_SERVICE="${CONTAINER_SERVICE:-zeal8bit-dev-env}"
   ZDE_USER_PATH="${ZDE_USER_PATH:-$HOME/.zeal8bit}"
   mkdir -p "$ZDE_USER_PATH"
+  if [ ! -f "$ZDE_USER_PATH/deps.env" ]; then
+    printf '# Managed by ZDE. Do not edit manually.\n' > "$ZDE_USER_PATH/deps.env"
+  fi
 
   export ZDE_IMAGE="${ZDE_IMAGE:-zoul0813/zeal-dev-environment}"
   export ZDE_VERSION="${ZDE_VERSION:-latest}"

@@ -30,6 +30,7 @@ class Env:
     deps_file: Path
     lock_file: Path
     collection_file: Path
+    managed_env_file: Path
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> int:
@@ -201,6 +202,7 @@ def resolve_env() -> Env:
     user_path = Path(os.environ.get("ZDE_USER_PATH", str(Path.home() / ".zeal8bit")))
     lock_file = user_path / "deps-lock.yml"
     collection_file = user_path / "collection.yml"
+    managed_env_file = user_path / "deps.env"
 
     return Env(
         zde_root=zde_root,
@@ -209,6 +211,7 @@ def resolve_env() -> Env:
         deps_file=deps_file,
         lock_file=lock_file,
         collection_file=collection_file,
+        managed_env_file=managed_env_file,
     )
 
 

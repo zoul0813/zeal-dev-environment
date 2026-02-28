@@ -79,6 +79,18 @@ class Dep:
         return resolve_dep_path(self.catalog.env, self.path, self.raw)
 
     @property
+    def env_export_base_path(self) -> Path:
+        raw_path = str(self.path)
+        path = Path(raw_path)
+        if path.is_absolute():
+            return path
+        if raw_path.startswith("home/"):
+            return Path("/home/zeal8bit") / raw_path.removeprefix("home/")
+        if raw_path.startswith("extras/"):
+            return Path("/home/zeal8bit") / raw_path
+        return self.catalog.env.zde_root / path
+
+    @property
     def required(self) -> bool:
         return bool(self.raw.get("required", False))
 
@@ -197,6 +209,70 @@ class Dep:
                 rel_hint = p.parent if copy_contents else p
             paths.append((source, rel_hint))
         return paths
+
+    def exposed_env(self) -> list[tuple[str, str]]:
+        raw_items = self.raw.get("env")
+        if not isinstance(raw_items, list) or not self.installed:
+            return []
+
+        base = self.env_export_base_path
+        exposed: list[tuple[str, str]] = []
+        for item in raw_items:
+            if isinstance(item, str):
+                name = item.strip()
+                value = base
+            elif isinstance(item, dict):
+                raw_name = item.get("name")
+                if not isinstance(raw_name, str):
+                    continue
+                name = raw_name.strip()
+                raw_path = item.get("path", ".")
+                if not isinstance(raw_path, str):
+                    continue
+                extra_path = raw_path.strip()
+                if not extra_path or extra_path == ".":
+                    value = base
+                else:
+                    value = base / extra_path
+            else:
+                continue
+
+            if not name:
+                continue
+            exposed.append((name, str(value)))
+        return exposed
+
+    def runtime_env(self) -> list[tuple[str, str]]:
+        raw_items = self.raw.get("env")
+        if not isinstance(raw_items, list) or not self.installed:
+            return []
+
+        base = self.path_resolved
+        exposed: list[tuple[str, str]] = []
+        for item in raw_items:
+            if isinstance(item, str):
+                name = item.strip()
+                value = base
+            elif isinstance(item, dict):
+                raw_name = item.get("name")
+                if not isinstance(raw_name, str):
+                    continue
+                name = raw_name.strip()
+                raw_path = item.get("path", ".")
+                if not isinstance(raw_path, str):
+                    continue
+                extra_path = raw_path.strip()
+                if not extra_path or extra_path == ".":
+                    value = base
+                else:
+                    value = base / extra_path
+            else:
+                continue
+
+            if not name:
+                continue
+            exposed.append((name, str(value)))
+        return exposed
 
     def install(self) -> int:
         return self.catalog.install_dep(self.id)
@@ -339,6 +415,7 @@ class DepCatalog:
         self.installed_by_id = {}
         for dep_id, dep in self.by_id.items():
             self.installed_by_id[dep_id] = is_git_repo(dep.path_resolved)
+        self._write_managed_env_file()
 
     def get(self, dep_id: str) -> Dep | None:
         return self.by_id.get(dep_id)
@@ -433,11 +510,15 @@ class DepCatalog:
 
             rc = self._run_build_for_dep(install_dep)
             if rc != 0:
+                self.installed_by_id[install_id] = True
                 self._write_dep_lock_entry(install_dep, "build_failed")
+                self._write_managed_env_file()
                 print(f"Failed building dependency: {install_id}")
                 return rc
 
+            self.installed_by_id[install_id] = True
             self._write_dep_lock_entry(install_dep, "synced")
+            self._write_managed_env_file()
             print(f"Installed dependency: {install_id}")
 
         self.refresh()
@@ -530,11 +611,15 @@ class DepCatalog:
             if newly_installed:
                 rc = self._run_build_for_dep(dep)
                 if rc != 0:
+                    self.installed_by_id[dep.id] = True
                     self._write_dep_lock_entry(dep, "build_failed")
+                    self._write_managed_env_file()
                     print(f"Failed building dependency: {update_id}")
                     return rc
 
             self._write_dep_lock_entry(dep, "synced")
+            self.installed_by_id[dep.id] = True
+            self._write_managed_env_file()
             if newly_installed:
                 print(f"Installed dependency: {update_id}")
             else:
@@ -618,6 +703,7 @@ class DepCatalog:
             if newly_installed:
                 rc = self._run_build_for_dep(dep)
                 if rc != 0:
+                    self.installed_by_id[dep.id] = True
                     lock_deps[dep.id] = build_lock_entry(
                         dep=dep.raw,
                         ref_type=ref_type,
@@ -629,6 +715,7 @@ class DepCatalog:
                     )
                     lock["updated_at"] = now
                     write_lock(self.env.lock_file, lock)
+                    self._write_managed_env_file()
                     print(f"Failed building dependency: {dep.id}", file=sys.stderr)
                     return rc
 
@@ -641,6 +728,8 @@ class DepCatalog:
                 current_commit_value=current_commit(dep_path),
                 resolved_path=dep_path,
             )
+            self.installed_by_id[dep.id] = True
+            self._write_managed_env_file()
 
         lock["updated_at"] = now
         write_lock(self.env.lock_file, lock)
@@ -651,9 +740,28 @@ class DepCatalog:
     def _skip_sync_for_installed(self) -> bool:
         return get_skip_sync_installed_config()
 
+    def _write_managed_env_file(self) -> None:
+        self.env.user_path.mkdir(parents=True, exist_ok=True)
+
+        managed: dict[str, str] = {}
+        for dep in self.deps:
+            for name, value in dep.exposed_env():
+                managed[name] = value
+
+        lines = ["# Managed by ZDE. Do not edit manually."]
+        for name in sorted(managed.keys()):
+            lines.append(f"{name}={managed[name]}")
+
+        content = "\n".join(lines) + "\n"
+        self.env.managed_env_file.write_text(content, encoding="utf-8")
+
     def _build_command_env(self) -> dict[str, str]:
         env = os.environ.copy()
         path_parts: list[str] = []
+
+        for dep in self.deps:
+            for name, value in dep.runtime_env():
+                env[name] = value
 
         for key in ("Z88DK_PATH", "SDCC_PATH", "GNUAS_PATH"):
             raw = env.get(key, "").strip()
@@ -691,6 +799,8 @@ class DepCatalog:
         if not isinstance(build, dict):
             return 0
 
+        command_env = self._build_command_env()
+
         commands = build.get("commands")
         if commands is not None:
             if (
@@ -702,7 +812,6 @@ class DepCatalog:
                 return 1
 
             print(f"Building dependency: {dep.id} (commands)")
-            command_env = self._build_command_env()
             for command in commands:
                 if not isinstance(command, str):
                     print(f"Invalid non-string build command for dependency: {dep.id}")
@@ -733,7 +842,10 @@ class DepCatalog:
 
         print(f"Building dependency: {dep.id} ({tool})")
         old_cwd = Path.cwd()
+        old_env = os.environ.copy()
         try:
+            os.environ.clear()
+            os.environ.update(command_env)
             os.chdir(dep.path_resolved)
             if tool == "cmake":
                 from cmds import cmake as cmd_cmake
@@ -744,6 +856,8 @@ class DepCatalog:
 
             return int(cmd_make.main(args))
         finally:
+            os.environ.clear()
+            os.environ.update(old_env)
             os.chdir(old_cwd)
 
     def _write_dep_lock_entry(self, dep: Dep, status: str) -> None:

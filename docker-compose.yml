@@ -12,10 +12,11 @@ services:
     restart: on-failure
     env_file:
       - .env
+      - ${ZDE_USER_PATH}/deps.env
     volumes:
       - ${PWD}:/src
       - ./home:/home/zeal8bit
-      - ~/.zeal8bit:/home/zeal8bit/.zeal8bit
+      - ${ZDE_USER_PATH}:/home/zeal8bit/.zeal8bit
       - ./mnt:/mnt
     ports:
       - 1145:1145

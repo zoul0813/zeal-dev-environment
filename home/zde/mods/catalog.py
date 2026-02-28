@@ -41,6 +41,30 @@ def _default_dep_path(dep: dict[str, Any]) -> str:
     return f"extras/{dep_id}"
 
 
+def _validate_dep_env(dep: dict[str, Any]) -> None:
+    env_items = dep.get("env")
+    if env_items is None:
+        return
+    if not isinstance(env_items, list):
+        raise RuntimeError(f"Dependency '{dep['id']}' has invalid env list")
+
+    for item in env_items:
+        if isinstance(item, str):
+            if not item.strip():
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid env entry")
+            continue
+        if not isinstance(item, dict):
+            raise RuntimeError(f"Dependency '{dep['id']}' has invalid env entry")
+
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise RuntimeError(f"Dependency '{dep['id']}' has invalid env.name")
+
+        env_path = item.get("path")
+        if env_path is not None and (not isinstance(env_path, str) or not env_path.strip()):
+            raise RuntimeError(f"Dependency '{dep['id']}' has invalid env.path")
+
+
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     if not deps_file.is_file():
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
@@ -134,6 +158,7 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
             if build_root is not None:
                 if not isinstance(build_root, str) or not build_root.strip():
                     raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.root")
+        _validate_dep_env(dep)
         dep_id = dep["id"]
         if dep_id in ids:
             raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")

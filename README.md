@@ -134,22 +134,17 @@ to setup your sessions env vars.
 source $ZDE_PATH/bin/activate
 ```
 
-This will export a handful of env vars used by Zeal build tools,
-for example:
+This will export static ZDE vars and then load dependency-specific vars from
+`~/.zeal8bit/deps.env`, which is generated from installed dependencies.
+For example:
 
 ```shell
 export ZDE_PATH="$ZDE_HOME/.."
+
+export PATH="$ZDE_PATH:$PATH"
 export ZOS_PATH="$ZDE_HOME/Zeal-8-bit-OS"
 export ZVB_SDK_PATH="$ZDE_HOME/Zeal-VideoBoard-SDK"
 export ZGDK_PATH="$ZDE_HOME/zeal-game-dev-kit"
-export ZAR_PATH="$ZDE_HOME/zeal-archiver"
-
-export PATH="$ZDE_PATH:$PATH"
-export PATH="$ZOS_PATH/tools:$PATH"
-export PATH="$ZVB_SDK_PATH/tools/zeal2gif:$PATH"
-export PATH="$ZVB_SDK_PATH/tools/tiled2zeal:$PATH"
-export PATH="$ZDE_HOME/zeal-archiver:$PATH"
-export PATH="$ZDE_PATH:$PATH"
 ```
 
 Once you activate ZDE Host Mode, you can just run `make` in your project and ZOS_PATH, ZVB_SDK_PATH, ZGDK_PATH and
@@ -197,5 +192,6 @@ ZDE_USE=podman zde update
 - Required dependencies are installed/synced by `zde update`.
 - Optional dependencies are installed on demand via `zde deps install <id-or-alias>`.
 - Installed dependency state is tracked in `~/.zeal8bit/deps-lock.yml`.
+- Dependency-specific env vars are generated into `~/.zeal8bit/deps.env`.
 
 Use `zde deps list` to view dependency state, aliases, and dependency health.
