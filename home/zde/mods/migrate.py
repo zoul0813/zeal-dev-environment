@@ -69,8 +69,8 @@ def migrate_broken_submodule_checkout(path: Path, migrate_enabled: bool) -> Path
 def migrate_legacy_submodules(
     deps: list[dict],
     resolve_dep_path: Callable[[str], Path],
-) -> tuple[set[str], list[Path]]:
-    force_install_ids: set[str] = set()
+) -> tuple[list[str], list[Path]]:
+    force_install_ids: list[str] = []
     backup_paths: list[Path] = []
     for dep in deps:
         migrate_field = dep.get("migrate")
@@ -82,7 +82,7 @@ def migrate_legacy_submodules(
         migrate_enabled = bool(migrate_field) if migrate_field is not None else False
         backup_path = migrate_broken_submodule_checkout(dep_path, migrate_enabled)
         if backup_path is not None:
-            force_install_ids.add(dep["id"])
+            force_install_ids.append(dep["id"])
             backup_paths.append(backup_path)
     return force_install_ids, backup_paths
 

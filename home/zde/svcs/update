@@ -2,17 +2,42 @@
 
 set -euo pipefail
 
+DEFAULT_BRANCH="main"
+TARGET_BRANCH="${ZDE_BRANCH:-}"
 CURRENT_BRANCH="$(git -C "$ZDE_PATH" branch --show-current 2>/dev/null || true)"
 
-if [ "$CURRENT_BRANCH" = "main" ]; then
-  echo "Pulling latest Zeal 8-bit repository branch: main"
-  git -C "$ZDE_PATH" pull origin main
-else
-  if [ -z "$CURRENT_BRANCH" ]; then
-    echo "Skipping ZDE git pull (detached HEAD; not on main)"
+switch_to_branch() {
+  local branch="$1"
+
+  git -C "$ZDE_PATH" fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+
+  if git -C "$ZDE_PATH" show-ref --verify --quiet "refs/heads/$branch"; then
+    if [ "$CURRENT_BRANCH" != "$branch" ]; then
+      git -C "$ZDE_PATH" checkout "$branch"
+    fi
   else
-    echo "Skipping ZDE git pull (current branch: $CURRENT_BRANCH)"
+    git -C "$ZDE_PATH" checkout -b "$branch" "refs/remotes/origin/$branch"
   fi
+}
+
+if [ -n "$TARGET_BRANCH" ]; then
+  echo "Switching ZDE repository to branch: $TARGET_BRANCH"
+  switch_to_branch "$TARGET_BRANCH"
+
+  echo "Pulling latest Zeal 8-bit repository branch: $TARGET_BRANCH"
+  git -C "$ZDE_PATH" pull --ff-only origin "$TARGET_BRANCH"
+else
+  if [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
+    if [ -z "$CURRENT_BRANCH" ]; then
+      echo "Switching ZDE repository to default branch: $DEFAULT_BRANCH"
+    else
+      echo "Switching ZDE repository from $CURRENT_BRANCH to default branch: $DEFAULT_BRANCH"
+    fi
+    switch_to_branch "$DEFAULT_BRANCH"
+  fi
+
+  echo "Pulling latest Zeal 8-bit repository branch: $DEFAULT_BRANCH"
+  git -C "$ZDE_PATH" pull --ff-only origin "$DEFAULT_BRANCH"
 fi
 
 "$CONTAINER_CMD" image pull "$ZDE_IMAGE_REF"

@@ -112,7 +112,6 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-zshell.git
     path: home/zeal-zshell
     branch: main
-    migrate: true
     build:
       tool: cmake
       artifacts:
