@@ -202,11 +202,16 @@ class Dep:
         build = self.raw.get("build")
         if self.stage_disabled:
             return []
-        if not isinstance(build, dict):
-            return []
-        artifacts = build.get("artifacts")
-        if artifacts is None:
+        if isinstance(build, dict):
+            artifacts = build.get("artifacts")
+            if artifacts is None:
+                artifacts = ["bin/"]
+        elif build is None:
+            if self.catalog._infer_build_tool(self) is None:
+                return []
             artifacts = ["bin/"]
+        else:
+            return []
         if not isinstance(artifacts, list):
             return []
 
@@ -348,7 +353,7 @@ class Dep:
 
         artifact_paths = self.artifact_paths()
         if not artifact_paths:
-            print(f"No build.artifacts configured for {self.id}")
+            print(f"No staging artifacts configured for {self.id}")
             return 1
 
         if get_rename_bins_config():
