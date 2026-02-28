@@ -6,6 +6,10 @@ DEFAULT_BRANCH="main"
 TARGET_BRANCH="${ZDE_BRANCH:-}"
 CURRENT_BRANCH="$(git -C "$ZDE_PATH" branch --show-current 2>/dev/null || true)"
 
+if [ -z "$TARGET_BRANCH" ] && [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
+  TARGET_BRANCH="$CURRENT_BRANCH"
+fi
+
 switch_to_branch() {
   local branch="$1"
 
