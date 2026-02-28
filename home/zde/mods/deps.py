@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from mods.migrate import migrate_broken_submodule_checkout
-from mods.catalog import load_deps_yaml, merge_deps_lists, order_deps_by_dependency
+from mods.catalog import filter_zde_visible_deps, load_deps_yaml, merge_deps_lists, order_deps_by_dependency
 from mods.config import Config
 from mods.update import (
     build_lock_entry,
@@ -44,6 +44,12 @@ def set_skip_sync_installed_config(enabled: bool) -> None:
     cfg = Config.load()
     cfg.set("deps.skip-sync-installed", bool(enabled))
     cfg.save()
+
+
+def get_rename_bins_config() -> bool:
+    cfg = Config.load()
+    value = cfg.get("deps.rename-bins")
+    return bool(value)
 
 
 @dataclass(frozen=True)
@@ -181,11 +187,26 @@ class Dep:
             return self.id
         return f"{raw_name.strip()} ({self.id})"
 
+    @property
+    def build_disabled(self) -> bool:
+        return self.raw.get("build") is False
+
+    @property
+    def stage_disabled(self) -> bool:
+        if self.build_disabled:
+            return True
+        build = self.raw.get("build")
+        return isinstance(build, dict) and build.get("stage") is False
+
     def artifact_paths(self) -> list[tuple[Path, Path]]:
         build = self.raw.get("build")
+        if self.stage_disabled:
+            return []
         if not isinstance(build, dict):
             return []
         artifacts = build.get("artifacts")
+        if artifacts is None:
+            artifacts = ["bin/"]
         if not isinstance(artifacts, list):
             return []
 
@@ -203,7 +224,7 @@ class Dep:
             if p.is_absolute():
                 rel_hint = Path(".") if copy_contents else Path(source.name)
             else:
-                rel_hint = p.parent if copy_contents else p
+                rel_hint = p.parent if copy_contents else Path(source.name)
             paths.append((source, rel_hint))
         return paths
 
@@ -318,13 +339,28 @@ class Dep:
             print(f"Target must be one of: {supported}")
             return 1
 
+        if self.build_disabled:
+            print(f"Build disabled for dependency: {self.id}")
+            return 1
+        if self.stage_disabled:
+            print(f"Staging disabled for dependency: {self.id}")
+            return 1
+
         artifact_paths = self.artifact_paths()
         if not artifact_paths:
             print(f"No build.artifacts configured for {self.id}")
             return 1
 
+        if get_rename_bins_config():
+            renamed: list[tuple[Path, Path]] = []
+            for source, rel_hint in artifact_paths:
+                if source.is_file() and rel_hint.suffix == ".bin":
+                    rel_hint = rel_hint.with_suffix("")
+                renamed.append((source, rel_hint))
+            artifact_paths = renamed
+
         build_cfg = self.raw.get("build")
-        stage_root = build_cfg.get("root") if isinstance(build_cfg, dict) else None
+        stage_root = build_cfg.get("root", "/apps") if isinstance(build_cfg, dict) else "/apps"
         image_cmd.stage_artifacts_to_target(artifact_paths, target_id, stage_root=stage_root)
 
         missing = 0
@@ -396,6 +432,7 @@ class DepCatalog:
         if self.env.collection_file.is_file():
             collection_raw = load_deps_yaml(self.env.collection_file)
             deps_raw = merge_deps_lists(deps_raw, collection_raw)
+        deps_raw = filter_zde_visible_deps(deps_raw)
         self._deps_raw = order_deps_by_dependency(deps_raw)
         self.by_id: dict[str, Dep] = {dep["id"]: Dep(self, dep) for dep in self._deps_raw}
         self.lock: dict[str, Any] = {}
@@ -578,7 +615,14 @@ class DepCatalog:
             return 1
 
         build_cfg = dep.raw.get("build")
-        if not isinstance(build_cfg, dict):
+        if build_cfg is False:
+            print(f"Build disabled for dependency: {dep_id}")
+            self._write_dep_lock_entry(dep, "synced")
+            self.refresh()
+            return 0
+        commands_configured = isinstance(build_cfg, dict) and build_cfg.get("commands") is not None
+        tool_configured = isinstance(build_cfg, dict) and isinstance(build_cfg.get("tool"), str)
+        if not commands_configured and not tool_configured and self._infer_build_tool(dep) is None:
             print(f"No build configured for dependency: {dep_id}")
             self._write_dep_lock_entry(dep, "synced")
             self.refresh()
@@ -844,10 +888,23 @@ class DepCatalog:
         env["PATH"] = ":".join(merged_parts)
         return env
 
+    def _infer_build_tool(self, dep: Dep) -> str | None:
+        dep_path = dep.path_resolved
+        if (dep_path / "CMakeLists.txt").is_file():
+            return "cmake"
+        if (dep_path / "Makefile").is_file():
+            return "make"
+        return None
+
     def _run_build_for_dep(self, dep: Dep) -> int:
         build = dep.raw.get("build")
-        if not isinstance(build, dict):
+        if build is False:
             return 0
+        if build is None:
+            build = {}
+        if not isinstance(build, dict):
+            print(f"Invalid build config for dependency: {dep.id}")
+            return 1
 
         command_env = self._build_command_env()
 
@@ -878,6 +935,11 @@ class DepCatalog:
             return 0
 
         tool = build.get("tool")
+        if tool is None:
+            tool = self._infer_build_tool(dep)
+            if tool is None:
+                return 0
+
         args = build.get("args", [])
         if not isinstance(args, list):
             print(f"Invalid build.args for dependency: {dep.id}")

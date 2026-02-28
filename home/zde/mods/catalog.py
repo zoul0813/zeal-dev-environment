@@ -71,6 +71,18 @@ def _validate_dep_env(dep: dict[str, Any]) -> None:
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid env.add_to_path")
 
 
+def filter_zde_visible_deps(deps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    visible: list[dict[str, Any]] = []
+    for dep in deps:
+        if not isinstance(dep, dict):
+            continue
+        zde = dep.get("zde")
+        if zde is False:
+            continue
+        visible.append(dep)
+    return visible
+
+
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     if not deps_file.is_file():
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
@@ -105,6 +117,9 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         required = dep.get("required")
         if required is not None and not isinstance(required, bool):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-boolean required flag")
+        zde = dep.get("zde")
+        if zde is not None and not isinstance(zde, bool):
+            raise RuntimeError(f"Dependency '{dep['id']}' has non-boolean zde flag")
         metadata = dep.get("metadata")
         if metadata is None:
             metadata = {}
@@ -135,6 +150,13 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid depends_on list")
         build = dep.get("build")
         if build is not None:
+            if build is False:
+                _validate_dep_env(dep)
+                dep_id = dep["id"]
+                if dep_id in ids:
+                    raise RuntimeError(f"Duplicate dependency id in deps.yml: {dep_id}")
+                ids.add(dep_id)
+                continue
             if not isinstance(build, dict):
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid build config")
             tool = build.get("tool")
@@ -146,10 +168,6 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
                     or any(not isinstance(item, str) or not item.strip() for item in commands)
                 ):
                     raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.commands list")
-            if commands is None and tool not in {"cmake", "make"}:
-                raise RuntimeError(
-                    f"Dependency '{dep['id']}' build config must define build.commands or build.tool (cmake/make)"
-                )
             if tool is not None and tool not in {"cmake", "make"}:
                 raise RuntimeError(f"Dependency '{dep['id']}' build.tool must be one of: cmake, make")
             build_args = build.get("args")
@@ -164,6 +182,9 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
             if build_root is not None:
                 if not isinstance(build_root, str) or not build_root.strip():
                     raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.root")
+            build_stage = build.get("stage")
+            if build_stage is not None and not isinstance(build_stage, bool):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.stage")
         _validate_dep_env(dep)
         dep_id = dep["id"]
         if dep_id in ids:
@@ -235,6 +256,12 @@ def merge_deps_lists(primary: list[dict[str, Any]], secondary: list[dict[str, An
                     continue
                 existing_aliases.append(alias)
                 seen_aliases.add(key)
+
+        for key, value in dep.items():
+            if key in {"id", "metadata", "aliases"}:
+                continue
+            if key not in existing:
+                existing[key] = value
 
     return merged
 

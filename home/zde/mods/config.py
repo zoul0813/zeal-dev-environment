@@ -50,6 +50,14 @@ _OPTIONS: dict[str, ConfigOption] = {
         default_value=False,
         legacy_paths=(("deps", "skip_sync_installed"),),
     ),
+    "deps.rename-bins": ConfigOption(
+        key="deps.rename-bins",
+        path=("deps", "rename-bins"),
+        value_type="bool",
+        description="When staging dependency artifacts, rename .bin files to drop the extension",
+        default_value=False,
+        legacy_paths=(("deps", "rename_bins"),),
+    ),
 }
 
 

@@ -161,13 +161,14 @@ def stage_artifacts_to_target(
             continue
 
         if source_path.is_file():
+            dest_name = rel_hint.name if rel_hint.name else source_path.name
             if supports_dirs:
                 dest_path = root_base / rel_hint
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
                 print(f"  Copying file: {source_path} -> {dest_path}")
                 shutil.copy2(source_path, dest_path)
             else:
-                dest_path = target_dir / source_path.name
+                dest_path = target_dir / dest_name
                 print(f"  Copying file: {source_path} -> {dest_path}")
                 shutil.copy2(source_path, dest_path)
             continue

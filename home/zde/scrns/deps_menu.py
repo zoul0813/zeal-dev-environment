@@ -98,7 +98,9 @@ class DepsMenuScreen(ItemActionScreen):
             if dep.installed and not dep.tracked:
                 line.append(" [untracked]", style="yellow")
 
-            action_ids = ["info", "update", "install", "build", "remove"]
+            action_ids = ["info", "update", "install", "remove"]
+            if not dep.build_disabled:
+                action_ids.append("build")
             if len(dep.artifact_paths()) > 0:
                 action_ids.append("stage")
             rows.append(ItemEntry(id=dep.id, label=line, action_ids=action_ids, data=dep))

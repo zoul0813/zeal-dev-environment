@@ -57,6 +57,7 @@ dependencies:
     branch: main
     build:
       tool: cmake
+      stage: false
     metadata:
       category:
         - core
@@ -98,6 +99,10 @@ dependencies:
     repo: https://github.com/zoul0813/zeal-archiver.git
     path: home/zeal-archiver
     branch: main
+    build:
+      artifacts:
+        - bin/zar.bin
+      root: /apps
     env:
       - name: ZAR_PATH
         add_to_path:
