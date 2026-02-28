@@ -27,6 +27,13 @@ class ConfigOption:
 
 
 _OPTIONS: dict[str, ConfigOption] = {
+    "output.color": ConfigOption(
+        key="output.color",
+        path=("output", "color"),
+        value_type="bool",
+        description="Enable or disable ANSI color output; unset uses terminal auto-detect",
+        default_value=None,
+    ),
     "textual.theme": ConfigOption(
         key="textual.theme",
         path=("textual", "theme"),

@@ -107,12 +107,18 @@ class Dep:
     def categories(self) -> list[str]:
         metadata = self.raw.get("metadata", {})
         if not isinstance(metadata, dict):
-            return ["Other"]
-        categories = metadata.get("category", ["Other"])
-        if not isinstance(categories, list):
-            return ["Other"]
-        values = [category for category in categories if isinstance(category, str) and category.strip()]
-        return values or ["Other"]
+            values = ["Other"]
+        else:
+            categories = metadata.get("category", ["Other"])
+            if not isinstance(categories, list):
+                values = ["Other"]
+            else:
+                values = [category for category in categories if isinstance(category, str) and category.strip()]
+                if not values:
+                    values = ["Other"]
+        if self.installed and not any(category.casefold() == "installed" for category in values):
+            values = [*values, "installed"]
+        return values
 
     @property
     def preferred_label(self) -> str:
@@ -313,7 +319,10 @@ class DepCatalog:
                     found[key] = category
         return [found[key] for key in sorted(found.keys())]
 
-    def deps_for_category(self, raw_category: str) -> list[Dep]:
+    def installed(self) -> list[Dep]:
+        return [dep for dep in self.deps if dep.installed]
+
+    def category(self, raw_category: str) -> list[Dep]:
         wanted = raw_category.strip().casefold()
         if not wanted:
             return self.deps

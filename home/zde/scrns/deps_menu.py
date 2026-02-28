@@ -58,6 +58,7 @@ class DepsMenuScreen(ItemActionScreen):
     def get_actions(self) -> list[ItemAction]:
         return [
             ItemAction("info", "info", shortcut="f3", callback=self._action_info),
+            ItemAction("update", "update", shortcut="f4", callback=self._action_update),
             ItemAction("install", "install", shortcut="f5", callback=self._action_install),
             ItemAction("build", "build", shortcut="f6", callback=self._action_build),
             ItemAction("stage", "stage", shortcut="f7", callback=self._action_stage),
@@ -90,7 +91,7 @@ class DepsMenuScreen(ItemActionScreen):
             if dep.installed and not dep.tracked:
                 line.append(" [untracked]", style="yellow")
 
-            action_ids = ["info", "install", "build", "remove"]
+            action_ids = ["info", "update", "install", "build", "remove"]
             if len(dep.artifact_paths()) > 0:
                 action_ids.append("stage")
             rows.append(ItemEntry(id=dep.id, label=line, action_ids=action_ids, data=dep))
@@ -133,6 +134,12 @@ class DepsMenuScreen(ItemActionScreen):
         dep = self._dep_from_item(item)
         with suspend_for_external_output(self.app):
             rc = int(dep.install())
+        return ActionResult(rc=rc, output="", refresh_items=True, preferred_item_id=dep.id)
+
+    def _action_update(self, item: ItemEntry) -> ActionResult:
+        dep = self._dep_from_item(item)
+        with suspend_for_external_output(self.app):
+            rc = int(dep.update())
         return ActionResult(rc=rc, output="", refresh_items=True, preferred_item_id=dep.id)
 
     def _action_remove(self, item: ItemEntry) -> ActionResult:

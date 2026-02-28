@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import os
+
+from mods.config import Config
 from mods.runtime import use_mode
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
 def main(args: list[str]) -> int:
+    cfg = Config.load()
+    color_value, color_explicit = cfg.get_with_source("output.color")
+    if color_explicit and color_value is False:
+        os.environ["NO_COLOR"] = "1"
+
     try:
         from mods.tui.app import ZDEApp
     except ModuleNotFoundError as exc:

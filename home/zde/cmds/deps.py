@@ -1,49 +1,11 @@
 from __future__ import annotations
 
-import os
-import sys
-
+from mods.cli import paint
 from mods.deps import DepCatalog
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
-def _colors_enabled() -> bool:
-    if os.environ.get("NO_COLOR"):
-        return False
-    term = os.environ.get("TERM", "")
-    if term.lower() == "dumb":
-        return False
-    return sys.stdout.isatty()
-
-
-def _paint(text: str, color: str, enabled: bool) -> str:
-    if not enabled:
-        return text
-    codes = {
-        "red": "\033[31m",
-        "yellow": "\033[33m",
-        "green": "\033[32m",
-    }
-    return f"{codes[color]}{text}\033[0m"
-
-
-def subcmd_list(args: list[str]) -> int:
-    catalog = DepCatalog()
-    use_color = _colors_enabled()
-    deps = catalog.deps
-
-    if len(args) > 1:
-        print("Usage: zde deps list [category]")
-        return 1
-    if args:
-        category = args[0]
-        deps = catalog.deps_for_category(category)
-        if not deps:
-            available = ", ".join(catalog.categories)
-            print(f"Unknown category: {category}")
-            print(f"Available categories: {available}")
-            return 1
-
+def _print_dep_rows(deps) -> None:
     mark_w = 3
     id_w = 36
     state_w = 20
@@ -59,15 +21,41 @@ def subcmd_list(args: list[str]) -> int:
         row = f"{dep.marker:<{mark_w}} {id_text:<{id_w}} {state_cell} {track_s:<{track_w}} {alias_text}"
 
         if dep.required and not dep.installed:
-            print(_paint(row, "red", use_color))
+            print(paint(row, "red"))
         elif dep.installed and dep.missing_dependency_ids:
-            print(_paint(row, "yellow", use_color))
+            print(paint(row, "yellow"))
         elif dep.installed and not dep.tracked:
-            print(_paint(row, "yellow", use_color))
+            print(paint(row, "yellow"))
         elif dep.installed:
-            print(_paint(row, "green", use_color))
+            print(paint(row, "green"))
         else:
             print(row)
+
+
+def subcmd_list(args: list[str]) -> int:
+    catalog = DepCatalog()
+    deps = catalog.deps
+
+    if len(args) > 1:
+        print("Usage: zde deps list [category]")
+        return 1
+    if args:
+        category = args[0]
+        deps = catalog.category(category)
+        if not deps:
+            available = ", ".join(catalog.categories)
+            print(f"Unknown category: {category}")
+            print(f"Available categories: {available}")
+            return 1
+
+    _print_dep_rows(deps)
+    return 0
+
+
+def _print_installed_summary() -> int:
+    catalog = DepCatalog()
+    deps = catalog.installed()
+    _print_dep_rows(deps)
     return 0
 
 
@@ -210,4 +198,4 @@ def main(args: list[str]) -> int:
 
     help()
     print()
-    return subcmd_list([])
+    return _print_installed_summary()

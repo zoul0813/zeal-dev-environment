@@ -1,51 +1,30 @@
 from __future__ import annotations
 
-import os
-import sys
-
+from mods.cli import paint
 from mods.config import CONFIG_FILE, Config, ConfigOption
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
-def _colors_enabled() -> bool:
-    if os.environ.get("NO_COLOR"):
-        return False
-    term = os.environ.get("TERM", "")
-    if term.lower() == "dumb":
-        return False
-    return sys.stdout.isatty()
-
-
-def _paint(text: str, color: str, enabled: bool) -> str:
-    if not enabled:
-        return text
-    codes = {
-        "white": "\033[37m",
-        "yellow": "\033[33m",
-        "green": "\033[32m",
-    }
-    return f"{codes[color]}{text}\033[0m"
-
-
 def _format_value(option: ConfigOption, value: object) -> str:
     if option.value_type == "bool":
+        if value is None:
+            return "auto"
         return "on" if bool(value) else "off"
     return str(value)
 
 
 def _render_grouped_yaml(config: Config) -> list[str]:
     tree: dict[str, object] = {}
-    use_color = _colors_enabled()
 
     for option in Config.iter_options():
         value, explicit = config.get_with_source(option.key)
         value_text = _format_value(option, value)
         if not explicit:
-            display = _paint(value_text, "white", use_color)
+            display = paint(value_text, "white")
         elif option.value_type == "bool":
-            display = _paint(value_text, "green" if bool(value) else "yellow", use_color)
+            display = paint(value_text, "green" if bool(value) else "yellow")
         else:
-            display = _paint(value_text, "green", use_color)
+            display = paint(value_text, "green")
 
         current = tree
         for part in option.path[:-1]:
