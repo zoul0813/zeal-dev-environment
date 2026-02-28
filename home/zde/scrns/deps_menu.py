@@ -54,9 +54,15 @@ class DepsMenuScreen(ItemActionScreen):
         )
         self._pending_stage_target: str | None = None
         self._stage_targets = set(image_cmd.available_stage_targets())
+        self._category_filter: str | None = None
+
+    def on_mount(self) -> None:
+        super().on_mount()
+        self._update_items_title()
 
     def get_actions(self) -> list[ItemAction]:
         return [
+            ItemAction("filter", "filter", requires_item=False, shortcut="f9"),
             ItemAction("info", "info", shortcut="f3", callback=self._action_info),
             ItemAction("update", "update", shortcut="f4", callback=self._action_update),
             ItemAction("install", "install", shortcut="f5", callback=self._action_install),
@@ -68,8 +74,9 @@ class DepsMenuScreen(ItemActionScreen):
     def get_items(self) -> list[ItemEntry]:
         rows: list[ItemEntry] = []
         catalog = DepCatalog()
+        deps = catalog.deps if self._category_filter is None else catalog.category(self._category_filter)
 
-        for dep in catalog.deps:
+        for dep in deps:
             line = Text()
             marker = dep.marker
             if dep.state == "required-miss":
@@ -103,6 +110,21 @@ class DepsMenuScreen(ItemActionScreen):
             rc = int(fn(*args))
         return rc, out.getvalue().rstrip()
 
+    def _update_items_title(self) -> None:
+        title = "Packages"
+        if self._category_filter:
+            title = f"Packages ({self._category_filter})"
+        panel = self.query_one("#item-list-panel", Vertical)
+        for child in panel.children:
+            if isinstance(child, Static):
+                child.update(title)
+                break
+
+    def run_action(self, action_id: str, item_id: str | None) -> ActionResult:
+        if action_id == "filter":
+            return self._action_filter()
+        return super().run_action(action_id, item_id)
+
     def _dep_from_item(self, item: ItemEntry) -> Dep:
         dep = item.data
         if not isinstance(dep, Dep):
@@ -122,6 +144,39 @@ class DepsMenuScreen(ItemActionScreen):
         supported = ", ".join(sorted(self._stage_targets))
         self._set_status(f"[warn] Target must be one of: {supported}")
         self.action_focus_items()
+
+    def _on_filter_selected(self, value: str | None) -> None:
+        if value is None:
+            self._set_status("")
+            self.action_focus_items()
+            return
+
+        chosen = value.strip()
+        self._category_filter = chosen or None
+        self._update_items_title()
+        self._refresh_items(preferred_item_id=self._last_item_id)
+        self._ensure_item_selection()
+        self._refresh_actions(preferred_action_id="filter")
+        if self._category_filter is None:
+            self._set_status("[ok] category filter: all")
+        else:
+            self._set_status(f"[ok] category filter: {self._category_filter}")
+        self._set_output("")
+        self.action_focus_items()
+
+    def _action_filter(self) -> ActionResult:
+        catalog = DepCatalog()
+        options = [("", "all")]
+        options.extend((category, category) for category in catalog.categories)
+        self.app.push_screen(
+            ChoiceModal(
+                title="Dependency Filter",
+                detail="Select a category",
+                options=options,
+            ),
+            self._on_filter_selected,
+        )
+        return ActionResult(status="")
 
     def _action_info(self, item: ItemEntry) -> ActionResult:
         dep = self._dep_from_item(item)

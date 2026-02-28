@@ -317,7 +317,10 @@ class DepCatalog:
                 key = category.casefold()
                 if key not in found:
                     found[key] = category
-        return [found[key] for key in sorted(found.keys())]
+        ordered_keys = sorted(key for key in found.keys() if key != "installed")
+        if "installed" in found:
+            ordered_keys.insert(0, "installed")
+        return [found[key] for key in ordered_keys]
 
     def installed(self) -> list[Dep]:
         return [dep for dep in self.deps if dep.installed]
