@@ -87,21 +87,32 @@ def subcmd_install(args: list[str]) -> int:
 
 def subcmd_update(args: list[str]) -> int:
     if not args:
-        print("Usage: zde deps update <id>")
+        print("Usage: zde deps update <id> [id...]")
         return 1
 
-    raw_id = args[0]
     catalog = DepCatalog()
-    try:
-        dep = catalog.resolve(raw_id)
-    except RuntimeError as exc:
-        print(str(exc))
-        return 1
-    if dep is None:
-        print(f"Unknown dependency id: {raw_id}")
-        return 1
+    dep_ids: list[str] = []
+    seen: set[str] = set()
 
-    return dep.update()
+    for raw_id in args:
+        try:
+            dep = catalog.resolve(raw_id)
+        except RuntimeError as exc:
+            print(str(exc))
+            return 1
+        if dep is None:
+            print(f"Unknown dependency id: {raw_id}")
+            return 1
+        if dep.id in seen:
+            continue
+        dep_ids.append(dep.id)
+        seen.add(dep.id)
+
+    for dep_id in dep_ids:
+        rc = catalog.update_dep(dep_id)
+        if rc != 0:
+            return rc
+    return 0
 
 
 def subcmd_remove(args: list[str]) -> int:
@@ -168,7 +179,7 @@ def help() -> int:
     print("  list [category]")
     print("  cats")
     print("  install <id>")
-    print("  update <id>")
+    print("  update <id> [id...]")
     print("  info <id>")
     print("  build <id>")
     print("  remove <id>")

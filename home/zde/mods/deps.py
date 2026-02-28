@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -588,6 +589,7 @@ class DepCatalog:
                     status="local",
                     updated_at=now,
                     current_commit_value=current_commit(dep_path),
+                    resolved_path=dep_path,
                 )
                 continue
 
@@ -606,6 +608,7 @@ class DepCatalog:
                         status="sync_failed",
                         updated_at=now,
                         current_commit_value=current_commit(dep_path),
+                        resolved_path=dep_path,
                     )
                 lock["updated_at"] = now
                 write_lock(self.env.lock_file, lock)
@@ -622,6 +625,7 @@ class DepCatalog:
                         status="build_failed",
                         updated_at=now,
                         current_commit_value=current_commit(dep_path),
+                        resolved_path=dep_path,
                     )
                     lock["updated_at"] = now
                     write_lock(self.env.lock_file, lock)
@@ -635,6 +639,7 @@ class DepCatalog:
                 status="synced",
                 updated_at=now,
                 current_commit_value=current_commit(dep_path),
+                resolved_path=dep_path,
             )
 
         lock["updated_at"] = now
@@ -649,6 +654,31 @@ class DepCatalog:
     def _run_build_for_dep(self, dep: Dep) -> int:
         build = dep.raw.get("build")
         if not isinstance(build, dict):
+            return 0
+
+        commands = build.get("commands")
+        if commands is not None:
+            if (
+                not isinstance(commands, list)
+                or not commands
+                or any(not isinstance(item, str) or not item.strip() for item in commands)
+            ):
+                print(f"Invalid build.commands for dependency: {dep.id}")
+                return 1
+
+            print(f"Building dependency: {dep.id} (commands)")
+            for command in commands:
+                if not isinstance(command, str):
+                    print(f"Invalid non-string build command for dependency: {dep.id}")
+                    return 1
+                print(f"$ {command}")
+                rc = subprocess.run(
+                    ["/bin/sh", "-lc", command],
+                    cwd=str(dep.path_resolved),
+                    check=False,
+                ).returncode
+                if rc != 0:
+                    return int(rc)
             return 0
 
         tool = build.get("tool")
@@ -694,6 +724,7 @@ class DepCatalog:
             status=status,
             updated_at=now,
             current_commit_value=current_commit(dep.path_resolved),
+            resolved_path=dep.path_resolved,
         )
         lock["updated_at"] = now
         write_lock(self.env.lock_file, lock)

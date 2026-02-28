@@ -14,6 +14,33 @@ except ModuleNotFoundError:
     yaml = None
 
 
+def _declared_categories(dep: dict[str, Any]) -> list[str]:
+    metadata = dep.get("metadata")
+    if not isinstance(metadata, dict):
+        return []
+    category = metadata.get("category")
+    if isinstance(category, str):
+        return [category]
+    if isinstance(category, list):
+        return [item for item in category if isinstance(item, str)]
+    return []
+
+
+def _repo_name_from_id(dep_id: str) -> str:
+    if "/" in dep_id:
+        return dep_id.split("/", 1)[1]
+    return dep_id
+
+
+def _default_dep_path(dep: dict[str, Any]) -> str:
+    dep_id = str(dep["id"])
+    categories = _declared_categories(dep)
+    is_core = any(category.casefold() == "core" for category in categories)
+    if is_core:
+        return f"home/{_repo_name_from_id(dep_id)}"
+    return f"extras/{dep_id}"
+
+
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     if not deps_file.is_file():
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
@@ -37,9 +64,14 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     for dep in deps:
         if not isinstance(dep, dict):
             raise RuntimeError("Each dependency entry must be a map")
-        for key in ("id", "repo", "path"):
+        for key in ("id", "repo"):
             if key not in dep or not isinstance(dep[key], str) or not dep[key].strip():
                 raise RuntimeError(f"Dependency missing required string field: {key}")
+        raw_path = dep.get("path")
+        if raw_path is None:
+            dep["path"] = _default_dep_path(dep)
+        elif not isinstance(raw_path, str) or not raw_path.strip():
+            raise RuntimeError(f"Dependency missing required string field: path")
         required = dep.get("required")
         if required is not None and not isinstance(required, bool):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-boolean required flag")
@@ -76,7 +108,19 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
             if not isinstance(build, dict):
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid build config")
             tool = build.get("tool")
-            if tool not in {"cmake", "make"}:
+            commands = build.get("commands")
+            if commands is not None:
+                if (
+                    not isinstance(commands, list)
+                    or not commands
+                    or any(not isinstance(item, str) or not item.strip() for item in commands)
+                ):
+                    raise RuntimeError(f"Dependency '{dep['id']}' has invalid build.commands list")
+            if commands is None and tool not in {"cmake", "make"}:
+                raise RuntimeError(
+                    f"Dependency '{dep['id']}' build config must define build.commands or build.tool (cmake/make)"
+                )
+            if tool is not None and tool not in {"cmake", "make"}:
                 raise RuntimeError(f"Dependency '{dep['id']}' build.tool must be one of: cmake, make")
             build_args = build.get("args")
             if build_args is not None:

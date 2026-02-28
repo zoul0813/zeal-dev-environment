@@ -231,6 +231,9 @@ def resolve_dep_path(env: Env, dep_path: str, dep: dict[str, Any] | None = None)
     if rel.is_absolute():
         return rel
 
+    if dep_path.startswith("extras/"):
+        return env.zde_home / dep_path
+
     candidate = env.zde_root / rel
     if candidate.exists():
         return candidate
@@ -253,10 +256,11 @@ def build_lock_entry(
     status: str,
     updated_at: str,
     current_commit_value: str | None,
+    resolved_path: Path | None = None,
 ) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "repo": dep["repo"],
-        "path": dep["path"],
+        "path": str(resolved_path) if isinstance(resolved_path, Path) else dep["path"],
         "ref_type": ref_type,
         "ref_value": ref_value,
         "status": status,
