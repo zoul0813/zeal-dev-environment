@@ -12,6 +12,7 @@ from mods.migrate import migrate_broken_submodule_checkout
 from mods.config import Config
 from mods.update import (
     build_lock_entry,
+    update_repo,
     clone_repo,
     configured_ref,
     current_commit,
