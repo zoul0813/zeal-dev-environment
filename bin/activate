@@ -40,12 +40,30 @@ if [ -f "\$_zde_managed_env_file" ]; then
 fi
 
 export PATH="\$ZDE_PATH:\$PATH"
-if [ -n "\${ZOS_PATH:-}" ]; then export PATH="\$ZOS_PATH/tools:\$PATH"; fi
-if [ -n "\${ZVB_SDK_PATH:-}" ]; then export PATH="\$ZVB_SDK_PATH/tools/zeal2gif:\$PATH"; fi
-if [ -n "\${ZVB_SDK_PATH:-}" ]; then export PATH="\$ZVB_SDK_PATH/tools/tiled2zeal:\$PATH"; fi
-if [ -n "\${ZAR_PATH:-}" ]; then export PATH="\$ZAR_PATH:\$PATH"; fi
+if [ -n "\${ZDE_DEP_PATHS:-}" ]; then
+    OLD_IFS="\$IFS"
+    IFS=':'
+    _zde_translated_dep_paths=""
+    for _zde_dep_path in \$ZDE_DEP_PATHS; do
+        case "\$_zde_dep_path" in
+            /home/zeal8bit)
+                _zde_dep_path="\$ZDE_HOME"
+                ;;
+            /home/zeal8bit/*)
+                _zde_dep_path="\$ZDE_HOME\${_zde_dep_path#/home/zeal8bit}"
+                ;;
+        esac
+        if [ -z "\$_zde_translated_dep_paths" ]; then
+            _zde_translated_dep_paths="\$_zde_dep_path"
+        else
+            _zde_translated_dep_paths="\$_zde_translated_dep_paths:\$_zde_dep_path"
+        fi
+    done
+    IFS="\$OLD_IFS"
+    export PATH="\$_zde_translated_dep_paths:\$PATH"
+fi
 
-unset _zde_managed_env_file _zde_line _zde_key _zde_value
+unset _zde_managed_env_file _zde_line _zde_key _zde_value _zde_dep_path _zde_translated_dep_paths OLD_IFS ZDE_DEP_PATHS
 EOF
 }
 

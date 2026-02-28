@@ -243,6 +243,8 @@ def resolve_dep_path(env: Env, dep_path: str, dep: dict[str, Any] | None = None)
 
     if dep_path.startswith("home/"):
         home_rel = Path(dep_path.removeprefix("home/"))
+        if isinstance(dep, dict) and "path" in dep:
+            return env.zde_home / home_rel
         categories = _declared_categories(dep)
         is_core = any(category.casefold() == "core" for category in categories)
         if not is_core:

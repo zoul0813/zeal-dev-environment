@@ -7,7 +7,9 @@ dependencies:
     required: true
     migrate: true
     env:
-      - ZOS_PATH
+      - name: ZOS_PATH
+        add_to_path:
+          - tools
     aliases:
       - zos
       - zealos
@@ -23,7 +25,10 @@ dependencies:
     branch: main
     migrate: true
     env:
-      - ZVB_SDK_PATH
+      - name: ZVB_SDK_PATH
+        add_to_path:
+          - tools/zeal2gif
+          - tools/tiled2zeal
     aliases:
       - zvb
       - video
@@ -94,7 +99,9 @@ dependencies:
     path: home/zeal-archiver
     branch: main
     env:
-      - ZAR_PATH
+      - name: ZAR_PATH
+        add_to_path:
+          - .
     metadata:
       category:
         - software

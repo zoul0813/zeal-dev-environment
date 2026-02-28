@@ -63,6 +63,12 @@ def _validate_dep_env(dep: dict[str, Any]) -> None:
         env_path = item.get("path")
         if env_path is not None and (not isinstance(env_path, str) or not env_path.strip()):
             raise RuntimeError(f"Dependency '{dep['id']}' has invalid env.path")
+        add_to_path = item.get("add_to_path")
+        if add_to_path is not None:
+            if not isinstance(add_to_path, list):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid env.add_to_path")
+            if any(not isinstance(path_item, str) or not path_item.strip() for path_item in add_to_path):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid env.add_to_path")
 
 
 def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:

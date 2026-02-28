@@ -193,5 +193,6 @@ ZDE_USE=podman zde update
 - Optional dependencies are installed on demand via `zde deps install <id-or-alias>`.
 - Installed dependency state is tracked in `~/.zeal8bit/deps-lock.yml`.
 - Dependency-specific env vars are generated into `~/.zeal8bit/deps.env`.
+- Dependency `env` entries in `deps.yml` may also declare `add_to_path` lists to prepend tool directories automatically.
 
 Use `zde deps list` to view dependency state, aliases, and dependency health.

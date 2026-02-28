@@ -80,15 +80,12 @@ class Dep:
 
     @property
     def env_export_base_path(self) -> Path:
-        raw_path = str(self.path)
-        path = Path(raw_path)
-        if path.is_absolute():
-            return path
-        if raw_path.startswith("home/"):
-            return Path("/home/zeal8bit") / raw_path.removeprefix("home/")
-        if raw_path.startswith("extras/"):
-            return Path("/home/zeal8bit") / raw_path
-        return self.catalog.env.zde_root / path
+        resolved = self.path_resolved
+        try:
+            rel_to_home = resolved.relative_to(self.catalog.env.zde_home)
+        except ValueError:
+            return resolved
+        return Path("/home/zeal8bit") / rel_to_home
 
     @property
     def required(self) -> bool:
@@ -210,69 +207,93 @@ class Dep:
             paths.append((source, rel_hint))
         return paths
 
-    def exposed_env(self) -> list[tuple[str, str]]:
+    def _env_items(self) -> list[dict[str, Any]]:
         raw_items = self.raw.get("env")
-        if not isinstance(raw_items, list) or not self.installed:
+        if not isinstance(raw_items, list):
+            return []
+
+        items: list[dict[str, Any]] = []
+        for item in raw_items:
+            if isinstance(item, str):
+                name = item.strip()
+                if not name:
+                    continue
+                items.append({"name": name, "path": ".", "add_to_path": []})
+                continue
+            if not isinstance(item, dict):
+                continue
+
+            raw_name = item.get("name")
+            if not isinstance(raw_name, str):
+                continue
+            name = raw_name.strip()
+            if not name:
+                continue
+
+            raw_path = item.get("path", ".")
+            if not isinstance(raw_path, str):
+                continue
+            path_value = raw_path.strip() or "."
+
+            raw_path_entries = item.get("add_to_path", [])
+            path_entries: list[str] = []
+            if isinstance(raw_path_entries, list):
+                for entry in raw_path_entries:
+                    if isinstance(entry, str) and entry.strip():
+                        path_entries.append(entry.strip())
+
+            items.append({"name": name, "path": path_value, "add_to_path": path_entries})
+        return items
+
+    def exposed_env(self) -> list[tuple[str, str]]:
+        if not self.installed:
             return []
 
         base = self.env_export_base_path
         exposed: list[tuple[str, str]] = []
-        for item in raw_items:
-            if isinstance(item, str):
-                name = item.strip()
-                value = base
-            elif isinstance(item, dict):
-                raw_name = item.get("name")
-                if not isinstance(raw_name, str):
-                    continue
-                name = raw_name.strip()
-                raw_path = item.get("path", ".")
-                if not isinstance(raw_path, str):
-                    continue
-                extra_path = raw_path.strip()
-                if not extra_path or extra_path == ".":
-                    value = base
-                else:
-                    value = base / extra_path
-            else:
-                continue
-
-            if not name:
-                continue
+        for item in self._env_items():
+            name = item["name"]
+            extra_path = item["path"]
+            value = base if extra_path == "." else base / extra_path
             exposed.append((name, str(value)))
         return exposed
 
     def runtime_env(self) -> list[tuple[str, str]]:
-        raw_items = self.raw.get("env")
-        if not isinstance(raw_items, list) or not self.installed:
+        if not self.installed:
             return []
 
         base = self.path_resolved
         exposed: list[tuple[str, str]] = []
-        for item in raw_items:
-            if isinstance(item, str):
-                name = item.strip()
-                value = base
-            elif isinstance(item, dict):
-                raw_name = item.get("name")
-                if not isinstance(raw_name, str):
-                    continue
-                name = raw_name.strip()
-                raw_path = item.get("path", ".")
-                if not isinstance(raw_path, str):
-                    continue
-                extra_path = raw_path.strip()
-                if not extra_path or extra_path == ".":
-                    value = base
-                else:
-                    value = base / extra_path
-            else:
-                continue
-
-            if not name:
-                continue
+        for item in self._env_items():
+            name = item["name"]
+            extra_path = item["path"]
+            value = base if extra_path == "." else base / extra_path
             exposed.append((name, str(value)))
         return exposed
+
+    def env_export_paths(self) -> list[str]:
+        if not self.installed:
+            return []
+
+        base = self.env_export_base_path
+        paths: list[str] = []
+        for item in self._env_items():
+            for entry in item["add_to_path"]:
+                value = base if entry == "." else base / entry
+                paths.append(str(value))
+        return paths
+
+    def runtime_paths(self) -> list[str]:
+        if not self.installed:
+            return []
+
+        base = self.path_resolved
+        paths: list[str] = []
+        for item in self._env_items():
+            for entry in item["add_to_path"]:
+                value = base if entry == "." else base / entry
+                paths.append(str(value))
+        return paths
 
     def install(self) -> int:
         return self.catalog.install_dep(self.id)
@@ -536,6 +557,7 @@ class DepCatalog:
                 shutil.rmtree(dep_path)
             else:
                 dep_path.unlink()
+            self._prune_empty_parent_dirs(dep_path)
 
         self._remove_dep_lock_entry(dep_id)
         print(f"Removed dependency: {dep_id}")
@@ -740,13 +762,49 @@ class DepCatalog:
     def _skip_sync_for_installed(self) -> bool:
         return get_skip_sync_installed_config()
 
+    def _prune_empty_parent_dirs(self, removed_path: Path) -> None:
+        stop_dirs: list[Path] = []
+        for candidate in (self.env.zde_home, self.env.zde_root):
+            try:
+                removed_path.relative_to(candidate)
+            except ValueError:
+                continue
+            stop_dirs.append(candidate)
+
+        if not stop_dirs:
+            return
+
+        current = removed_path.parent
+        while True:
+            if any(current == stop_dir for stop_dir in stop_dirs):
+                break
+            if not current.exists() or not current.is_dir():
+                break
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _write_managed_env_file(self) -> None:
         self.env.user_path.mkdir(parents=True, exist_ok=True)
 
         managed: dict[str, str] = {}
+        managed_paths: list[str] = []
         for dep in self.deps:
             for name, value in dep.exposed_env():
                 managed[name] = value
+            managed_paths.extend(dep.env_export_paths())
+
+        if managed_paths:
+            seen_paths: set[str] = set()
+            ordered_paths: list[str] = []
+            for path in managed_paths:
+                if path in seen_paths:
+                    continue
+                seen_paths.add(path)
+                ordered_paths.append(path)
+            managed["ZDE_DEP_PATHS"] = ":".join(ordered_paths)
 
         lines = ["# Managed by ZDE. Do not edit manually."]
         for name in sorted(managed.keys()):
@@ -762,21 +820,13 @@ class DepCatalog:
         for dep in self.deps:
             for name, value in dep.runtime_env():
                 env[name] = value
+            path_parts.extend(dep.runtime_paths())
 
         for key in ("Z88DK_PATH", "SDCC_PATH", "GNUAS_PATH"):
             raw = env.get(key, "").strip()
             if not raw:
                 continue
             path_parts.append(str(Path(raw) / "bin"))
-
-        path_parts.extend(
-            [
-                str(self.env.zde_home / "Zeal-8-bit-OS" / "tools"),
-                str(self.env.zde_home / "Zeal-VideoBoard-SDK" / "tools" / "zeal2gif"),
-                str(self.env.zde_home / "Zeal-VideoBoard-SDK" / "tools" / "tiled2zeal"),
-                str(self.env.zde_home / "zeal-archiver"),
-            ]
-        )
 
         existing_path = env.get("PATH", "")
         if existing_path:
