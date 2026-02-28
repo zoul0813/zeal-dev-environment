@@ -5,3 +5,4 @@
 .vscode
 .cookiecutter_replay
 .cookiecutter
+/collection.yml

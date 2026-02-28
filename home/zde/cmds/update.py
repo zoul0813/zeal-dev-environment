@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from mods.migrate import migrate_if_legacy
 from mods.tui.contract import ActionSpec, CommandSpec
-from mods.update import resolve_env, update_deps
+from mods.update import resolve_env, run_update
 
 
 def main(args: list[str]) -> int:
@@ -13,7 +13,7 @@ def main(args: list[str]) -> int:
     if rc != 0:
         return rc
 
-    rc = update_deps(env)
+    rc = run_update(env)
     if rc != 0:
         return rc
 

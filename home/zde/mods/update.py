@@ -3,10 +3,15 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mods.common import COLLECTION_URL
 from mods.process import run as process_run
 from mods.process import run_capture as process_run_capture
 
@@ -20,8 +25,10 @@ except ModuleNotFoundError:
 class Env:
     zde_root: Path
     zde_home: Path
+    user_path: Path
     deps_file: Path
     lock_file: Path
+    collection_file: Path
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> int:
@@ -75,8 +82,24 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         if required is not None and not isinstance(required, bool):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-boolean required flag")
         metadata = dep.get("metadata")
-        if metadata is not None and not isinstance(metadata, dict):
+        if metadata is None:
+            metadata = {}
+            dep["metadata"] = metadata
+        elif not isinstance(metadata, dict):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-map metadata")
+
+        category = metadata.get("category")
+        if category is None:
+            metadata["category"] = ["Other"]
+        elif isinstance(category, str):
+            if not category.strip():
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid metadata.category")
+            metadata["category"] = [category]
+        elif isinstance(category, list):
+            if any(not isinstance(item, str) or not item.strip() for item in category):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid metadata.category list")
+        else:
+            raise RuntimeError(f"Dependency '{dep['id']}' has invalid metadata.category")
         aliases = dep.get("aliases")
         if aliases is not None:
             if not isinstance(aliases, list) or any(not isinstance(item, str) or not item.strip() for item in aliases):
@@ -302,14 +325,17 @@ def resolve_env() -> Env:
     if not deps_file.is_file():
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
 
-    user_path = Path(os.environ.get("ZDE_USER_PATH", str(zde_home / ".zeal8bit")))
+    user_path = Path(os.environ.get("ZDE_USER_PATH", str(Path.home() / ".zeal8bit")))
     lock_file = user_path / "deps-lock.yml"
+    collection_file = user_path / "collection.yml"
 
     return Env(
         zde_root=zde_root,
         zde_home=zde_home,
+        user_path=user_path,
         deps_file=deps_file,
         lock_file=lock_file,
+        collection_file=collection_file,
     )
 
 
@@ -361,9 +387,49 @@ def update_deps(env: Env) -> int:
     return DepCatalog(env).sync_for_update()
 
 
+def update_collection(env: Env) -> int:
+    env.user_path.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix="zde-collection-", dir=env.user_path) as tmp_dir:
+        source_file = Path(tmp_dir) / "collection.yml"
+        try:
+            with urllib.request.urlopen(COLLECTION_URL) as response:
+                payload = response.read()
+        except urllib.error.URLError as exc:
+            print(f"Failed syncing collection catalog: {exc}", file=sys.stderr)
+            return 1
+
+        try:
+            rendered = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            print(f"Invalid collection catalog encoding: {exc}", file=sys.stderr)
+            return 1
+
+        source_file.write_text(rendered, encoding="utf-8")
+
+        try:
+            load_deps_yaml(source_file)
+        except (FileNotFoundError, RuntimeError) as exc:
+            print(f"Invalid collection catalog: {exc}", file=sys.stderr)
+            return 1
+
+    if rendered and not rendered.endswith("\n"):
+        rendered += "\n"
+    env.collection_file.write_text(rendered, encoding="utf-8")
+    print(f"Collection catalog updated: {env.collection_file}")
+    return 0
+
+
+def run_update(env: Env) -> int:
+    rc = update_deps(env)
+    if rc != 0:
+        return rc
+    return update_collection(env)
+
+
 def main() -> int:
     env = resolve_env()
-    return update_deps(env)
+    return run_update(env)
 
 
 if __name__ == "__main__":

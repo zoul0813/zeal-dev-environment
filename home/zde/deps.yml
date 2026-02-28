@@ -10,6 +10,8 @@ dependencies:
       - zos
       - zealos
     metadata:
+      category:
+        - core
       name: Zeal 8-bit OS
       description: Zeal 8-bit operating system source
 
@@ -22,6 +24,9 @@ dependencies:
       - zvb
       - video
     metadata:
+      category:
+        - core
+        - library
       name: Zeal VideoBoard SDK
       description: VideoBoard SDK and tools
 
@@ -30,6 +35,8 @@ dependencies:
     path: home/Zeal-Bootloader
     branch: main
     metadata:
+      category:
+        - core
       name: Zeal Bootloader
       description: Zeal bootloader source
     aliases:
@@ -42,6 +49,8 @@ dependencies:
     build:
       tool: cmake
     metadata:
+      category:
+        - core
       name: ZealFS
       description: Zeal file system tools/source
     aliases:
@@ -52,6 +61,8 @@ dependencies:
     path: home/Zeal-WebEmulator
     branch: main
     metadata:
+      category:
+        - service
       name: Zeal Web Emulator
       description: Browser-based Zeal emulator
     aliases:
@@ -65,6 +76,8 @@ dependencies:
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
+      category:
+        - core
       name: Zeal Game Dev Kit
       description: Game development kit
     aliases:
@@ -75,6 +88,9 @@ dependencies:
     path: home/zeal-archiver
     branch: main
     metadata:
+      category:
+        - software
+        - library
       name: Zeal Archiver
       description: Zeal archiving tools
     aliases:
@@ -85,6 +101,8 @@ dependencies:
     path: home/Zeal-Playground
     branch: main
     metadata:
+      category:
+        - service
       name: Zeal Playground
       description: Playground web app and files
     aliases:
@@ -103,6 +121,9 @@ dependencies:
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
+      category:
+        - core
+        - library
       name: Zeal Coreutils
       description: Core utility programs for Zeal
     aliases:
@@ -120,6 +141,8 @@ dependencies:
     depends_on:
       - zoul0813/zeal-coreutils
     metadata:
+      category:
+        - software
       name: ZShell
       description: A Shell for Zeal 8-bit OS
     aliases:
