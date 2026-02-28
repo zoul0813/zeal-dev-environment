@@ -247,7 +247,7 @@ def merge_deps_lists(primary: list[dict[str, Any]], secondary: list[dict[str, An
         dep_aliases = dep.get("aliases")
         if existing_aliases is None and isinstance(dep_aliases, list):
             existing["aliases"] = list(dep_aliases)
-            continue
+            existing_aliases = existing["aliases"]
         if isinstance(existing_aliases, list) and isinstance(dep_aliases, list):
             seen_aliases = {str(item).casefold() for item in existing_aliases}
             for alias in dep_aliases:
