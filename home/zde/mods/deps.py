@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from mods.migrate import migrate_broken_submodule_checkout
+from mods.catalog import load_deps_yaml, merge_deps_lists, order_deps_by_dependency
 from mods.config import Config
 from mods.update import (
     build_lock_entry,
@@ -17,9 +18,7 @@ from mods.update import (
     configured_ref,
     current_commit,
     is_git_repo,
-    load_deps_yaml,
     load_lock,
-    order_deps_by_dependency,
     resolve_dep_path,
     resolve_env,
     write_lock,
@@ -103,6 +102,17 @@ class Dep:
         if not isinstance(parents, list):
             return []
         return [parent for parent in parents if isinstance(parent, str)]
+
+    @property
+    def categories(self) -> list[str]:
+        metadata = self.raw.get("metadata", {})
+        if not isinstance(metadata, dict):
+            return ["Other"]
+        categories = metadata.get("category", ["Other"])
+        if not isinstance(categories, list):
+            return ["Other"]
+        values = [category for category in categories if isinstance(category, str) and category.strip()]
+        return values or ["Other"]
 
     @property
     def preferred_label(self) -> str:
@@ -190,6 +200,9 @@ class Dep:
     def build(self) -> int:
         return self.catalog.build_dep(self.id)
 
+    def update(self) -> int:
+        return self.catalog.update_dep(self.id)
+
     def stage(self, target: str) -> int:
         # Local import keeps deps module independent from image command module at import time.
         from cmds import image as image_cmd
@@ -275,7 +288,11 @@ class Dep:
 class DepCatalog:
     def __init__(self, env: object | None = None) -> None:
         self.env = resolve_env() if env is None else env
-        self._deps_raw = order_deps_by_dependency(load_deps_yaml(self.env.deps_file))
+        deps_raw = load_deps_yaml(self.env.deps_file)
+        if self.env.collection_file.is_file():
+            collection_raw = load_deps_yaml(self.env.collection_file)
+            deps_raw = merge_deps_lists(deps_raw, collection_raw)
+        self._deps_raw = order_deps_by_dependency(deps_raw)
         self.by_id: dict[str, Dep] = {dep["id"]: Dep(self, dep) for dep in self._deps_raw}
         self.lock: dict[str, Any] = {}
         self.lock_deps: dict[str, Any] = {}
@@ -285,6 +302,22 @@ class DepCatalog:
     @property
     def deps(self) -> list[Dep]:
         return [self.by_id[dep_id] for dep_id in sorted(self.by_id.keys())]
+
+    @property
+    def categories(self) -> list[str]:
+        found: dict[str, str] = {}
+        for dep in self.deps:
+            for category in dep.categories:
+                key = category.casefold()
+                if key not in found:
+                    found[key] = category
+        return [found[key] for key in sorted(found.keys())]
+
+    def deps_for_category(self, raw_category: str) -> list[Dep]:
+        wanted = raw_category.strip().casefold()
+        if not wanted:
+            return self.deps
+        return [dep for dep in self.deps if any(category.casefold() == wanted for category in dep.categories)]
 
     def refresh(self) -> None:
         self.lock = load_lock(self.env.lock_file)
@@ -444,6 +477,56 @@ class DepCatalog:
 
         self._write_dep_lock_entry(dep, "synced")
         print(f"Built dependency: {dep_id}")
+        self.refresh()
+        return 0
+
+    def update_dep(self, dep_id: str, *, include_dependencies: bool = True) -> int:
+        update_ids = self.dependency_chain(dep_id) if include_dependencies else [dep_id]
+
+        for update_id in update_ids:
+            dep = self.by_id[update_id]
+            dep_path = dep.path_resolved
+            has_git = is_git_repo(dep_path)
+            if not has_git and dep_path.exists():
+                migrated = migrate_broken_submodule_checkout(dep_path, True)
+                if migrated:
+                    has_git = False
+
+            ref_type, ref_value = configured_ref(dep.raw)
+
+            if dep_path.exists() and not has_git:
+                try:
+                    has_entries = next(dep_path.iterdir(), None) is not None
+                except OSError:
+                    has_entries = True
+                if has_entries:
+                    print(f"Dependency path exists but is not a git repo: {dep_path}")
+                    return 1
+
+            newly_installed = not has_git
+            if newly_installed:
+                rc = clone_repo(dep_path, dep.repo, ref_type, ref_value)
+            else:
+                rc = update_repo(dep_path, dep.repo, ref_type, ref_value)
+
+            if rc != 0:
+                self._write_dep_lock_entry(dep, "sync_failed")
+                print(f"Failed updating dependency: {update_id}")
+                return rc
+
+            if newly_installed:
+                rc = self._run_build_for_dep(dep)
+                if rc != 0:
+                    self._write_dep_lock_entry(dep, "build_failed")
+                    print(f"Failed building dependency: {update_id}")
+                    return rc
+
+            self._write_dep_lock_entry(dep, "synced")
+            if newly_installed:
+                print(f"Installed dependency: {update_id}")
+            else:
+                print(f"Updated dependency: {update_id}")
+
         self.refresh()
         return 0
 

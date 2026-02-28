@@ -128,8 +128,9 @@ def migrate_if_legacy(env: object) -> int:
         return 0
 
     # Local imports keep migrate module isolated from deps/update module wiring at import time.
+    from mods.catalog import load_deps_yaml, order_deps_by_dependency
     from mods.deps import DepCatalog
-    from mods.update import load_deps_yaml, order_deps_by_dependency, resolve_dep_path
+    from mods.update import resolve_dep_path
 
     deps_file = getattr(env, "deps_file")
     deps = order_deps_by_dependency(load_deps_yaml(deps_file))

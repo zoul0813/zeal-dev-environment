@@ -30,21 +30,33 @@ def _paint(text: str, color: str, enabled: bool) -> str:
 def subcmd_list(args: list[str]) -> int:
     catalog = DepCatalog()
     use_color = _colors_enabled()
+    deps = catalog.deps
+
+    if len(args) > 1:
+        print("Usage: zde deps list [category]")
+        return 1
+    if args:
+        category = args[0]
+        deps = catalog.deps_for_category(category)
+        if not deps:
+            available = ", ".join(catalog.categories)
+            print(f"Unknown category: {category}")
+            print(f"Available categories: {available}")
+            return 1
 
     mark_w = 3
-    id_w = 34
+    id_w = 36
     state_w = 20
-    req_w = 8
     track_w = 7
-    print(f"{'[?]':<{mark_w}} {'ID':<{id_w}} {'STATE':<{state_w}} {'REQUIRED':<{req_w}} {'TRACKED':<{track_w}} ALIASES")
-    for dep in catalog.deps:
-        req_s = "yes" if dep.required else "no"
+    print(f"{'[?]':<{mark_w}} {'ID':<{id_w}} {'STATE':<{state_w}} {'TRACKED':<{track_w}} ALIASES")
+    for dep in deps:
         track_s = "yes" if dep.tracked else "no"
         alias_text = ", ".join(dep.aliases) if dep.aliases else "-"
+        id_text = dep.id + (" *" if dep.required else "")
 
         state_plain = dep.state
         state_cell = state_plain.ljust(state_w)
-        row = f"{dep.marker:<{mark_w}} {dep.id:<{id_w}} {state_cell} {req_s:<{req_w}} {track_s:<{track_w}} {alias_text}"
+        row = f"{dep.marker:<{mark_w}} {id_text:<{id_w}} {state_cell} {track_s:<{track_w}} {alias_text}"
 
         if dep.required and not dep.installed:
             print(_paint(row, "red", use_color))
@@ -56,6 +68,13 @@ def subcmd_list(args: list[str]) -> int:
             print(_paint(row, "green", use_color))
         else:
             print(row)
+    return 0
+
+
+def subcmd_cats(args: list[str]) -> int:
+    catalog = DepCatalog()
+    for category in catalog.categories:
+        print(category)
     return 0
 
 
@@ -76,6 +95,25 @@ def subcmd_install(args: list[str]) -> int:
         return 1
 
     return dep.install()
+
+
+def subcmd_update(args: list[str]) -> int:
+    if not args:
+        print("Usage: zde deps update <id>")
+        return 1
+
+    raw_id = args[0]
+    catalog = DepCatalog()
+    try:
+        dep = catalog.resolve(raw_id)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
+    if dep is None:
+        print(f"Unknown dependency id: {raw_id}")
+        return 1
+
+    return dep.update()
 
 
 def subcmd_remove(args: list[str]) -> int:
@@ -139,8 +177,10 @@ def subcmd_build(args: list[str]) -> int:
 def help() -> int:
     print("Usage: zde deps <subcommand> [args]")
     print("Subcommands:")
-    print("  list")
+    print("  list [category]")
+    print("  cats")
     print("  install <id>")
+    print("  update <id>")
     print("  info <id>")
     print("  build <id>")
     print("  remove <id>")
