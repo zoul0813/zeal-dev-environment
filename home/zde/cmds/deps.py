@@ -9,16 +9,14 @@ def _print_dep_rows(deps) -> None:
     mark_w = 3
     id_w = 36
     state_w = 20
-    track_w = 7
-    print(f"{'[?]':<{mark_w}} {'ID':<{id_w}} {'STATE':<{state_w}} {'TRACKED':<{track_w}} ALIASES")
+    print(f"{'[?]':<{mark_w}} {'ID':<{id_w}} {'STATE':<{state_w}} ALIASES")
     for dep in deps:
-        track_s = "yes" if dep.tracked else "no"
         alias_text = ", ".join(dep.aliases) if dep.aliases else "-"
         id_text = dep.id + (" *" if dep.required else "")
 
         state_plain = dep.state
         state_cell = state_plain.ljust(state_w)
-        row = f"{dep.marker:<{mark_w}} {id_text:<{id_w}} {state_cell} {track_s:<{track_w}} {alias_text}"
+        row = f"{dep.marker:<{mark_w}} {id_text:<{id_w}} {state_cell} {alias_text}"
 
         if dep.required and not dep.installed:
             print(paint(row, "red"))

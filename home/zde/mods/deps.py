@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from mods.migrate import migrate_broken_submodule_checkout
 from mods.catalog import filter_zde_visible_deps, load_deps_yaml, merge_deps_lists, order_deps_by_dependency
@@ -72,6 +72,20 @@ class DepConfig:
 
 @dataclass
 class Dep:
+    _CATEGORY_STAGE_ROOTS: ClassVar[dict[str, str]] = {
+        "demo": "/demos",
+        "game": "/games",
+    }
+    _DEFAULT_ARTIFACT_EXCLUDED_NAMES: ClassVar[set[str]] = {
+        "makefile",
+        "gnumakefile",
+        "cmakelists.txt",
+        "cmakecache",
+        "cmake_install",
+        "install_manifest",
+        "manifest",
+    }
+
     catalog: "DepCatalog"
     raw: dict[str, Any]
 
@@ -198,6 +212,46 @@ class Dep:
         build = self.raw.get("build")
         return isinstance(build, dict) and build.get("stage") is False
 
+    @property
+    def inferred_stage_root(self) -> str:
+        build = self.raw.get("build")
+        if isinstance(build, dict):
+            root = build.get("root")
+            if isinstance(root, str) and root.strip():
+                return root.strip()
+
+        for category in self.categories:
+            mapped = self._CATEGORY_STAGE_ROOTS.get(category.casefold())
+            if mapped:
+                return mapped
+        return "/apps"
+
+    def _infer_default_artifacts(self) -> list[str]:
+        source_dir_name: str | None = None
+        source_dir: Path | None = None
+        for candidate in ("bin", "build"):
+            candidate_dir = self.path_resolved / candidate
+            if candidate_dir.is_dir():
+                source_dir_name = candidate
+                source_dir = candidate_dir
+                break
+
+        if source_dir_name is None or source_dir is None:
+            return []
+
+        artifacts: list[str] = []
+        for child in sorted(source_dir.iterdir(), key=lambda path: path.name):
+            if not child.is_file():
+                continue
+            if child.suffix == ".bin":
+                artifacts.append(f"{source_dir_name}/{child.name}")
+                continue
+            if child.suffix == "":
+                if child.name.casefold() in self._DEFAULT_ARTIFACT_EXCLUDED_NAMES:
+                    continue
+                artifacts.append(f"{source_dir_name}/{child.name}")
+        return artifacts
+
     def artifact_paths(self) -> list[tuple[Path, Path]]:
         build = self.raw.get("build")
         if self.stage_disabled:
@@ -205,11 +259,11 @@ class Dep:
         if isinstance(build, dict):
             artifacts = build.get("artifacts")
             if artifacts is None:
-                artifacts = ["bin/"]
+                artifacts = self._infer_default_artifacts()
         elif build is None:
             if self.catalog._infer_build_tool(self) is None:
                 return []
-            artifacts = ["bin/"]
+            artifacts = self._infer_default_artifacts()
         else:
             return []
         if not isinstance(artifacts, list):
@@ -364,8 +418,7 @@ class Dep:
                 renamed.append((source, rel_hint))
             artifact_paths = renamed
 
-        build_cfg = self.raw.get("build")
-        stage_root = build_cfg.get("root", "/apps") if isinstance(build_cfg, dict) else "/apps"
+        stage_root = self.inferred_stage_root
         image_cmd.stage_artifacts_to_target(artifact_paths, target_id, stage_root=stage_root)
 
         missing = 0
