@@ -75,7 +75,7 @@ class Dep:
 
     @property
     def path_resolved(self) -> Path:
-        return resolve_dep_path(self.catalog.env, self.path)
+        return resolve_dep_path(self.catalog.env, self.path, self.raw)
 
     @property
     def required(self) -> bool:

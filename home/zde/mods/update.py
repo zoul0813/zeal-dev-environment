@@ -212,7 +212,21 @@ def resolve_env() -> Env:
     )
 
 
-def resolve_dep_path(env: Env, dep_path: str) -> Path:
+def _declared_categories(dep: dict[str, Any] | None) -> list[str]:
+    if not isinstance(dep, dict):
+        return []
+    metadata = dep.get("metadata")
+    if not isinstance(metadata, dict):
+        return []
+    categories = metadata.get("category")
+    if isinstance(categories, str):
+        return [categories]
+    if isinstance(categories, list):
+        return [item for item in categories if isinstance(item, str)]
+    return []
+
+
+def resolve_dep_path(env: Env, dep_path: str, dep: dict[str, Any] | None = None) -> Path:
     rel = Path(dep_path)
     if rel.is_absolute():
         return rel
@@ -222,7 +236,12 @@ def resolve_dep_path(env: Env, dep_path: str) -> Path:
         return candidate
 
     if dep_path.startswith("home/"):
-        return env.zde_home / dep_path.removeprefix("home/")
+        home_rel = Path(dep_path.removeprefix("home/"))
+        categories = _declared_categories(dep)
+        is_core = any(category.casefold() == "core" for category in categories)
+        if not is_core:
+            return env.zde_home / "extras" / home_rel
+        return env.zde_home / home_rel
 
     return candidate
 
