@@ -2,197 +2,112 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-Zeal Dev Environment (ZDE) is a collection of tools to simplify building projects for the [Zeal 8-bit Computer](https://zeal8bit.com/).
+Zeal Development Environment (ZDE) is the build and tooling environment for working on software for the [Zeal 8-bit Computer](https://zeal8bit.com/). It provides a consistent containerized toolchain, project scaffolding, dependency management, image staging utilities, and optional host-mode activation.
+
+Detailed command documentation now lives in [docs/README.md](./docs/README.md).
 
 ## Table of Contents
 
-- [Setup](#setup)
-- [Usage](#usage)
-  - [General](#usage)
-  - [Interactive Mode](#interactive-mode)
-  - [Host Mode](#host-mode)
-- [Dependencies](#dependencies)
+- [What ZDE Provides](#what-zde-provides)
+- [Getting Started](#getting-started)
+- [Linux](#linux)
+- [macOS](#macos)
+- [Windows (WSL2)](#windows-wsl2)
+- [Quick Command Overview](#quick-command-overview)
+- [Requirements And Dependencies](#requirements-and-dependencies)
 
-## Setup
+## What ZDE Provides
 
-Clone the repo to your preffered location, such as ~/zeal-dev-environment
+- A container-based development environment for Zeal projects.
+- A host wrapper script (`./zde`) for launching builds, tools, and long-lived services.
+- Optional host-mode activation for running against the ZDE-managed toolchain without entering the container.
+- Project templates for quickly starting new Zeal applications.
+- Dependency management for required and optional tool repositories.
 
-### Clone the repo
+## Getting Started
 
-```shell
-cd ~/
+Clone the repository, change into it, and run the initial update:
 
+```sh
 git clone https://github.com/zoul0813/zeal-dev-environment.git
-
 cd zeal-dev-environment
-
-# Run ZDE Update
 ./zde update
 ```
 
-### Add ZDE to your PATH
+If you want to run `zde` from anywhere, add the repository root to your `PATH`:
 
-Add ZDE to your PATH
-
-```shell
+```sh
 export ZDE_PATH="/path/to/zeal-dev-environment"
-export PATH="$PATH:$ZDE_PATH"
+export PATH="$ZDE_PATH:$PATH"
 ```
+
+### Linux
+
+- Install `git`.
+- Install a supported container runtime.
+- Ensure your user can run the selected container runtime.
+- Clone the repository and run `./zde update`.
+
+### macOS
+
+- Install `git`.
+- Install a container runtime. Docker Desktop and Podman are both supported options.
+- Start the container runtime before running ZDE commands.
+- Clone the repository and run `./zde update`.
 
 ### Windows (WSL2)
 
-If you experience issues in Windows, try the following:
+Use ZDE from a Linux shell inside WSL2, not from PowerShell.
 
-- Install Git (https://learn.microsoft.com/en-us/windows/wsl/tutorials/wsl-git)
-- Install WSL2 (default is OK) to get an Ubuntu OS + bash shell (https://learn.microsoft.com/en-us/windows/wsl/install)
-- Install Docker Desktop for Windows with the proper config for WSL2 (https://learn.microsoft.com/en-us/windows/wsl/tutorials/wsl-containers)
-- `git clone https://github.com/zoul0813/zeal-dev-environment.git`, from the Bash shell, not PowerShell
-- Follow ZDE Readme (https://github.com/zoul0813/zeal-dev-environment/blob/main/README.md)
-- Type `zde update`
+- Install Git inside WSL.
+- Install WSL2.
+- Install a container runtime inside WSL2. Docker Desktop with WSL2 integration and Podman are both supported options.
+- Clone the repository from the WSL shell.
+- Run `./zde update` from the WSL shell.
 
-## Usage
+## Quick Command Overview
 
-```shell
-zde COMMAND [OPTIONS]
-```
+Use `zde COMMAND [args]`.
 
-### Commands
+Host wrapper and service commands:
 
-- `-i` - interactive mode, starts a new container shell mounting the current directory to `/src`
+- [`zde update`](./docs/update.md): update the local ZDE checkout, pull the container image, and run ZDE sync tasks.
+- [`zde -i`](./docs/interactive.md): open an interactive shell inside the ZDE container.
+- [`zde activate`](./docs/activate.md): emit shell exports for host mode.
+- [`zde emulator`](./docs/emulator.md): start, stop, or query the Zeal Web Emulator service.
+- [`zde playground`](./docs/playground.md): start, stop, or query the Zeal Playground service.
 
-- `activate` - exports ZDE env vars in your current shell (`eval "$(zde activate)"`)
+Core ZDE commands:
 
-- `update` - updates ZDE and synchronizes dependencies
+- [`zde deps`](./docs/deps.md): manage required and optional dependencies.
+- [`zde create`](./docs/create.md): scaffold a new project from a template.
+- [`zde make`](./docs/make.md): run `make` in the current project.
+- [`zde cmake`](./docs/cmake.md): configure and build CMake projects.
+- [`zde image`](./docs/image.md): manage EEPROM, CF, TF, and romdisk staging and image files.
+- [`zde config`](./docs/config.md): inspect and change persistent ZDE config.
+- [`zde kernel`](./docs/kernel.md): build the Zeal kernel with predefined or user config.
+- [`zde tui`](./docs/tui.md): launch the optional terminal UI.
 
-- `deps` - dependency management for optional deps (`list`, `install`, `remove`)
+For the full command map, runtime configuration, and per-command reference pages, see [docs/README.md](./docs/README.md).
 
-  > Optional dependencies are only installed when explicitly requested with `zde deps install <id-or-alias>`.
+## Requirements And Dependencies
 
-- `make` - execute make, passing all additional arguments (ie; `zde make all`)
+Base requirements:
 
-  > You can pass additional arguments to `zde make`, such as `zde make all` or `zde make clean`, etc.
+- `git`
+- a supported container runtime
+- a working container runtime with compose support
 
-- `cmake` - execute cmake in the current directory
+ZDE dependency model:
 
-  > You can optionally pass the name of the cmake build dir `zde cmake bin`, by default it assumes `build`
-
-- `emu[lator]` - launches the Zeal Web Emulator at (http://127.0.0.1:1145/?r=latest)
-
-  > You can optionally pass `stop` and `start` to stop or start the emulator.
-  >
-  > In addition, you can pass a URL encoded query string to pass additional arguments to the emulator,
-  > such as the preferred ROM to use (default: `r=latest`).  Refer to the Zeal-WebEmulator docs for
-  > available options.
-
-- `playground` - launches the Zeal Playground at (http://127.0.0.1:1155/?r=latest)
-
-  > You can optionally pass `stop` and `start` to stop or start the emulator.
-
-- `image` - generates [eeprom,sd,cf] disk images from files contained within $ZDE_PATH/mnt/[eeprom,sd,cf]
-
-  > This option copies the contents of $ZDE_PATH/mnt/[eeprom,sd,cf] into $ZDE_PATH/mnt/[eeprom,sd,cf].img
-  >
-  > You can optionally pass an additional "size" (32,64,etc) to create a 32k or 64k ZealFS image
-  >
-  > For example, `zde image eeprom 64` will copy the contents of $ZDE_PATH/mnt/eeprom to
-  > $ZDE_PATH/mnt/eeprom.img and create a 64k image file that can be flashed to the 64k EEPROM on Zeal 8-bit Computer.
-
-- `create` - creates a new project from available templates
-
-  > Usage: `zde create {template} name={project_name}`
-  >
-  > Templates: `zealos`, `zgdk`
-  >
-  > The project template is created in the current working folder, so you will have a `project_name` folder in
-  > your current path after executing.
-
-### Interactive Mode
-
-ZDE Interactive Mode allows you to shell into the ZDE container and run make/cmake/etc on your project
-
-```shell
-cd /path/to/project
-zde -i
-```
-
-When using Interactive Mode, you have full access to the ZDE container system.
-
-The modules provided by ZDE are located in `/home/zeal8bit`, and your project is mounted to `/src`.
-
-### Host Mode
-
-ZDE Host Mode allows you to use ZDE modules on your host, and sets up various env vars so you can run make/cmake
-locally without needing to run a container.  This mode requires that you have all the necessary tooling already installed.
-
-Follow the Zeal 8-bit [Getting Start Guide](https://github.com/Zeal8bit/Zeal-8-bit-OS/?tab=readme-ov-file#getting-started) to
-setup your local environment with the necessary prerequisites.
-
-To enable host mode in a shell, just source the `bin/activate` script
-to setup your sessions env vars.
-
-```shell
-source $ZDE_PATH/bin/activate
-```
-
-This will export static ZDE vars and then load dependency-specific vars from
-`~/.zeal8bit/deps.env`, which is generated from installed dependencies.
-For example:
-
-```shell
-export ZDE_PATH="$ZDE_HOME/.."
-
-export PATH="$ZDE_PATH:$PATH"
-export ZOS_PATH="$ZDE_HOME/Zeal-8-bit-OS"
-export ZVB_SDK_PATH="$ZDE_HOME/Zeal-VideoBoard-SDK"
-export ZGDK_PATH="$ZDE_HOME/zeal-game-dev-kit"
-```
-
-Once you activate ZDE Host Mode, you can just run `make` in your project and ZOS_PATH, ZVB_SDK_PATH, ZGDK_PATH and
-various other paths will be setup for you.
-
-### `zde create` example
-
-```shell
-cd /path/to/root
-zde create zealos name=hello
-cd hello
-zde make
-zde emu
-```
-
-  The project will produce a `{project_name}.bin`, so in the case of the example you would have `hello.bin`
-  to run in the emulator.
-
-### Use without Docker/Podman/Containers
-
-You can activate ZDE by sourcing the `bin/activate` script.
-
-```shell
-source $ZDE_PATH/bin/activate
-```
-
-Optionally, add a `zde-activate` alias
-
-```shell
-alias zde-activate="source $ZDE_PATH/bin/activate"
-```
-
-Once you've added ZDE to your path, run `zde update` to synchronize required dependencies and update any installed optional dependencies.
-
-You can force container runtime selection with `ZDE_USE`:
-
-```shell
-ZDE_USE=docker zde update
-# or
-ZDE_USE=podman zde update
-```
-
-## Dependencies
-
-- Required dependencies are installed/synced by `zde update`.
-- Optional dependencies are installed on demand via `zde deps install <id-or-alias>`.
+- Required dependencies are installed and synchronized by `zde update`.
+- Optional dependencies are installed on demand with `zde deps install <id-or-alias>`.
 - Installed dependency state is tracked in `~/.zeal8bit/deps-lock.yml`.
-- Dependency-specific env vars are generated into `~/.zeal8bit/deps.env`.
-- Dependency `env` entries in `deps.yml` may also declare `add_to_path` lists to prepend tool directories automatically.
+- Generated dependency environment exports are written to `~/.zeal8bit/deps.env`.
 
-Use `zde deps list` to view dependency state, aliases, and dependency health.
+Host mode:
+
+- You can activate ZDE without entering the container by running `eval "$(zde activate)"` or sourcing `bin/activate`.
+- Host mode assumes you already have the required native tooling available on your machine.
+
+Project-specific prerequisites may still apply depending on which Zeal project, SDK, or optional dependency you are using.
