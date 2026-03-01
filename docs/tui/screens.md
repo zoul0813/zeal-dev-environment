@@ -74,6 +74,13 @@ Top-level features:
 
 - pick a media target: `eeprom`, `cf`, `tf`, or `romdisk`
 - open a file-tree style browser for that target
+- create `eeprom`, `cf`, and `tf` images from the TUI
+
+Image creation behavior:
+
+- the top-level media screen exposes a `create` action for `eeprom`, `cf`, and `tf`
+- the TUI prompts for the image size before running the create command
+- the actual image build still uses the same underlying `zde image <type> create [size]` command path
 
 Inside the file browser:
 
@@ -82,7 +89,7 @@ Inside the file browser:
 - remove files or directories with confirmation
 - refresh the listing
 
-This screen is a staged-file browser, not a full replacement for every `zde image` CLI subcommand.
+This screen is still not a full replacement for every `zde image` CLI subcommand.
 
 ## App-Level Features
 
