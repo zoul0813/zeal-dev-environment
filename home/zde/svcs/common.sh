@@ -98,6 +98,20 @@ zde_command() {
   if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then
     CONTAINER_EXEC+=( -e "ZEAL_KERNEL_VERSION=${ZEAL_KERNEL_VERSION}" )
   fi
+  for passthrough_var in \
+    TERM \
+    COLORTERM \
+    TERM_PROGRAM \
+    TERM_PROGRAM_VERSION \
+    LC_TERMINAL \
+    LC_TERMINAL_VERSION \
+    ITERM_SESSION_ID \
+    ITERM_PROFILE \
+    ZDE_TUI_IMAGE_PROTOCOL; do
+    if [ -n "${!passthrough_var-}" ]; then
+      CONTAINER_EXEC+=( -e "${passthrough_var}=${!passthrough_var}" )
+    fi
+  done
 
   "${CONTAINER_EXEC[@]}" "$CONTAINER_SERVICE" /home/zeal8bit/zde/zde.py "$@"
 }
@@ -128,6 +142,20 @@ zde_shell() {
   if [ -n "${ZEAL_KERNEL_VERSION:-}" ]; then
     CONTAINER_EXEC+=( -e "ZEAL_KERNEL_VERSION=${ZEAL_KERNEL_VERSION}" )
   fi
+  for passthrough_var in \
+    TERM \
+    COLORTERM \
+    TERM_PROGRAM \
+    TERM_PROGRAM_VERSION \
+    LC_TERMINAL \
+    LC_TERMINAL_VERSION \
+    ITERM_SESSION_ID \
+    ITERM_PROFILE \
+    ZDE_TUI_IMAGE_PROTOCOL; do
+    if [ -n "${!passthrough_var-}" ]; then
+      CONTAINER_EXEC+=( -e "${passthrough_var}=${!passthrough_var}" )
+    fi
+  done
 
   "${CONTAINER_EXEC[@]}" "$service_name" /bin/bash
 }

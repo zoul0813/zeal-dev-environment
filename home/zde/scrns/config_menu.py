@@ -149,7 +149,7 @@ class ConfigMenuScreen(ItemActionScreen):
             return
         cfg = Config.load()
         try:
-            value = cfg.set(option.key, raw)
+            value = cfg.set_from_text(option.key, raw)
         except ValueError as exc:
             self._after_modal(status=f"[error] {exc}", preferred_key=option.key)
             return

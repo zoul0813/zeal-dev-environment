@@ -24,6 +24,7 @@ Features:
 - color-coded dependency list
 - state markers (`[x]`, `[ ]`, `[?]`)
 - dependency info modal
+- screens picker for `metadata.screenshot` and `metadata.video`
 - category filter picker
 - install, update, build, stage, and remove actions
 - automatic action visibility based on each dependency's capabilities
@@ -31,6 +32,27 @@ Features:
 TUI-only conveniences:
 
 - `filter` opens a category chooser instead of requiring a typed category name
+- `screens` opens a chooser for screenshot/video URLs only when native terminal image support is detected
+- screenshots are rendered with terminal-native image protocols (for supported terminals)
+- videos use terminal playback when available
+
+Native screenshot terminal support in ZDE:
+
+- iTerm2 (OSC 1337 inline image protocol)
+- kitty (kitty graphics protocol)
+- WezTerm (kitty graphics protocol path)
+- Ghostty (kitty graphics protocol path)
+- Konsole (kitty graphics protocol path)
+- Warp (kitty graphics protocol path)
+
+For additional terminals that support kitty graphics protocol compatibility, see:
+
+- https://sw.kovidgoyal.net/kitty/graphics-protocol/
+
+Detection notes:
+
+- Detection relies on terminal environment variables passed into the container.
+- If auto-detection fails, set `ZDE_TUI_IMAGE_PROTOCOL=iterm` or `ZDE_TUI_IMAGE_PROTOCOL=kitty` before launching ZDE.
 - `stage` opens a target picker before running the stage action
 - `info` opens a scrollable modal instead of printing to the terminal
 

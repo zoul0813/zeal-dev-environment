@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 
 
 CONFIG_FILE = USER_STATE_DIR / "zde.conf.yml"
-ConfigType = Literal["bool", "str"]
+ConfigType = Literal["bool", "str", "float"]
 
 
 @dataclass(frozen=True)
@@ -39,8 +39,15 @@ _OPTIONS: dict[str, ConfigOption] = {
         path=("textual", "theme"),
         value_type="str",
         description="Textual UI theme name",
-        default_value="solarized-dark",
+        default_value="monokai",
         legacy_paths=(("tui", "textual", "theme"),),
+    ),
+    "textual.screenshot-scale": ConfigOption(
+        key="textual.screenshot-scale",
+        path=("textual", "screenshot-scale"),
+        value_type="float",
+        description="Scale factor for TUI native screenshot previews (> 0, 1.0 = default size)",
+        default_value=1.0,
     ),
     "deps.skip-sync-installed": ConfigOption(
         key="deps.skip-sync-installed",
@@ -175,6 +182,12 @@ class Config:
             if isinstance(value, bool):
                 return value
             return None
+        if option.value_type == "float":
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                number = float(value)
+                if number > 0:
+                    return number
+            return None
         if option.value_type == "str":
             if isinstance(value, str):
                 return value
@@ -215,6 +228,12 @@ class Config:
             if not isinstance(value, bool):
                 raise ValueError(f"Invalid boolean value for {option.key}: {value}")
             normalized: Any = bool(value)
+        elif option.value_type == "float":
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise ValueError(f"Value for {option.key} must be a number")
+            normalized = float(value)
+            if normalized <= 0:
+                raise ValueError(f"Value for {option.key} must be greater than 0")
         else:
             if not isinstance(value, str):
                 raise ValueError(f"Value for {option.key} must be a string")
@@ -236,6 +255,15 @@ class Config:
                     f"Invalid boolean value for {option.key}: {raw_value}\n"
                     "Expected: on/off, true/false, yes/no, 1/0"
                 )
+            return self.set(option.key, parsed)
+        if option.value_type == "float":
+            token = raw_value.strip()
+            try:
+                parsed = float(token)
+            except ValueError:
+                raise ValueError(f"Invalid numeric value for {option.key}: {raw_value}") from None
+            if parsed <= 0:
+                raise ValueError(f"Value for {option.key} must be greater than 0")
             return self.set(option.key, parsed)
         return self.set(option.key, raw_value)
 

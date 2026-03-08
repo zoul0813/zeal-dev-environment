@@ -150,6 +150,37 @@ class Dep:
             values = [*values, "installed"]
         return values
 
+    def _metadata_url_list(self, key: str) -> list[str]:
+        metadata = self.raw.get("metadata", {})
+        if not isinstance(metadata, dict):
+            return []
+        raw = metadata.get(key)
+        if isinstance(raw, str):
+            value = raw.strip()
+            return [value] if value else []
+        if not isinstance(raw, list):
+            return []
+        urls: list[str] = []
+        for item in raw:
+            if not isinstance(item, str):
+                continue
+            value = item.strip()
+            if value:
+                urls.append(value)
+        return urls
+
+    @property
+    def screenshot_urls(self) -> list[str]:
+        return self._metadata_url_list("screenshot")
+
+    @property
+    def video_urls(self) -> list[str]:
+        return self._metadata_url_list("video")
+
+    @property
+    def has_media(self) -> bool:
+        return bool(self.screenshot_urls or self.video_urls)
+
     @property
     def preferred_label(self) -> str:
         aliases = self.aliases

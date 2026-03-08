@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import io
+import sys
+import termios
+import tty
 from contextlib import redirect_stderr, redirect_stdout
 
 from rich.text import Text
@@ -12,6 +15,7 @@ from textual.widgets import Static
 from cmds import image as image_cmd
 from mods.deps import Dep, DepCatalog
 from mods.tui.exec import suspend_for_external_output
+from mods.tui.media import MediaEntry, native_media_supported, preview_image_url_native
 from mods.tui.screens.choice_modal import ChoiceModal
 from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
 
@@ -63,6 +67,7 @@ class DepsMenuScreen(ItemActionScreen):
     def get_actions(self) -> list[ItemAction]:
         return [
             ItemAction("filter", "filter", requires_item=False, shortcut="f9"),
+            ItemAction("screens", "screens", shortcut="f1", callback=self._action_screens),
             ItemAction("info", "info", shortcut="f3", callback=self._action_info),
             ItemAction("update", "update", shortcut="f4", callback=self._action_update),
             ItemAction("install", "install", shortcut="f5", callback=self._action_install),
@@ -99,6 +104,8 @@ class DepsMenuScreen(ItemActionScreen):
                 line.append(" [untracked]", style="yellow")
 
             action_ids = ["info", "update", "install", "remove"]
+            if native_media_supported() and dep.screenshot_urls:
+                action_ids.append("screens")
             if not dep.build_disabled:
                 action_ids.append("build")
             if len(dep.artifact_paths()) > 0:
@@ -111,6 +118,33 @@ class DepsMenuScreen(ItemActionScreen):
         with redirect_stdout(out), redirect_stderr(out):
             rc = int(fn(*args))
         return rc, out.getvalue().rstrip()
+
+    def _wait_for_return_key(self) -> None:
+        prompt = "\nPress Enter or Esc to return to ZDE TUI..."
+        stream = sys.stdin
+        if not stream.isatty():
+            try:
+                input(prompt)
+            except EOFError:
+                pass
+            return
+        fd = stream.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            print(prompt, end="", flush=True)
+            tty.setraw(fd)
+            while True:
+                ch = stream.read(1)
+                if ch in ("\r", "\n", "\x1b"):
+                    break
+        except Exception:
+            try:
+                input(prompt)
+            except EOFError:
+                pass
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            print("")
 
     def _update_items_title(self) -> None:
         title = "Packages"
@@ -187,6 +221,62 @@ class DepsMenuScreen(ItemActionScreen):
             self.app.push_screen(DepsInfoModal(dep.id, output), lambda _result: self.action_focus_items())
         return ActionResult(rc=0, output="")
 
+    def _dep_media_entries(self, dep: Dep) -> list[MediaEntry]:
+        entries: list[MediaEntry] = []
+        for index, url in enumerate(dep.screenshot_urls):
+            entries.append(MediaEntry(kind="screenshot", index=index, url=url))
+        return entries
+
+    def _on_media_selected(self, dep: Dep, value: str | None) -> None:
+        if value is None:
+            self._set_status("")
+            self.action_focus_items()
+            return
+        selected = value.strip()
+        if not selected:
+            self._set_status("[warn] no media selection")
+            self.action_focus_items()
+            return
+
+        entry_by_id = {entry.id: entry for entry in self._dep_media_entries(dep)}
+        entry = entry_by_id.get(selected)
+        if entry is None:
+            self._set_status("[warn] invalid media selection")
+            self.action_focus_items()
+            return
+
+        with suspend_for_external_output(self.app):
+            rc = preview_image_url_native(entry.url)
+            self._wait_for_return_key()
+
+        if rc == 0:
+            self._set_status(f"[ok] opened {entry.kind} #{entry.index + 1} for {dep.id}")
+        else:
+            self._set_status(f"[warn] failed to open {entry.kind} #{entry.index + 1} for {dep.id}")
+        self.action_focus_items()
+
+    def _action_screens(self, item: ItemEntry) -> ActionResult:
+        dep = self._dep_from_item(item)
+        if not native_media_supported():
+            return ActionResult(rc=1, status="[warn] native terminal image support not detected")
+        entries = self._dep_media_entries(dep)
+        if not entries:
+            return ActionResult(rc=1, status=f"[warn] no screenshots for {dep.id}")
+        if len(entries) == 1:
+            self._on_media_selected(dep, entries[0].id)
+            return ActionResult(rc=0, status="")
+
+        options = [(entry.id, entry.label) for entry in entries]
+        self.app.push_screen(
+            ChoiceModal(
+                title=f"Screens: {dep.id}",
+                detail="Select a screenshot URL",
+                options=options,
+            ),
+            lambda value: self._on_media_selected(dep, value),
+        )
+        return ActionResult(rc=0, status="")
+
     def _action_install(self, item: ItemEntry) -> ActionResult:
         dep = self._dep_from_item(item)
         with suspend_for_external_output(self.app):
@@ -208,10 +298,7 @@ class DepsMenuScreen(ItemActionScreen):
         dep = self._dep_from_item(item)
         with suspend_for_external_output(self.app):
             rc = int(dep.build())
-            try:
-                input("\nPress Enter to return to ZDE TUI...")
-            except EOFError:
-                pass
+            self._wait_for_return_key()
         return ActionResult(rc=rc, refresh_items=True, preferred_item_id=dep.id)
 
     def _action_stage(self, item: ItemEntry) -> ActionResult:
