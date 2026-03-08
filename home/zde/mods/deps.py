@@ -619,11 +619,6 @@ class DepCatalog:
         allow_required: bool = False,
         include_dependencies: bool = True,
     ) -> int:
-        dep = self.by_id[dep_id]
-        if dep.required and not allow_required:
-            print(f"Dependency is required and managed by update: {dep_id}")
-            return 1
-
         install_ids = self.dependency_chain(dep_id) if include_dependencies else [dep_id]
         for install_id in install_ids:
             install_dep = self.by_id[install_id]
@@ -646,8 +641,16 @@ class DepCatalog:
                     return 1
 
             if has_git:
+                rc = update_repo(dep_path, install_dep.repo, ref_type, ref_value)
+                if rc != 0:
+                    self._write_dep_lock_entry(install_dep, "sync_failed")
+                    print(f"Failed updating dependency: {install_id}")
+                    return rc
+
+                self.installed_by_id[install_id] = True
                 self._write_dep_lock_entry(install_dep, "synced")
-                print(f"Dependency already installed: {install_id}")
+                self._write_managed_env_file()
+                print(f"Updated dependency: {install_id}")
                 continue
 
             rc = clone_repo(dep_path, install_dep.repo, ref_type, ref_value)

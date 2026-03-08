@@ -5,6 +5,10 @@ inputs:
     description: 'Repository to checkout'
     required: false
     default: zoul0813/zeal-dev-environment
+  ref:
+    description: 'Ref (branch, tag, or SHA) to checkout for the ZDE repository'
+    required: false
+    default: ""
   path:
     description: 'Path to checkout the repo'
     required: false
@@ -13,13 +17,45 @@ inputs:
     description: 'Docker image to pull'
     required: false
     default: zoul0813/zeal-dev-environment:latest
+  deps:
+    description: 'Additional optional ZDE dependencies to install (space, comma, or newline separated IDs/aliases)'
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
+    - name: Resolve setup-zde ref
+      id: setup_zde_ref
+      run: |
+        set -euo pipefail
+        ref='${{ github.action_ref }}'
+        action_path='${{ github.action_path }}'
+
+        if [ -z "$ref" ]; then
+          rel="${action_path#*/_actions/}"
+          if [ "$rel" != "$action_path" ]; then
+            after_repo="${rel#*/*/}"
+            suffix="/github/setup-zde"
+            case "$after_repo" in
+              *"$suffix")
+                ref="${after_repo%"$suffix"}"
+                ;;
+            esac
+          fi
+        fi
+
+        if [ -z "$ref" ]; then
+          ref="main"
+        fi
+
+        echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      shell: bash
+
     - name: Checkout ZDE repo
       uses: actions/checkout@v3
       with:
         repository: ${{ inputs.repo }}
+        ref: ${{ inputs.ref || steps.setup_zde_ref.outputs.ref || 'main' }}
         path: ${{ inputs.path }}
         submodules: true
         fetch-depth: 0
@@ -33,4 +69,53 @@ runs:
       run: |
         echo "ZDE_PATH=${{ github.workspace }}/${{ inputs.path }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/${{ inputs.path }}" >> $GITHUB_PATH
+      shell: bash
+
+    - name: Install ZDE Dependencies
+      run: |
+        set -euo pipefail
+        cd "${{ github.workspace }}/${{ inputs.path }}"
+
+        deps=(
+          "Zeal8bit/Zeal-8-bit-OS"
+          "Zeal8bit/Zeal-VideoBoard-SDK"
+        )
+
+        raw='${{ inputs.deps }}'
+        raw="${raw//,/ }"
+        raw="${raw//$'\n'/ }"
+
+        for token in $raw; do
+          deps+=("$token")
+        done
+
+        dedupe() {
+          local -n in_arr=$1
+          local -n out_arr=$2
+          declare -A seen=()
+          for item in "${in_arr[@]}"; do
+            if [ -z "${seen[$item]+x}" ]; then
+              out_arr+=("$item")
+              seen[$item]=1
+            fi
+          done
+        }
+
+        deduped=()
+        dedupe deps deduped
+        ./zde deps install "${deduped[@]}"
+      shell: bash
+
+    - name: Normalize ZDE Workspace Permissions
+      run: |
+        set -euo pipefail
+
+        owner="$(id -u):$(id -g)"
+        if command -v sudo >/dev/null 2>&1; then
+          sudo chown -R "$owner" "$ZDE_PATH"
+          sudo chmod -R u+rwX "$ZDE_PATH"
+        else
+          chown -R "$owner" "$ZDE_PATH"
+          chmod -R u+rwX "$ZDE_PATH"
+        fi
       shell: bash
