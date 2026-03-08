@@ -1,6 +1,6 @@
 # `zde kernel`
 
-`kernel` builds the Zeal kernel through `home/kernel.sh`.
+`kernel` builds the Zeal kernel through the Python command module.
 
 ## Usage
 
@@ -13,8 +13,8 @@ zde kernel menuconfig
 
 ## Behavior
 
-- With no arguments, uses the `zeal8bit` kernel config.
-- With a single argument, forwards that config name to `kernel.sh`.
+- With no arguments, prints help.
+- With a single argument, uses that config name as `configs/<name>.default`.
 
 ## Special Modes
 

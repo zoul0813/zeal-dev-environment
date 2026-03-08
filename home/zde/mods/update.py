@@ -121,6 +121,10 @@ def configured_ref(dep: dict[str, Any]) -> tuple[str, str]:
     return ("branch", "main")
 
 
+def wants_tag_fetch(dep: dict[str, Any]) -> bool:
+    return dep.get("tag") is True
+
+
 def ensure_origin(path: Path, repo: str) -> int:
     try:
         existing = run_capture(["git", "-C", str(path), "remote", "get-url", "origin"])
@@ -136,10 +140,19 @@ def ensure_origin(path: Path, repo: str) -> int:
     return run(["git", "-C", str(path), "remote", "add", "origin", repo])
 
 
-def clone_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
+def _fetch_tags(path: Path) -> int:
+    return run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", "--tags"])
+
+
+def clone_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_tags: bool = False) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     if ref_type in {"branch", "tag"}:
-        return run(["git", "clone", "--depth", "1", "--branch", ref_value, repo, str(path)])
+        rc = run(["git", "clone", "--depth", "1", "--branch", ref_value, repo, str(path)])
+        if rc != 0:
+            return rc
+        if fetch_tags:
+            return _fetch_tags(path)
+        return 0
 
     rc = run(["git", "clone", "--no-checkout", "--depth", "1", repo, str(path)])
     if rc != 0:
@@ -148,10 +161,15 @@ def clone_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
     rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", ref_value])
     if rc != 0:
         return rc
-    return run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"])
+    rc = run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"])
+    if rc != 0:
+        return rc
+    if fetch_tags:
+        return _fetch_tags(path)
+    return 0
 
 
-def update_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
+def update_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_tags: bool = False) -> int:
     if not (path / ".git").exists():
         return 1
 
@@ -165,18 +183,33 @@ def update_repo(path: Path, repo: str, ref_type: str, ref_value: str) -> int:
             rc = run(["git", "-C", str(path), "checkout", "-B", ref_value, f"origin/{ref_value}"])
             if rc != 0:
                 return rc
-        return run(["git", "-C", str(path), "pull", "--ff-only", "origin", ref_value])
+        rc = run(["git", "-C", str(path), "pull", "--ff-only", "origin", ref_value])
+        if rc != 0:
+            return rc
+        if fetch_tags:
+            return _fetch_tags(path)
+        return 0
 
     if ref_type == "tag":
         rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", "tag", ref_value])
         if rc != 0:
             return rc
-        return run(["git", "-C", str(path), "checkout", "--detach", f"tags/{ref_value}"])
+        rc = run(["git", "-C", str(path), "checkout", "--detach", f"tags/{ref_value}"])
+        if rc != 0:
+            return rc
+        if fetch_tags:
+            return _fetch_tags(path)
+        return 0
 
     rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", ref_value])
     if rc != 0:
         return rc
-    return run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"])
+    rc = run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"])
+    if rc != 0:
+        return rc
+    if fetch_tags:
+        return _fetch_tags(path)
+    return 0
 
 
 def resolve_env() -> Env:

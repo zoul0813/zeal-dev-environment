@@ -151,7 +151,6 @@ Command-specific variables:
 
 - `CONTAINER_SERVICE`: default compose service for forwarded commands and `zde -i`.
 - `ZDE_BUILD_SERVICE`: compose service used by `zde -i -b`.
-- `ZEAL_KERNEL_VERSION`: kernel version string passed into builds. If unset, ZDE tries `git describe` from `home/Zeal-8-bit-OS`.
 
 Advanced overrides:
 

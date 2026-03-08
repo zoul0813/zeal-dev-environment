@@ -4,6 +4,8 @@ dependencies:
     repo: https://github.com/Zeal8bit/Zeal-8-bit-OS.git
     path: home/Zeal-8-bit-OS
     branch: main
+    tag: true
+    build: false
     required: true
     migrate: true
     env:

@@ -59,3 +59,8 @@ State strings include values such as `ok`, `required-miss`, `broken(...)`, `untr
 - `install` can also target required dependencies when you need an install/update without running `zde update`.
 - Installing an already-installed dependency performs an update/sync instead of being a no-op.
 - Optional dependencies are installed only when you request them.
+- Dependency ref options in `deps.yml`:
+  - `branch: <name>`: track and sync that branch.
+  - `tag: <name>`: pin to that tag.
+  - `commit: <sha>`: pin to that commit.
+  - `tag: true`: also fetch repository tags during clone/update (shallow tag fetch, no full unshallow).

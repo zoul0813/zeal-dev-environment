@@ -120,6 +120,19 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
         zde = dep.get("zde")
         if zde is not None and not isinstance(zde, bool):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-boolean zde flag")
+        commit = dep.get("commit")
+        if commit is not None and (not isinstance(commit, str) or not commit.strip()):
+            raise RuntimeError(f"Dependency '{dep['id']}' has invalid commit value")
+        branch = dep.get("branch")
+        if branch is not None and (not isinstance(branch, str) or not branch.strip()):
+            raise RuntimeError(f"Dependency '{dep['id']}' has invalid branch value")
+        tag = dep.get("tag")
+        if tag is not None:
+            if isinstance(tag, str):
+                if not tag.strip():
+                    raise RuntimeError(f"Dependency '{dep['id']}' has invalid tag value")
+            elif not isinstance(tag, bool):
+                raise RuntimeError(f"Dependency '{dep['id']}' has invalid tag value")
         metadata = dep.get("metadata")
         if metadata is None:
             metadata = {}

@@ -17,6 +17,7 @@ from mods.update import (
     update_repo,
     clone_repo,
     configured_ref,
+    wants_tag_fetch,
     current_commit,
     is_git_repo,
     load_lock,
@@ -630,6 +631,7 @@ class DepCatalog:
                     has_git = False
 
             ref_type, ref_value = configured_ref(install_dep.raw)
+            fetch_tags = wants_tag_fetch(install_dep.raw)
 
             if dep_path.exists() and not has_git:
                 try:
@@ -641,7 +643,7 @@ class DepCatalog:
                     return 1
 
             if has_git:
-                rc = update_repo(dep_path, install_dep.repo, ref_type, ref_value)
+                rc = update_repo(dep_path, install_dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
                 if rc != 0:
                     self._write_dep_lock_entry(install_dep, "sync_failed")
                     print(f"Failed updating dependency: {install_id}")
@@ -653,7 +655,7 @@ class DepCatalog:
                 print(f"Updated dependency: {install_id}")
                 continue
 
-            rc = clone_repo(dep_path, install_dep.repo, ref_type, ref_value)
+            rc = clone_repo(dep_path, install_dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
             if rc != 0:
                 print(f"Failed installing dependency: {install_id}")
                 return rc
@@ -745,6 +747,7 @@ class DepCatalog:
                     has_git = False
 
             ref_type, ref_value = configured_ref(dep.raw)
+            fetch_tags = wants_tag_fetch(dep.raw)
 
             if dep_path.exists() and not has_git:
                 try:
@@ -757,9 +760,9 @@ class DepCatalog:
 
             newly_installed = not has_git
             if newly_installed:
-                rc = clone_repo(dep_path, dep.repo, ref_type, ref_value)
+                rc = clone_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
             else:
-                rc = update_repo(dep_path, dep.repo, ref_type, ref_value)
+                rc = update_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
 
             if rc != 0:
                 self._write_dep_lock_entry(dep, "sync_failed")
@@ -799,6 +802,7 @@ class DepCatalog:
         now = datetime.now(timezone.utc).isoformat()
         for dep in self.deps:
             ref_type, ref_value = configured_ref(dep.raw)
+            fetch_tags = wants_tag_fetch(dep.raw)
             dep_path = dep.path_resolved
             has_git = is_git_repo(dep_path)
 
@@ -838,9 +842,9 @@ class DepCatalog:
 
             newly_installed = not has_git
             if newly_installed:
-                rc = clone_repo(dep_path, dep.repo, ref_type, ref_value)
+                rc = clone_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
             else:
-                rc = update_repo(dep_path, dep.repo, ref_type, ref_value)
+                rc = update_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
 
             if rc != 0:
                 if has_git:
