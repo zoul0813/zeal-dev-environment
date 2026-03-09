@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from mods.common import ZOS_PATH
+
 
 def broken_submodule_gitdir(path: Path) -> Path | None:
     git_marker = path / ".git"
@@ -114,17 +116,14 @@ def migrate_and_install_legacy_submodules(
     return 0
 
 
-def needs_legacy_migration(zde_home: Path) -> bool:
+def needs_legacy_migration() -> bool:
     # Use Zeal-8-bit-OS as the sentinel for old submodule-based layouts.
-    sentinel = zde_home / "Zeal-8-bit-OS"
+    sentinel = ZOS_PATH
     return broken_submodule_gitdir(sentinel) is not None
 
 
 def migrate_if_legacy(env: object) -> int:
-    zde_home = getattr(env, "zde_home")
-    if not isinstance(zde_home, Path):
-        raise RuntimeError("Invalid update environment: missing zde_home path")
-    if not needs_legacy_migration(zde_home):
+    if not needs_legacy_migration():
         return 0
 
     # Local imports keep migrate module isolated from deps/update module wiring at import time.

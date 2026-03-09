@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import termios
+import tty
 from contextlib import contextmanager
 
 from mods.commands import command_to_module_name, discover_subcommands, import_command_module
@@ -13,6 +16,33 @@ def suspend_for_external_output(app):
     with app.suspend():
         with with_run_options(clear_before_run=True, clear_before_run_once=True):
             yield
+
+
+def pause_after_run(prompt: str = "\nPress Enter or Esc to return to ZDE TUI...") -> None:
+    stream = sys.stdin
+    if not stream.isatty():
+        try:
+            input(prompt)
+        except EOFError:
+            pass
+        return
+    fd = stream.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        print(prompt, end="", flush=True)
+        tty.setraw(fd)
+        while True:
+            ch = stream.read(1)
+            if ch in ("\r", "\n", "\x1b"):
+                break
+    except Exception:
+        try:
+            input(prompt)
+        except EOFError:
+            pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        print("")
 
 
 def run_action(command_name: str, action_id: str, args: list[str] | None = None) -> int:

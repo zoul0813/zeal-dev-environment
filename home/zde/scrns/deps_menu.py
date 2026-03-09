@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import io
-import sys
-import termios
-import tty
 from contextlib import redirect_stderr, redirect_stdout
 
 from rich.text import Text
@@ -12,7 +9,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from cmds import image as image_cmd
+from mods import image as image_mod
 from mods.deps import Dep, DepCatalog
 from mods.tui.exec import suspend_for_external_output
 from mods.tui.media import MediaEntry, native_media_supported, preview_image_url_native
@@ -56,8 +53,8 @@ class DepsMenuScreen(ItemActionScreen):
             items_title="Packages",
             actions_title="Actions",
         )
-        self._pending_stage_target: str | None = None
-        self._stage_targets = set(image_cmd.available_stage_targets())
+        self._pending_stage_image: image_mod.Image | None = None
+        self._stage_images = {image.image_type: image for image in image_mod.images()}
         self._category_filter: str | None = None
 
     def on_mount(self) -> None:
@@ -71,7 +68,7 @@ class DepsMenuScreen(ItemActionScreen):
             ItemAction("info", "info", shortcut="f3", callback=self._action_info),
             ItemAction("update", "update", shortcut="f4", callback=self._action_update),
             ItemAction("install", "install", shortcut="f5", callback=self._action_install),
-            ItemAction("build", "build", shortcut="f6", callback=self._action_build),
+            ItemAction("build", "build", shortcut="f6", pause_after_run=True, callback=self._action_build),
             ItemAction("stage", "stage", shortcut="f7", callback=self._action_stage),
             ItemAction("remove", "remove", shortcut="f8", callback=self._action_remove),
         ]
@@ -119,33 +116,6 @@ class DepsMenuScreen(ItemActionScreen):
             rc = int(fn(*args))
         return rc, out.getvalue().rstrip()
 
-    def _wait_for_return_key(self) -> None:
-        prompt = "\nPress Enter or Esc to return to ZDE TUI..."
-        stream = sys.stdin
-        if not stream.isatty():
-            try:
-                input(prompt)
-            except EOFError:
-                pass
-            return
-        fd = stream.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            print(prompt, end="", flush=True)
-            tty.setraw(fd)
-            while True:
-                ch = stream.read(1)
-                if ch in ("\r", "\n", "\x1b"):
-                    break
-        except Exception:
-            try:
-                input(prompt)
-            except EOFError:
-                pass
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            print("")
-
     def _update_items_title(self) -> None:
         title = "Packages"
         if self._category_filter:
@@ -173,11 +143,12 @@ class DepsMenuScreen(ItemActionScreen):
             self.action_focus_items()
             return
         target = value.strip().lower()
-        if target in self._stage_targets:
-            self._pending_stage_target = target
+        image = self._stage_images.get(target)
+        if image is not None:
+            self._pending_stage_image = image
             self._execute_action("stage", dep_id)
             return
-        supported = ", ".join(sorted(self._stage_targets))
+        supported = ", ".join(sorted(self._stage_images.keys()))
         self._set_status(f"[warn] Target must be one of: {supported}")
         self.action_focus_items()
 
@@ -247,7 +218,7 @@ class DepsMenuScreen(ItemActionScreen):
 
         with suspend_for_external_output(self.app):
             rc = preview_image_url_native(entry.url)
-            self._wait_for_return_key()
+        self._pause_after_run()
 
         if rc == 0:
             self._set_status(f"[ok] opened {entry.kind} #{entry.index + 1} for {dep.id}")
@@ -298,22 +269,21 @@ class DepsMenuScreen(ItemActionScreen):
         dep = self._dep_from_item(item)
         with suspend_for_external_output(self.app):
             rc = int(dep.build())
-            self._wait_for_return_key()
         return ActionResult(rc=rc, refresh_items=True, preferred_item_id=dep.id)
 
     def _action_stage(self, item: ItemEntry) -> ActionResult:
         dep = self._dep_from_item(item)
-        if self._pending_stage_target is None:
+        if self._pending_stage_image is None:
             self.app.push_screen(
                 ChoiceModal(
                     title="Stage Artifacts Target",
                     detail="Select destination",
-                    options=[(target, target) for target in image_cmd.available_stage_targets()],
+                    options=[(target, target) for target in sorted(self._stage_images.keys())],
                 ),
                 lambda value: self._on_stage_target(dep.id, value),
             )
             return ActionResult(status="")
-        target = self._pending_stage_target
-        self._pending_stage_target = None
-        rc, output = self._run_capture(dep.stage, target)
+        image = self._pending_stage_image
+        self._pending_stage_image = None
+        rc, output = self._run_capture(dep.stage, image)
         return ActionResult(rc=rc, output=output, preferred_item_id=dep.id)

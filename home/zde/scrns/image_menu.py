@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-from cmds import image as image_cmd
+from mods import image as image_mod
 from mods.tui.exec import suspend_for_external_output
 from mods.tui.screens.file_tree import FileTreeScreen
 from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
 from mods.tui.screens.prompt_modal import PromptModal
-
-
-_DEFAULT_IMAGE_SIZES: dict[str, str] = {
-    "eeprom": "32",
-    "cf": "64",
-    "tf": "4096",
-}
 
 
 class ImageMenuScreen(ItemActionScreen):
@@ -27,12 +20,13 @@ class ImageMenuScreen(ItemActionScreen):
         )
 
     def get_items(self) -> list[ItemEntry]:
-        return [
-            ItemEntry(id="eeprom", label="eeprom", action_ids=["open", "create"]),
-            ItemEntry(id="cf", label="cf", action_ids=["open", "create"]),
-            ItemEntry(id="tf", label="tf", action_ids=["open", "create"]),
-            ItemEntry(id="romdisk", label="romdisk", action_ids=["open", "create"]),
-        ]
+        rows: list[ItemEntry] = []
+        for image in image_mod.images():
+            action_ids = ["open"]
+            if image.create_usage is not None:
+                action_ids.append("create")
+            rows.append(ItemEntry(id=image.image_type, label=image.image_type, action_ids=action_ids))
+        return rows
 
     def get_actions(self) -> list[ItemAction]:
         return [
@@ -45,9 +39,11 @@ class ImageMenuScreen(ItemActionScreen):
         return ActionResult(status="", focus_items=False)
 
     def _action_create(self, item: ItemEntry) -> ActionResult:
+        image = image_mod.get_image(item.id)
         if item.id == "romdisk":
             with suspend_for_external_output(self.app):
-                rc = int(image_cmd.run_image_subcommand(item.id, ["create"]))
+                rc = int(image.create([]))
+            self._pause_after_run()
             self.app.refresh(layout=True, repaint=True)
             self.refresh(layout=True, repaint=True)
             self.action_focus_items()
@@ -59,7 +55,7 @@ class ImageMenuScreen(ItemActionScreen):
             self._set_output("")
             return ActionResult(status="")
 
-        default_size = _DEFAULT_IMAGE_SIZES.get(item.id)
+        default_size = image.default_create_size
         if default_size is None:
             return ActionResult(rc=1, status=f"[warn] create is not supported for {item.id}")
         self.app.push_screen(
@@ -87,8 +83,10 @@ class ImageMenuScreen(ItemActionScreen):
             self.action_focus_items()
             return
 
+        image = image_mod.get_image(image_type)
         with suspend_for_external_output(self.app):
-            rc = int(image_cmd.run_image_subcommand(image_type, ["create", size]))
+            rc = int(image.create([size]))
+        self._pause_after_run()
         self.app.refresh(layout=True, repaint=True)
         self.refresh(layout=True, repaint=True)
         self.action_focus_items()

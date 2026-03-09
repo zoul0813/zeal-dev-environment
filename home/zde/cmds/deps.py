@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mods.cli import paint
 from mods.deps import DepCatalog
+from mods import image as image_mod
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
@@ -164,6 +165,13 @@ def subcmd_stage(args: list[str]) -> int:
         return 1
 
     target = args[0]
+    try:
+        image = image_mod.get_image(target.strip().lower())
+    except ValueError:
+        supported = ", ".join(sorted(img.image_type for img in image_mod.images()))
+        print(f"Target must be one of: {supported}")
+        return 1
+
     catalog, dep_ids, rc = _resolve_dep_ids(args[1:], "Usage: zde deps stage <target> <id> [id...]")
     if rc != 0 or catalog is None or dep_ids is None:
         return rc
@@ -173,7 +181,7 @@ def subcmd_stage(args: list[str]) -> int:
         if dep is None:
             print(f"Unknown dependency id: {dep_id}")
             return 1
-        rc = dep.stage(target)
+        rc = dep.stage(image)
         if rc != 0:
             return rc
     return 0

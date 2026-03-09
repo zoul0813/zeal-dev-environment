@@ -6,7 +6,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.tui.contract import CommandSpec
-from mods.tui.exec import run_action, suspend_for_external_output
+from mods.tui.exec import pause_after_run, run_action, suspend_for_external_output
 
 
 class ActionMenuScreen(Screen[None]):
@@ -55,10 +55,7 @@ class ActionMenuScreen(Screen[None]):
         with suspend_for_external_output(self.app):
             rc = run_action(self._command.name, action.id, action.default_args)
             if action.pause_after_run:
-                try:
-                    input("\nPress Enter to return to ZDE TUI...")
-                except EOFError:
-                    pass
+                pause_after_run()
         self.app.refresh(layout=True, repaint=True)
         self.refresh(layout=True, repaint=True)
         self.query_one("#actions", ListView).focus()

@@ -4,7 +4,7 @@ import io
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-from cmds import image as image_cmd
+from mods import image as image_mod
 from mods.tui.screens.item_action_screen import (
     ActionResult,
     ConfirmRequest,
@@ -18,7 +18,8 @@ class FileTreeScreen(ItemActionScreen):
     DEFAULT_ACTION_ID = "refresh"
 
     def __init__(self, image_type: str) -> None:
-        self._image_type = image_type
+        self._image = image_mod.get_image(image_type)
+        self._image_type = self._image.image_type
         self._current_dir = Path(".")
         self._entry_is_dir: dict[str, bool] = {}
         super().__init__(
@@ -52,7 +53,7 @@ class FileTreeScreen(ItemActionScreen):
         if self._current_dir != Path("."):
             rows.append(ItemEntry(id="..", label="drwx ..", action_ids=["open", "refresh"]))
             self._entry_is_dir[".."] = True
-        for name, line, is_dir in image_cmd.image_entries(self._image_type, self._current_dir):
+        for name, line, is_dir in self._image.entries(self._current_dir):
             action_ids = ["remove", "refresh"]
             if is_dir:
                 action_ids.append("open")
@@ -96,7 +97,7 @@ class FileTreeScreen(ItemActionScreen):
         if item.id == "..":
             return ActionResult(rc=1, status="[warn] Select a file or directory entry")
         target = self._relative_target(item.id)
-        rc, _output = self._run_capture(image_cmd.run_image_subcommand, self._image_type, ["rm", target])
+        rc, _output = self._run_capture(self._image.rm, [target])
         return ActionResult(
             rc=rc,
             output="",

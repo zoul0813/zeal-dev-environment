@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TYPE_CHECKING
 
 from mods.migrate import migrate_broken_submodule_checkout
 from mods.catalog import filter_zde_visible_deps, load_deps_yaml, merge_deps_lists, order_deps_by_dependency
@@ -25,6 +25,9 @@ from mods.update import (
     resolve_env,
     write_lock,
 )
+
+if TYPE_CHECKING:
+    from mods.image import Image
 
 
 def _wrap_config_value(value: Any) -> Any:
@@ -419,17 +422,7 @@ class Dep:
     def update(self) -> int:
         return self.catalog.update_dep(self.id)
 
-    def stage(self, target: str) -> int:
-        # Local import keeps deps module independent from image command module at import time.
-        from cmds import image as image_cmd
-
-        target_id = target.strip().lower()
-        targets = set(image_cmd.available_stage_targets())
-        if target_id not in targets:
-            supported = ", ".join(sorted(targets))
-            print(f"Target must be one of: {supported}")
-            return 1
-
+    def stage(self, image: "Image") -> int:
         if self.build_disabled:
             print(f"Build disabled for dependency: {self.id}")
             return 1
@@ -451,7 +444,7 @@ class Dep:
             artifact_paths = renamed
 
         stage_root = self.inferred_stage_root
-        image_cmd.stage_artifacts_to_target(artifact_paths, target_id, stage_root=stage_root)
+        image.stage_artifacts(artifact_paths, stage_root=stage_root)
 
         missing = 0
         for source, _ in artifact_paths:
@@ -461,7 +454,8 @@ class Dep:
             print(f"Staging had missing artifacts for {self.id}")
             return 1
 
-        target_label = "romdisk" if target_id == "romdisk" else f"image {target_id}"
+        target_id = image.image_type
+        target_label = f"image {target_id}"
         print(f"Staged artifacts for {self.id} -> {target_label}")
         return 0
 

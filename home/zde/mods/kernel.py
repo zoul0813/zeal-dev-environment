@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from typing import Any
 
-from mods.common import HOME_DIR, MNT_DIR, USER_STATE_DIR
+from mods.common import MNT_DIR, USER_STATE_DIR, ZOS_PATH
 from mods.process import run
 
 
@@ -21,7 +21,7 @@ class KernelOption:
 
 
 def list_kernel_configs() -> list[str]:
-    configs_dir = HOME_DIR / "Zeal-8-bit-OS" / "configs"
+    configs_dir = ZOS_PATH / "configs"
     if not configs_dir.is_dir():
         return []
     return sorted(path.stem for path in configs_dir.glob("*.default"))
@@ -140,7 +140,7 @@ def _kernel_version(zos_path: Path) -> str:
 
 
 def build_kernel(kernel_config: str) -> int:
-    zos_path = HOME_DIR / "Zeal-8-bit-OS"
+    zos_path = ZOS_PATH
     fullbin = zos_path / "build" / "os_with_romdisk.img"
     kernel_version = _kernel_version(zos_path)
     cmd_env = os.environ.copy()
@@ -206,7 +206,7 @@ def build_kernel(kernel_config: str) -> int:
 def run_kernel(args: list[str]) -> int:
     kernel_config = args[0] if args else "zeal8bit"
     user_conf = USER_STATE_DIR / "os.conf"
-    os_conf = HOME_DIR / "Zeal-8-bit-OS" / "os.conf"
+    os_conf = ZOS_PATH / "os.conf"
     user_conf_create = False
 
     if kernel_config in {"user", "menuconfig"}:

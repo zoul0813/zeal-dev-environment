@@ -8,6 +8,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
+from mods.tui.exec import pause_after_run, suspend_for_external_output
 from mods.tui.screens.confirm_modal import ConfirmModal
 
 try:
@@ -22,6 +23,7 @@ class ItemAction:
     label: str
     requires_item: bool = True
     shortcut: str = ""
+    pause_after_run: bool = False
     callback: Callable[["ItemEntry"], ActionResult | int | None] | None = None
 
 
@@ -405,7 +407,10 @@ class ItemActionScreen(Screen[None]):
 
     def _execute_action(self, action_id: str, item_id: str | None) -> None:
         selected_action = self._selected_action_id()
+        action = self._action_defs.get(action_id)
         result = self.run_action(action_id, item_id)
+        if isinstance(action, ItemAction) and action.pause_after_run:
+            self._pause_after_run()
         self.app.refresh(layout=True, repaint=True)
         self.refresh(layout=True, repaint=True)
         if result.refresh_items:
@@ -424,6 +429,10 @@ class ItemActionScreen(Screen[None]):
             suffix = item_id if item_id else "-"
             self._set_status(f"[error] {action_id} failed ({result.rc}) for {suffix}")
         self._set_output(result.output)
+
+    def _pause_after_run(self) -> None:
+        with suspend_for_external_output(self.app):
+            pause_after_run()
 
     def _run_action_by_id(self, action_id: str) -> None:
         if self._visible_action_ids and action_id not in self._visible_action_ids:
