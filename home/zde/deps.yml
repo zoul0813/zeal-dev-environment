@@ -155,8 +155,7 @@ dependencies:
 
   - id: zoul0813/zeal-zshell
     repo: https://github.com/zoul0813/zeal-zshell.git
-    path: home/zeal-zshell
-    branch: main
+    branch: build-deploy
     build:
       tool: cmake
       artifacts:

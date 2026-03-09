@@ -20,11 +20,82 @@ class KernelOption:
     args: list[str]
 
 
+@dataclass(frozen=True)
+class DepKernelConfig:
+    dep_id: str
+    aliases: list[str]
+    os_conf: Path
+
+
+def _dep_kernel_config_from_lock(dep_id: str, lock_entry: Any, default_aliases: list[str] | None = None) -> DepKernelConfig | None:
+    if not isinstance(lock_entry, dict):
+        return None
+    dep_root_raw = lock_entry.get("path")
+    if not isinstance(dep_root_raw, str) or not dep_root_raw.strip():
+        return None
+    dep_root = Path(dep_root_raw.strip())
+    kernel_cfg = lock_entry.get("kernel_config")
+    if not isinstance(kernel_cfg, dict):
+        return None
+    raw_path = kernel_cfg.get("path")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        return None
+    cfg_path = Path(raw_path.strip())
+    os_conf = cfg_path if cfg_path.is_absolute() else dep_root / cfg_path
+    if not os_conf.is_file():
+        return None
+
+    raw_aliases = kernel_cfg.get("aliases")
+    aliases: list[str] = []
+    if isinstance(raw_aliases, list):
+        aliases = [alias for alias in raw_aliases if isinstance(alias, str) and alias.strip()]
+    if not aliases and default_aliases:
+        aliases = [alias for alias in default_aliases if isinstance(alias, str) and alias.strip()]
+
+    return DepKernelConfig(dep_id=dep_id, aliases=aliases, os_conf=os_conf)
+
+
 def list_kernel_configs() -> list[str]:
     configs_dir = ZOS_PATH / "configs"
     if not configs_dir.is_dir():
         return []
     return sorted(path.stem for path in configs_dir.glob("*.default"))
+
+
+def list_dep_kernel_configs() -> list[DepKernelConfig]:
+    try:
+        from mods.deps import DepCatalog
+    except Exception:
+        return []
+
+    catalog = DepCatalog()
+    rows: list[DepKernelConfig] = []
+    for dep in catalog.installed():
+        lock_entry = catalog.lock_deps.get(dep.id)
+        dep_cfg = _dep_kernel_config_from_lock(dep.id, lock_entry, dep.aliases)
+        if dep_cfg is None:
+            continue
+        rows.append(dep_cfg)
+    return sorted(rows, key=lambda row: row.dep_id.casefold())
+
+
+def _resolve_dep_kernel_config(raw: str) -> DepKernelConfig | None:
+    try:
+        from mods.deps import DepCatalog
+    except Exception:
+        return None
+
+    catalog = DepCatalog()
+    raw_id = raw.strip()
+    if not raw_id:
+        return None
+    try:
+        dep = catalog.resolve(raw_id)
+    except RuntimeError:
+        return None
+    if dep is None or not dep.installed:
+        return None
+    return _dep_kernel_config_from_lock(dep.id, catalog.lock_deps.get(dep.id), dep.aliases)
 
 
 def list_kernel_options() -> list[KernelOption]:
@@ -37,6 +108,17 @@ def list_kernel_options() -> list[KernelOption]:
         )
         for name in list_kernel_configs()
     ]
+    for dep_cfg in list_dep_kernel_configs():
+        label = dep_cfg.aliases[0] if dep_cfg.aliases else dep_cfg.dep_id
+        aliases = ", ".join(dep_cfg.aliases) if dep_cfg.aliases else "-"
+        options.append(
+            KernelOption(
+                action_id=f"dep:{dep_cfg.dep_id}",
+                label=label,
+                help=f"Build kernel using dep config: {dep_cfg.dep_id} (aliases: {aliases})",
+                args=[dep_cfg.dep_id],
+            )
+        )
     options.append(
         KernelOption(
             action_id="user",
@@ -208,6 +290,15 @@ def run_kernel(args: list[str]) -> int:
     user_conf = USER_STATE_DIR / "os.conf"
     os_conf = ZOS_PATH / "os.conf"
     user_conf_create = False
+    builtin_configs = set(list_kernel_configs())
+    builtin_special = {"user", "menuconfig", "default"}
+    dep_cfg: DepKernelConfig | None = None
+
+    if kernel_config not in builtin_special and kernel_config not in builtin_configs:
+        dep_cfg = _resolve_dep_kernel_config(kernel_config)
+        if dep_cfg is None:
+            print(f"Unknown kernel config: {kernel_config}")
+            return 1
 
     if kernel_config in {"user", "menuconfig"}:
         if user_conf.is_file():
@@ -216,6 +307,10 @@ def run_kernel(args: list[str]) -> int:
         else:
             user_conf_create = True
             print(f"Warning: {user_conf} does not exist")
+    elif dep_cfg is not None:
+        shutil.copy2(dep_cfg.os_conf, os_conf)
+        print(f"Copied {dep_cfg.os_conf} to {os_conf}")
+        kernel_config = "user"
 
     rc = build_kernel(kernel_config)
 
@@ -244,6 +339,12 @@ def run_kernel_tui_action(action_id: str, context: dict[str, Any]) -> int:
             print("Invalid kernel config action.")
             return 1
         return run_kernel([config_name, *action_args])
+    if action_id.startswith("dep:"):
+        dep_id = action_id.split(":", 1)[1]
+        if not dep_id:
+            print("Invalid dep kernel config action.")
+            return 1
+        return run_kernel([dep_id, *action_args])
 
     print(f"Unsupported kernel TUI action: {action_id}")
     return 1

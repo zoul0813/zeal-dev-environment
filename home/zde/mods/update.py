@@ -287,6 +287,19 @@ def resolve_dep_path(env: Env, dep_path: str, dep: dict[str, Any] | None = None)
     return candidate
 
 
+def _is_git_tracked_file(repo_path: Path, rel_path: str) -> bool:
+    if not repo_path.is_dir():
+        return False
+    return (
+        process_run(
+            ["git", "-C", str(repo_path), "ls-files", "--error-unmatch", "--", rel_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    )
+
+
 def build_lock_entry(
     dep: dict[str, Any],
     ref_type: str,
@@ -311,6 +324,16 @@ def build_lock_entry(
     depends_on = dep.get("depends_on")
     if isinstance(depends_on, list) and depends_on:
         entry["depends_on"] = depends_on
+
+    if isinstance(resolved_path, Path):
+        if _is_git_tracked_file(resolved_path, "os.conf"):
+            kernel_config: dict[str, Any] = {"path": "os.conf"}
+            aliases = dep.get("aliases")
+            if isinstance(aliases, list):
+                normalized_aliases = [alias for alias in aliases if isinstance(alias, str) and alias.strip()]
+                if normalized_aliases:
+                    kernel_config["aliases"] = normalized_aliases
+            entry["kernel_config"] = kernel_config
     return entry
 
 
