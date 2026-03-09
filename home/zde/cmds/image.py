@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -92,6 +93,117 @@ def _build_zealfs_image(image_type: str, size: str) -> int:
     if rc != 0:
         return rc
     return run(["sudo", "umount", media_dir])
+
+
+def _read_os_conf_value(os_conf: Path, key: str) -> str | None:
+    if not os_conf.is_file():
+        return None
+    pattern = re.compile(rf"^\s*{re.escape(key)}=(.*)$")
+    for raw in os_conf.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = pattern.match(line)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        return value
+    return None
+
+
+def _parse_conf_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"y", "yes", "1", "true", "on"}
+
+
+def _subcmd_create_romdisk(args: list[str]) -> int:
+    if args:
+        print("Usage: zde image romdisk create")
+        return 1
+
+    zos_path = HOME_DIR / "Zeal-8-bit-OS"
+    tools_path = zos_path / "tools"
+    pack_script = tools_path / "pack.py"
+    concat_script = tools_path / "concat.py"
+    build_dir = zos_path / "build"
+    os_conf = zos_path / "os.conf"
+    stage_dir = MNT_DIR / "romdisk"
+    roms_dir = MNT_DIR / "roms"
+    kernel_bin = build_dir / "os.bin"
+    disk_img = MNT_DIR / "romdisk.img"
+    output_img = roms_dir / "custom.img"
+
+    if kernel_bin.is_file():
+        kernel_source = kernel_bin
+    else:
+        print(f"Missing kernel build artifact: {kernel_bin}")
+        print("Build the kernel first: zde kernel <config>")
+        return 1
+    if not pack_script.is_file() or not concat_script.is_file():
+        print("Missing romdisk tools (pack.py/concat.py)")
+        return 1
+
+    offset_pages_raw = _read_os_conf_value(os_conf, "CONFIG_ROMDISK_OFFSET_PAGES")
+    try:
+        offset_pages = int(offset_pages_raw) if offset_pages_raw is not None else 1
+    except ValueError:
+        print(f"Invalid CONFIG_ROMDISK_OFFSET_PAGES in {os_conf}: {offset_pages_raw}")
+        return 1
+    if offset_pages <= 0:
+        print(f"Invalid CONFIG_ROMDISK_OFFSET_PAGES: {offset_pages} (must be > 0)")
+        return 1
+
+    include_init_bin = _parse_conf_bool(_read_os_conf_value(os_conf, "CONFIG_ROMDISK_INCLUDE_INIT_BIN"))
+    ignore_hidden = _parse_conf_bool(_read_os_conf_value(os_conf, "CONFIG_ROMDISK_IGNORE_HIDDEN"))
+    init_bin = build_dir / "romdisk" / "init" / "build" / "init.bin"
+
+    build_dir.mkdir(parents=True, exist_ok=True)
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    roms_dir.mkdir(parents=True, exist_ok=True)
+
+    offset_bytes = offset_pages * 0x4000
+    kernel_size = kernel_source.stat().st_size
+    if kernel_size > offset_bytes:
+        print("Kernel image is bigger than configured ROMDISK offset:")
+        print(f"  kernel={kernel_source} ({kernel_size} bytes)")
+        print(f"  offset={offset_bytes} bytes")
+        print("Increase CONFIG_ROMDISK_OFFSET_PAGES or rebuild with a smaller kernel.")
+        return 1
+
+    pack_cmd = [sys.executable, str(pack_script)]
+    if ignore_hidden:
+        pack_cmd.append("--skip-hidden")
+    pack_cmd.extend([str(disk_img)])
+    if include_init_bin and init_bin.is_file():
+        pack_cmd.append(str(init_bin))
+    elif include_init_bin:
+        print(f"Warning: CONFIG_ROMDISK_INCLUDE_INIT_BIN=y but '{init_bin}' is missing")
+    pack_cmd.append(str(stage_dir))
+
+    rc = run(pack_cmd)
+    if rc != 0:
+        return rc
+
+    rc = run(
+        [
+            sys.executable,
+            str(concat_script),
+            str(output_img),
+            "0x0000",
+            str(kernel_source),
+            hex(offset_bytes),
+            str(disk_img),
+        ]
+    )
+    if rc != 0:
+        return rc
+
+    print(f"Created {disk_img}")
+    print(f"Created {output_img}")
+    return 0
 
 
 def _copy_path_to_image(path: Path, image_type: str) -> None:
@@ -206,7 +318,7 @@ def image_rows(image_type: str, relative_dir: Path | str = Path(".")) -> list[tu
 
 
 def subcmd_romdisk(args: list[str]) -> int:
-    return _dispatch_image_type("romdisk", args, "", allow_create=False)
+    return _dispatch_image_type("romdisk", args, "", allow_create=True)
 
 
 def run_image_subcommand(image_type: str, args: list[str]) -> int:
@@ -274,6 +386,9 @@ def _subcmd_rm(image_type: str, args: list[str]) -> int:
 
 
 def _subcmd_create(image_type: str, args: list[str], default_size: str) -> int:
+    if image_type == "romdisk":
+        return _subcmd_create_romdisk(args)
+
     if len(args) > 1:
         print(f"Usage: zde image {image_type} create [size]")
         return 1
@@ -311,7 +426,10 @@ def _help_image_type(image_type: str, allow_create: bool = True) -> int:
     print("  rm <path1> [path2] [path3] ...")
     print("  ls")
     if allow_create:
-        print("  create [size]")
+        if image_type == "romdisk":
+            print("  create")
+        else:
+            print("  create [size]")
     return 0
 
 
@@ -354,7 +472,7 @@ def help() -> int:
     print("  eeprom <add|rm|ls|create> [args]")
     print("  cf <add|rm|ls|create> [args]")
     print("  tf <add|rm|ls|create> [args]")
-    print("  romdisk <add|rm|ls> [args]")
+    print("  romdisk <add|rm|ls|create> [args]")
     return 0
 
 
@@ -366,7 +484,7 @@ def get_tui_spec() -> CommandSpec:
     return CommandSpec(
         name="image",
         label="image",
-        help="Manage and build EEPROM/CF/TF images",
+        help="Manage and build EEPROM/CF/TF/ROMDISK images",
         actions=[
             ActionSpec(id="open", label="open", help="Open image media browser"),
         ],

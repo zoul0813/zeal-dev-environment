@@ -17,15 +17,14 @@ Supported subcommands:
 - `rm <path1> [path2] [path3] ...`
 - `ls`
 - `create [size]` for `eeprom`, `cf`, and `tf`
-
-`romdisk` supports `add`, `rm`, and `ls`, but not `create`.
+- `create` for `romdisk`
 
 ## Targets
 
 - `eeprom`: directory-backed staging plus ZealFS image creation.
 - `cf`: directory-backed staging plus packed CompactFlash image creation.
 - `tf`: directory-backed staging plus ZealFS image creation with MBR support.
-- `romdisk`: staging-only target.
+- `romdisk`: staged file target plus ROM disk regeneration using the latest kernel image.
 
 ## Subcommand Details
 
@@ -51,6 +50,10 @@ Supported subcommands:
 - `cf` defaults to size `64`.
 - `tf` defaults to size `4096`.
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
+- `romdisk create`:
+  - Packs staged files from `mnt/romdisk` into `home/Zeal-8-bit-OS/build/disk.img`.
+  - Rebuilds `home/Zeal-8-bit-OS/build/os_with_romdisk.img` by combining the latest ROM image (`mnt/roms/latest.img`) with the freshly packed disk.
+  - Updates `mnt/roms/latest.img` in place and writes `mnt/romdisk.img`.
 
 ## Legacy Alias
 

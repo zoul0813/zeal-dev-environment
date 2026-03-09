@@ -31,7 +31,7 @@ class ImageMenuScreen(ItemActionScreen):
             ItemEntry(id="eeprom", label="eeprom", action_ids=["open", "create"]),
             ItemEntry(id="cf", label="cf", action_ids=["open", "create"]),
             ItemEntry(id="tf", label="tf", action_ids=["open", "create"]),
-            ItemEntry(id="romdisk", label="romdisk", action_ids=["open"]),
+            ItemEntry(id="romdisk", label="romdisk", action_ids=["open", "create"]),
         ]
 
     def get_actions(self) -> list[ItemAction]:
@@ -45,6 +45,20 @@ class ImageMenuScreen(ItemActionScreen):
         return ActionResult(status="", focus_items=False)
 
     def _action_create(self, item: ItemEntry) -> ActionResult:
+        if item.id == "romdisk":
+            with suspend_for_external_output(self.app):
+                rc = int(image_cmd.run_image_subcommand(item.id, ["create"]))
+            self.app.refresh(layout=True, repaint=True)
+            self.refresh(layout=True, repaint=True)
+            self.action_focus_items()
+            if rc == 0:
+                self._set_status(f"[ok] created {item.id}")
+                self._set_output("")
+                return ActionResult(status="")
+            self._set_status(f"[error] create failed ({rc}) for {item.id}")
+            self._set_output("")
+            return ActionResult(status="")
+
         default_size = _DEFAULT_IMAGE_SIZES.get(item.id)
         if default_size is None:
             return ActionResult(rc=1, status=f"[warn] create is not supported for {item.id}")
