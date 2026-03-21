@@ -64,8 +64,13 @@ def load_lock(lock_file: Path) -> dict[str, Any]:
     else:
         if process_run(["yq", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
             raise RuntimeError("PyYAML or yq is required to parse deps-lock.yml")
-        raw = run_capture(["yq", "-o=json", ".", str(lock_file)])
-        data = json.loads(raw)
+        try:
+            raw = run_capture(["yq", "-o=json", ".", str(lock_file)])
+            data = json.loads(raw)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to parse deps-lock.yml with yq: {e}") from e
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"deps-lock.yml produced invalid JSON via yq: {e}") from e
 
     if not isinstance(data, dict):
         raise RuntimeError("deps-lock.yml must be a YAML object")
@@ -95,7 +100,10 @@ def write_lock(lock_file: Path, lock: dict[str, Any]) -> None:
         raise RuntimeError("PyYAML or yq is required to write deps-lock.yml")
 
     payload = json.dumps(lock, sort_keys=True)
-    rendered = process_run_capture(["yq", "-P", "-o=yaml", ".", "-"], input_text=payload)
+    try:
+        rendered = process_run_capture(["yq", "-P", "-o=yaml", ".", "-"], input_text=payload)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to serialise lock file with yq: {e}") from e
     lock_file.write_text(rendered + ("\n" if rendered and not rendered.endswith("\n") else ""), encoding="utf-8")
 
 
