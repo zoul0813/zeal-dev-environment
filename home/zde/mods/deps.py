@@ -30,13 +30,6 @@ if TYPE_CHECKING:
     from mods.image import Image
 
 
-def _wrap_config_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return DepConfig(value)
-    if isinstance(value, list):
-        return [_wrap_config_value(item) for item in value]
-    return value
-
 
 def get_skip_sync_installed_config() -> bool:
     cfg = Config.load()
@@ -54,24 +47,6 @@ def get_rename_bins_config() -> bool:
     cfg = Config.load()
     value = cfg.get("deps.rename-bins")
     return bool(value)
-
-
-@dataclass(frozen=True)
-class DepConfig:
-    _data: dict[str, Any]
-
-    def __getattr__(self, name: str) -> Any:
-        if name in self._data:
-            return _wrap_config_value(self._data[name])
-        raise AttributeError(name)
-
-    def __getitem__(self, key: str) -> Any:
-        return _wrap_config_value(self._data[key])
-
-    def get(self, key: str, default: Any = None) -> Any:
-        if key not in self._data:
-            return default
-        return _wrap_config_value(self._data[key])
 
 
 @dataclass
@@ -95,8 +70,20 @@ class Dep:
 
     def __getattr__(self, name: str) -> Any:
         if name in self.raw:
-            return _wrap_config_value(self.raw[name])
+            return self.raw[name]
         raise AttributeError(name)
+
+    @property
+    def id(self) -> str:
+        return str(self.raw["id"])
+
+    @property
+    def repo(self) -> str:
+        return str(self.raw["repo"])
+
+    @property
+    def path(self) -> str:
+        return str(self.raw["path"])
 
     @property
     def path_resolved(self) -> Path:
