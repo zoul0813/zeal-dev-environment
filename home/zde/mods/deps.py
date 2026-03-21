@@ -589,22 +589,23 @@ class DepCatalog:
         visited: set[str] = set()
         ordered: list[str] = []
 
-        def visit(cur: str) -> None:
+        def visit(cur: str, path: list[str]) -> None:
             if cur in visited:
                 return
             if cur in visiting:
-                raise RuntimeError(f"Dependency cycle detected at '{cur}'")
+                cycle = " -> ".join(path + [cur])
+                raise RuntimeError(f"Dependency cycle detected: {cycle}")
             dep = self.by_id.get(cur)
             if dep is None:
                 raise RuntimeError(f"Unknown dependency id in chain: {cur}")
             visiting.add(cur)
             for parent in dep.depends_on:
-                visit(parent)
+                visit(parent, path + [cur])
             visiting.remove(cur)
             visited.add(cur)
             ordered.append(cur)
 
-        visit(dep_id)
+        visit(dep_id, [])
         return ordered
 
     def install_dep(
