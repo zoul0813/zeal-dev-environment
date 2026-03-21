@@ -15,6 +15,7 @@ Detailed command documentation now lives in [docs/README.md](./docs/README.md).
 - [Windows (WSL2)](#windows-wsl2)
 - [Quick Command Overview](#quick-command-overview)
 - [Requirements And Dependencies](#requirements-and-dependencies)
+- [Upgrading from a Previous Version](#upgrading-from-a-previous-version)
 
 ## What ZDE Provides
 
@@ -104,6 +105,7 @@ ZDE dependency model:
 - Optional dependencies are installed on demand with `zde deps install <id-or-alias>`.
 - Installed dependency state is tracked in `~/.zeal8bit/deps-lock.yml`.
 - Generated dependency environment exports are written to `~/.zeal8bit/deps.env`.
+- The state directory defaults to `~/.zeal8bit` and can be overridden by setting `ZDE_USER_PATH` in your environment before running `zde`.
 
 Host mode:
 
@@ -111,3 +113,14 @@ Host mode:
 - Host mode assumes you already have the required native tooling available on your machine.
 
 Project-specific prerequisites may still apply depending on which Zeal project, SDK, or optional dependency you are using.
+
+## Upgrading from a Previous Version
+
+If you are on an older ZDE version, run `zde update` twice — the first run pulls the latest ZDE code, and the second applies any updated sync tasks against the new version:
+
+```sh
+./zde update
+./zde update
+```
+
+ZDE will automatically migrate required (core) dependencies. Non-core optional dependencies are no longer tracked as submodules — they can be reinstalled after upgrading with `zde deps install <id-or-alias>`.
