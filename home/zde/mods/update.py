@@ -256,21 +256,8 @@ def resolve_env() -> Env:
     )
 
 
-def _declared_categories(dep: dict[str, Any] | None) -> list[str]:
-    if not isinstance(dep, dict):
-        return []
-    metadata = dep.get("metadata")
-    if not isinstance(metadata, dict):
-        return []
-    categories = metadata.get("category")
-    if isinstance(categories, str):
-        return [categories]
-    if isinstance(categories, list):
-        return [item for item in categories if isinstance(item, str)]
-    return []
 
-
-def resolve_dep_path(env: Env, dep_path: str, dep: dict[str, Any] | None = None) -> Path:
+def resolve_dep_path(env: Env, dep_path: str) -> Path:
     rel = Path(dep_path)
     if rel.is_absolute():
         return rel
@@ -278,21 +265,10 @@ def resolve_dep_path(env: Env, dep_path: str, dep: dict[str, Any] | None = None)
     if dep_path.startswith("extras/"):
         return env.zde_home / dep_path
 
-    candidate = env.zde_root / rel
-    if candidate.exists():
-        return candidate
-
     if dep_path.startswith("home/"):
-        home_rel = Path(dep_path.removeprefix("home/"))
-        if isinstance(dep, dict) and "path" in dep:
-            return env.zde_home / home_rel
-        categories = _declared_categories(dep)
-        is_core = any(category.casefold() == "core" for category in categories)
-        if not is_core:
-            return env.zde_home / "extras" / home_rel
-        return env.zde_home / home_rel
+        return env.zde_home / Path(dep_path.removeprefix("home/"))
 
-    return candidate
+    return env.zde_root / rel
 
 
 def _is_git_tracked_file(repo_path: Path, rel_path: str) -> bool:

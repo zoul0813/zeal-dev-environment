@@ -100,7 +100,7 @@ class Dep:
 
     @property
     def path_resolved(self) -> Path:
-        return resolve_dep_path(self.catalog.env, self.path, self.raw)
+        return resolve_dep_path(self.catalog.env, self.path)
 
     @property
     def env_export_base_path(self) -> Path:
