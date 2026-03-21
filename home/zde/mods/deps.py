@@ -680,6 +680,14 @@ class DepCatalog:
             print(f"Cannot remove required dependency: {dep_id}")
             return 1
 
+        dependents = [
+            d.id for d in self.by_id.values()
+            if dep_id in d.depends_on and self.installed_by_id.get(d.id, False)
+        ]
+        if dependents:
+            print(f"Cannot remove '{dep_id}': required by {', '.join(sorted(dependents))}")
+            return 1
+
         dep_path = dep.path_resolved
         if dep_path.exists():
             if dep_path.is_dir():
