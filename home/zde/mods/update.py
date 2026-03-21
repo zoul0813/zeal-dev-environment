@@ -367,11 +367,3 @@ def run_update(env: Env) -> int:
         return rc
     return update_collection(env)
 
-
-def main() -> int:
-    env = resolve_env()
-    return run_update(env)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

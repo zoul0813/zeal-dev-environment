@@ -33,6 +33,8 @@ RUN echo "Installing prerequisites" \
   && pip3 install cookiecutter \
   && pip3 install pillow \
   && pip3 install textual \
+  && pip3 install pytest \
+  && pip3 install pytest-cov \
   && pip3 install --upgrade "setuptools<81"
 
 ENV \

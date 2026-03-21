@@ -88,6 +88,7 @@ Core ZDE commands:
 - [`zde config`](./docs/config.md): inspect and change persistent ZDE config.
 - [`zde kernel`](./docs/kernel.md): build the Zeal kernel with predefined or user config.
 - [`zde tui`](./docs/tui.md): launch the optional terminal UI.
+- [`zde test`](./docs/test.md): run ZDE Python unit tests.
 
 For the full command map, runtime configuration, and per-command reference pages, see [docs/README.md](./docs/README.md).
 

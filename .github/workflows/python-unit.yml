@@ -1,0 +1,21 @@
+name: Python Unit Tests
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pull ZDE image for tests
+        run: docker pull zoul0813/zeal-dev-environment:latest
+
+      - name: Run ZDE unit tests in container
+        env:
+          ZDE_IMAGE_REF: zoul0813/zeal-dev-environment:latest
+          ZDE_STRICT_EXIT: "1"
+        run: ./zde test -vv -ra --tb=short --durations=10 --color=no -o console_output_style=classic --cov --cov-report=term

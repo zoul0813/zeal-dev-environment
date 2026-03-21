@@ -9,7 +9,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.tui.exec import pause_after_run, suspend_for_external_output
-from mods.tui.screens.confirm_modal import ConfirmModal
+from mods.tui.modals.confirm_modal import ConfirmModal
 
 try:
     from textual.binding import Binding
@@ -131,10 +131,10 @@ class ItemActionScreen(Screen[None]):
         self._sync_footer_shortcuts()
         self.action_focus_items()
 
-    def get_items(self) -> list[ItemEntry | GroupEntry]:
+    def get_items(self) -> list[ItemEntry | GroupEntry]:  # pragma: no cover - abstract hook
         raise NotImplementedError
 
-    def get_actions(self) -> list[ItemAction]:
+    def get_actions(self) -> list[ItemAction]:  # pragma: no cover - abstract hook
         raise NotImplementedError
 
     def confirm_action(self, action_id: str, item_id: str | None) -> ConfirmRequest | None:

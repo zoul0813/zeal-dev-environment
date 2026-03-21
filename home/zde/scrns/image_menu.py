@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from mods import image as image_mod
 from mods.tui.exec import suspend_for_external_output
-from mods.tui.screens.file_tree import FileTreeScreen
-from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
-from mods.tui.screens.prompt_modal import PromptModal
+from mods.tui.panels.file_tree import FileTreeScreen
+from mods.tui.panels.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
+from mods.tui.modals.prompt_modal import PromptModal
 
 
 class ImageMenuScreen(ItemActionScreen):
