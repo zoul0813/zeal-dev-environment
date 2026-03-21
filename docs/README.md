@@ -50,6 +50,7 @@ cd hello
 - [`image`](./image.md): manage EEPROM, CF, TF, and romdisk staging areas and image files.
 - [`kernel`](./kernel.md): build the Zeal kernel with preset or user config.
 - [`make`](./make.md): run `make` in the current project.
+- [`test`](./test.md): run ZDE Python unit tests with pytest.
 - [`tui`](./tui.md): launch the optional Textual interface.
 
 ## Notes

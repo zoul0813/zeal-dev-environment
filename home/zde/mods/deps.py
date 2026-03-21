@@ -476,7 +476,7 @@ class Dep:
                     else:
                         lines.append(f"{indent}{_pretty_label(str(k))}: {v}")
                 return
-            lines.append(f"{indent}{value}")
+            lines.append(f"{indent}{value}")  # pragma: no cover - defensive fallback
 
         lines.append(f"Id: {self.id}")
         lines.append(f"Installed: {'yes' if self.installed else 'no'}")

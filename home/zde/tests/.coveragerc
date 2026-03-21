@@ -1,0 +1,14 @@
+[run]
+source =
+    home/zde
+omit =
+    home/zde/tests/*
+    */home/zde/tests/*
+    */tests/*
+    home/zde/mods/tui/app.py
+    home/zde/mods/tui/panels/action_menu.py
+    home/zde/mods/tui/modals/choice_modal.py
+    home/zde/mods/tui/panels/command_menu.py
+    home/zde/mods/tui/modals/confirm_modal.py
+    home/zde/mods/tui/modals/prompt_modal.py
+    home/zde/mods/tui/modals/text_view_modal.py

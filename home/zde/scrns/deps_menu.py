@@ -13,8 +13,8 @@ from mods import image as image_mod
 from mods.deps import Dep, DepCatalog
 from mods.tui.exec import suspend_for_external_output
 from mods.tui.media import MediaEntry, native_media_supported, preview_image_url_native
-from mods.tui.screens.choice_modal import ChoiceModal
-from mods.tui.screens.item_action_screen import ActionResult, ConfirmRequest, ItemAction, ItemActionScreen, ItemEntry
+from mods.tui.modals.choice_modal import ChoiceModal
+from mods.tui.panels.item_action_screen import ActionResult, ConfirmRequest, ItemAction, ItemActionScreen, ItemEntry
 
 
 class DepsInfoModal(ModalScreen[None]):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mods.kernel import list_dep_kernel_configs, list_kernel_configs, list_kernel_options, run_kernel, run_kernel_tui_action
+from mods.kernel import list_dep_kernel_configs, list_kernel_configs, list_kernel_options, run_kernel
 from mods.tui.contract import ActionSpec, CommandSpec
 
 
@@ -44,7 +44,26 @@ def main(args: list[str]) -> int:
 
 
 def run_tui_action(action_id: str, context: dict[str, Any]) -> int:
-    return run_kernel_tui_action(action_id, context)
+    action_args = list(context.get("args", []))
+    match action_id:
+        case "__main__":
+            return run_kernel(action_args)
+        case "user" | "menuconfig" | "default":
+            return run_kernel([action_id, *action_args])
+        case _ if action_id.startswith("config:"):
+            config_name = action_id.split(":", 1)[1]
+            if not config_name:
+                print("Invalid kernel config action.")
+                return 1
+            return run_kernel([config_name, *action_args])
+        case _ if action_id.startswith("dep:"):
+            dep_id = action_id.split(":", 1)[1]
+            if not dep_id:
+                print("Invalid dep kernel config action.")
+                return 1
+            return run_kernel([dep_id, *action_args])
+        case _:
+            return run_kernel([action_id, *action_args])
 
 
 def get_tui_spec() -> CommandSpec:

@@ -8,8 +8,8 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 from mods.commands import command_to_module_name, import_command_module
 from mods.tui.contract import CommandSpec
 from mods.tui.exec import pause_after_run, run_action, suspend_for_external_output
-from mods.tui.screens.action_menu import ActionMenuScreen
-from mods.tui.screens.confirm_modal import ConfirmModal
+from mods.tui.panels.action_menu import ActionMenuScreen
+from mods.tui.modals.confirm_modal import ConfirmModal
 
 
 class CommandMenuScreen(Screen[None]):

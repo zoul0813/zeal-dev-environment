@@ -11,7 +11,7 @@ from textual.widgets import Static
 
 from mods.config import Config
 from mods.tui.catalog import build_catalog
-from mods.tui.screens.command_menu import CommandMenuScreen
+from mods.tui.panels.command_menu import CommandMenuScreen
 
 
 class ZDEApp(App[None]):

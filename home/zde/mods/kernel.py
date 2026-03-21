@@ -321,30 +321,3 @@ def run_kernel(args: list[str]) -> int:
             print(f"Copied {os_conf} to {user_conf}")
 
     return rc
-
-
-def run_kernel_tui_action(action_id: str, context: dict[str, Any]) -> int:
-    action_args = list(context.get("args", []))
-    if action_id == "__main__":
-        return run_kernel(action_args)
-    if action_id == "user":
-        return run_kernel(["user", *action_args])
-    if action_id == "menuconfig":
-        return run_kernel(["menuconfig", *action_args])
-    if action_id == "default":
-        return run_kernel(["default", *action_args])
-    if action_id.startswith("config:"):
-        config_name = action_id.split(":", 1)[1]
-        if not config_name:
-            print("Invalid kernel config action.")
-            return 1
-        return run_kernel([config_name, *action_args])
-    if action_id.startswith("dep:"):
-        dep_id = action_id.split(":", 1)[1]
-        if not dep_id:
-            print("Invalid dep kernel config action.")
-            return 1
-        return run_kernel([dep_id, *action_args])
-
-    print(f"Unsupported kernel TUI action: {action_id}")
-    return 1

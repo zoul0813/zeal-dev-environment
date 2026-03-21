@@ -4,9 +4,9 @@ import io
 from contextlib import redirect_stderr, redirect_stdout
 
 from cmds import create as create_cmd
-from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
-from mods.tui.screens.prompt_modal import PromptModal
-from mods.tui.screens.text_view_modal import TextViewModal
+from mods.tui.panels.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
+from mods.tui.modals.prompt_modal import PromptModal
+from mods.tui.modals.text_view_modal import TextViewModal
 
 
 class CreateMenuScreen(ItemActionScreen):

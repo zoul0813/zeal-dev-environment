@@ -5,7 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from mods import image as image_mod
-from mods.tui.screens.item_action_screen import (
+from mods.tui.panels.item_action_screen import (
     ActionResult,
     ConfirmRequest,
     ItemAction,

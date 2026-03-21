@@ -3,9 +3,9 @@ from __future__ import annotations
 from rich.text import Text
 
 from mods.config import Config, ConfigOption
-from mods.tui.screens.choice_modal import ChoiceModal
-from mods.tui.screens.item_action_screen import ActionResult, GroupEntry, ItemAction, ItemActionScreen, ItemEntry
-from mods.tui.screens.prompt_modal import PromptModal
+from mods.tui.modals.choice_modal import ChoiceModal
+from mods.tui.panels.item_action_screen import ActionResult, GroupEntry, ItemAction, ItemActionScreen, ItemEntry
+from mods.tui.modals.prompt_modal import PromptModal
 
 
 class ConfigMenuScreen(ItemActionScreen):
