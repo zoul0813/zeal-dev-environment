@@ -135,16 +135,19 @@ def run_checked(
 ) -> None:
     _apply_pre_run_behavior(stdout=stdout, capture_output=False)
     text_mode = input_text is not None
-    subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        check=True,
-        env=env,
-        stdout=stdout,
-        stderr=stderr,
-        input=input_text,
-        text=text_mode,
-    )
+    try:
+        subprocess.run(
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            check=True,
+            env=env,
+            stdout=stdout,
+            stderr=stderr,
+            input=input_text,
+            text=text_mode,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(f"Command not found: {cmd[0]}")
 
 
 def run_capture(
@@ -155,14 +158,17 @@ def run_capture(
     input_text: str | None = None,
 ) -> str:
     # Captured runs don't render to terminal, so no terminal pre-run behavior.
-    result = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        check=True,
-        env=env,
-        input=input_text,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            check=True,
+            env=env,
+            input=input_text,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(f"Command not found: {cmd[0]}")
     return result.stdout.strip()
