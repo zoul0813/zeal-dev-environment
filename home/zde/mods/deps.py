@@ -109,7 +109,7 @@ class Dep:
             rel_to_home = resolved.relative_to(self.catalog.env.zde_home)
         except ValueError:
             return resolved
-        return Path("/home/zeal8bit") / rel_to_home
+        return self.catalog.env.zde_home / rel_to_home
 
     @property
     def required(self) -> bool:
