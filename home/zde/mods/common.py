@@ -10,4 +10,4 @@ ZOS_PATH = HOME_DIR / "Zeal-8-bit-OS"
 MNT_DIR = Path("/mnt") if Path("/mnt").is_dir() else REPO_ROOT / "mnt"
 ROMDISK_DIR = MNT_DIR / "romdisk"
 USER_STATE_DIR = Path(os.environ.get("ZDE_USER_PATH", str(Path.home() / ".zeal8bit")))
-COLLECTION_URL = "https://raw.githubusercontent.com/Zeal8bit/Zeal-Software-Collection/feature/zde-deps/collection.yml"
+COLLECTION_URL = "https://raw.githubusercontent.com/Zeal8bit/Zeal-Software-Collection/main/collection.yml"
