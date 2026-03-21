@@ -400,8 +400,8 @@ class Dep:
     def install(self) -> int:
         return self.catalog.install_dep(self.id)
 
-    def remove(self) -> int:
-        return self.catalog.remove_dep(self.id)
+    def remove(self, *, force: bool = False) -> int:
+        return self.catalog.remove_dep(self.id, force=force)
 
     def build(self) -> int:
         return self.catalog.build_dep(self.id)
@@ -661,19 +661,23 @@ class DepCatalog:
         self.refresh()
         return 0
 
-    def remove_dep(self, dep_id: str) -> int:
+    def get_dependents(self, dep_id: str) -> list[str]:
+        return [
+            d.id for d in self.by_id.values()
+            if dep_id in d.depends_on and self.installed_by_id.get(d.id, False)
+        ]
+
+    def remove_dep(self, dep_id: str, *, force: bool = False) -> int:
         dep = self.by_id[dep_id]
         if dep.required:
             print(f"Cannot remove required dependency: {dep_id}")
             return 1
 
-        dependents = [
-            d.id for d in self.by_id.values()
-            if dep_id in d.depends_on and self.installed_by_id.get(d.id, False)
-        ]
-        if dependents:
-            print(f"Cannot remove '{dep_id}': required by {', '.join(sorted(dependents))}")
-            return 1
+        if not force:
+            dependents = self.get_dependents(dep_id)
+            if dependents:
+                print(f"Cannot remove '{dep_id}': required by {', '.join(sorted(dependents))}")
+                return 1
 
         dep_path = dep.path_resolved
         if dep_path.exists():

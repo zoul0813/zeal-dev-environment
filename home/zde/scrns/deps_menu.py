@@ -14,7 +14,7 @@ from mods.deps import Dep, DepCatalog
 from mods.tui.exec import suspend_for_external_output
 from mods.tui.media import MediaEntry, native_media_supported, preview_image_url_native
 from mods.tui.screens.choice_modal import ChoiceModal
-from mods.tui.screens.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
+from mods.tui.screens.item_action_screen import ActionResult, ConfirmRequest, ItemAction, ItemActionScreen, ItemEntry
 
 
 class DepsInfoModal(ModalScreen[None]):
@@ -259,6 +259,17 @@ class DepsMenuScreen(ItemActionScreen):
         with suspend_for_external_output(self.app):
             rc = int(dep.update())
         return ActionResult(rc=rc, output="", refresh_items=True, preferred_item_id=dep.id)
+
+    def confirm_action(self, action_id: str, item_id: str | None) -> ConfirmRequest | None:
+        if action_id != "remove" or item_id is None:
+            return None
+        return ConfirmRequest(
+            title=f"Remove '{item_id}'?",
+            detail="This will delete the dependency directory. Press Y to confirm, N/Esc to cancel.",
+            yes_label="Remove",
+            no_label="Cancel",
+            default_no=True,
+        )
 
     def _action_remove(self, item: ItemEntry) -> ActionResult:
         dep = self._dep_from_item(item)

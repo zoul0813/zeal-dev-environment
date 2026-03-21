@@ -116,12 +116,30 @@ def subcmd_update(args: list[str]) -> int:
 
 
 def subcmd_remove(args: list[str]) -> int:
-    catalog, dep_ids, rc = _resolve_dep_ids(args, "Usage: zde deps remove <id> [id...]")
+    force = "-f" in args or "--force" in args
+    args = [a for a in args if a not in ("-f", "--force")]
+    catalog, dep_ids, rc = _resolve_dep_ids(args, "Usage: zde deps remove [-f] <id> [id...]")
     if rc != 0 or catalog is None or dep_ids is None:
         return rc
 
+    if not force:
+        for dep_id in dep_ids:
+            dependents = catalog.get_dependents(dep_id)
+            if dependents:
+                print(f"Cannot remove '{dep_id}': required by {', '.join(sorted(dependents))}")
+                return 1
+
+        names = ", ".join(dep_ids)
+        try:
+            answer = input(f"Remove {names}? [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer != "y":
+            print("Aborted.")
+            return 1
+
     for dep_id in dep_ids:
-        rc = catalog.remove_dep(dep_id)
+        rc = catalog.remove_dep(dep_id, force=force)
         if rc != 0:
             return rc
     return 0
