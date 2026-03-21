@@ -651,6 +651,9 @@ class DepCatalog:
 
             rc = clone_repo(dep_path, install_dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
             if rc != 0:
+                if dep_path.exists():
+                    shutil.rmtree(dep_path)
+                    self._prune_empty_parent_dirs(dep_path)
                 print(f"Failed installing dependency: {install_id}")
                 return rc
 
