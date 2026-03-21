@@ -15,16 +15,8 @@ class _RuntimeState:
 _STATE = _RuntimeState()
 
 
-def get_mode() -> RuntimeMode:
-    return _STATE.mode
-
-
 def is_tui_mode() -> bool:
     return _STATE.mode == "tui"
-
-
-def set_mode(mode: RuntimeMode) -> None:
-    _STATE.mode = mode
 
 
 @contextmanager
