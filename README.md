@@ -72,6 +72,7 @@ Use `zde COMMAND [args]`.
 
 Host wrapper and service commands:
 
+- `zde -v` / `zde --version`: print the current ZDE version and configured ZDE image reference.
 - [`zde update`](./docs/update.md): update the local ZDE checkout, pull the container image, and run ZDE sync tasks.
 - [`zde -i`](./docs/interactive.md): open an interactive shell inside the ZDE container.
 - [`zde activate`](./docs/activate.md): emit shell exports for host mode.

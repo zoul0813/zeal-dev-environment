@@ -17,6 +17,60 @@ finalize_exit() {
   exit "$rc"
 }
 
+zde_version() {
+  local short_sha=""
+  local exact_tag=""
+  local base_tag=""
+
+  short_sha="$(git -C "$ZDE_PATH" rev-parse --short=7 HEAD 2>/dev/null || true)"
+  if [ -z "$short_sha" ]; then
+    echo "unversioned"
+    return 0
+  fi
+
+  exact_tag="$(git -C "$ZDE_PATH" describe --tags --exact-match 2>/dev/null || true)"
+  if [ -n "$exact_tag" ]; then
+    echo "$exact_tag"
+    return 0
+  fi
+
+  base_tag="$(git -C "$ZDE_PATH" describe --tags --abbrev=0 2>/dev/null || true)"
+  if [ -n "$base_tag" ]; then
+    echo "${base_tag}-${short_sha}"
+    return 0
+  fi
+
+  echo "$short_sha"
+}
+
+print_version_info() {
+  local image_tags=""
+  local image_repo=""
+  local escaped_repo=""
+  echo "ZDE: $(zde_version)"
+  echo "Image: $ZDE_IMAGE_REF"
+
+  image_repo="${ZDE_IMAGE_REF%%:*}"
+  image_tags="$("$CONTAINER_CMD" image inspect "$ZDE_IMAGE_REF" --format '{{range .RepoTags}}{{println .}}{{end}}' 2>/dev/null || true)"
+  if [ -z "$image_tags" ]; then
+    image_tags="$("$CONTAINER_CMD" image inspect "docker.io/$ZDE_IMAGE_REF" --format '{{range .RepoTags}}{{println .}}{{end}}' 2>/dev/null || true)"
+  fi
+  if [ -z "$image_tags" ]; then
+    escaped_repo="$(printf '%s' "$image_repo" | sed 's/[.[\*^$()+?{|]/\\&/g')"
+    image_tags="$("$CONTAINER_CMD" images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E "^(docker\\.io/)?${escaped_repo}:" || true)"
+  fi
+
+  if [ -n "$image_tags" ]; then
+    echo "Image tags:"
+    while IFS= read -r tag; do
+      [ -n "$tag" ] || continue
+      echo "  - $tag"
+    done <<< "$(printf '%s\n' "$image_tags" | awk '!seen[$0]++')"
+  else
+    echo "Image tags: (image not present locally)"
+  fi
+}
+
 print_service_statuses() {
   local green=""
   local reset=""
@@ -43,6 +97,10 @@ print_service_statuses() {
 }
 
 case "$COMMAND" in
+  -v|--version|version)
+    print_version_info
+    exit 0
+    ;;
   -i)
     if [ "${HOST_ARGS[0]-}" = "-b" ]; then
       zde_shell "${ZDE_BUILD_SERVICE:-zeal8bit-build-env}"

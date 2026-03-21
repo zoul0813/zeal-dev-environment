@@ -34,6 +34,7 @@ cd hello
 
 ## Host Commands
 
+- `-v` / `--version`: print the current ZDE version and configured image reference.
 - [`activate`](./activate.md): emit shell exports for host mode.
 - [`-i`](./interactive.md): open an interactive shell inside the container.
 - [`emulator` / `emu`](./emulator.md): run the Zeal Web Emulator service.
