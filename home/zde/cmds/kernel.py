@@ -68,6 +68,12 @@ def run_tui_action(action_id: str, context: dict[str, Any]) -> int:
 
 def get_tui_spec() -> CommandSpec:
     actions = [
+        ActionSpec(id="user", label="user", help="Build using saved user os.conf"),
+        ActionSpec(id="menuconfig", label="menuconfig", help="Open kernel menuconfig and persist user config"),
+        ActionSpec(id="default", label="default", help="Create default kernel config"),
+    ]
+    actions.extend(
+        [
         ActionSpec(
             id=option.action_id,
             label=option.label,
@@ -75,9 +81,8 @@ def get_tui_spec() -> CommandSpec:
             default_args=option.args,
         )
         for option in list_kernel_options()
-    ]
-    actions.append(ActionSpec(id="menuconfig", label="menuconfig", help="Open kernel menuconfig and persist user config"))
-    actions.append(ActionSpec(id="default", label="default", help="Create default kernel config"))
+        ]
+    )
     return CommandSpec(
         name="kernel",
         label="kernel",

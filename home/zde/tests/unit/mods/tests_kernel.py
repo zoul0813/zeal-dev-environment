@@ -45,31 +45,41 @@ def test_dep_kernel_config_from_lock_branches(tmp_path: Path) -> None:
 
 def test_list_kernel_configs_and_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     zos = tmp_path / "zos"
+    (zos / "configs" / "agon").mkdir(parents=True, exist_ok=True)
     (zos / "configs" / "trs80").mkdir(parents=True, exist_ok=True)
     (zos / "configs" / "zeal8bit").mkdir(parents=True, exist_ok=True)
-    (zos / "configs" / "zeal8bit.conf").write_text("x", encoding="utf-8")
-    (zos / "configs" / "trs80" / "hw.conf").write_text("x", encoding="utf-8")
-    (zos / "configs" / "zeal8bit" / "emu_zvb.conf").write_text("x", encoding="utf-8")
+    (zos / "configs" / "agon" / "os.conf").write_text("## Agon target\nx", encoding="utf-8")
+    (zos / "configs" / "trs80" / "os.conf").write_text("## TRS-80 target\nx", encoding="utf-8")
+    (zos / "configs" / "zeal8bit" / "os.conf").write_text("## Zeal 8-bit target\nx", encoding="utf-8")
+    (zos / "configs" / "zeal8bit" / "emu.conf").write_text("x", encoding="utf-8")
+    (zos / "configs" / "zeal8bit" / "uart.conf").write_text("x", encoding="utf-8")
     (zos / "configs" / "user.txt").write_text("x", encoding="utf-8")
     monkeypatch.setattr(kernel, "ZOS_PATH", zos)
 
-    assert kernel.list_kernel_configs() == ["trs80/hw", "zeal8bit", "zeal8bit/emu_zvb"]
-    assert kernel._resolve_builtin_kernel_config_path("trs80/hw") == "configs/trs80/hw.conf"
-    assert kernel._resolve_builtin_kernel_config_path("trs80/hw.conf") == "configs/trs80/hw.conf"
-    assert kernel._resolve_builtin_kernel_config_path("configs/trs80/hw.conf") == "configs/trs80/hw.conf"
+    assert kernel.list_kernel_configs() == ["agon", "trs80", "zeal8bit", "zeal8bit/emu", "zeal8bit/uart"]
+    assert kernel._resolve_builtin_kernel_config_path("agon") == "configs/agon/os.conf"
+    assert kernel._resolve_builtin_kernel_config_path("agon/os") == "configs/agon/os.conf"
+    assert kernel._resolve_builtin_kernel_config_path("agon/os.conf") == "configs/agon/os.conf"
+    assert kernel._resolve_builtin_kernel_config_path("configs/agon") == "configs/agon/os.conf"
+    assert kernel._resolve_builtin_kernel_config_path("configs/agon/os.conf") == "configs/agon/os.conf"
 
     monkeypatch.setattr(
         kernel,
         "list_dep_kernel_configs",
         lambda: [kernel.DepKernelConfig(dep_id="dep-a", aliases=["a1", "a2"], os_conf=tmp_path / "a.conf")],
     )
+    (tmp_path / "a.conf").write_text("## ZShell Optimized\nx", encoding="utf-8")
     options = kernel.list_kernel_options()
-    assert any(opt.action_id == "config:trs80/hw" for opt in options)
-    assert any(opt.action_id == "config:zeal8bit/emu_zvb" for opt in options)
+    assert any(opt.action_id == "config:agon" for opt in options)
+    assert any(opt.action_id == "config:zeal8bit/emu" for opt in options)
+    agon_opt = next(opt for opt in options if opt.action_id == "config:agon")
+    assert agon_opt.help == "Build (Agon target)"
+    emu_opt = next(opt for opt in options if opt.action_id == "config:zeal8bit/emu")
+    assert emu_opt.help == "Build (emu)"
     dep_opt = next(opt for opt in options if opt.action_id == "dep:dep-a")
     assert dep_opt.label == "a1"
-    assert "aliases: a1, a2" in dep_opt.help
-    assert options[-1].action_id == "user"
+    assert dep_opt.help == "Build (ZShell Optimized)"
+    assert all(opt.action_id != "user" for opt in options)
 
     monkeypatch.setattr(kernel, "ZOS_PATH", tmp_path / "missing-zos")
     assert kernel.list_kernel_configs() == []

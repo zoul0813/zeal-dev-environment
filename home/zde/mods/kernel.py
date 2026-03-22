@@ -56,7 +56,14 @@ def _dep_kernel_config_from_lock(dep_id: str, lock_entry: Any, default_aliases: 
 
 
 def list_kernel_configs() -> list[str]:
-    return sorted(_kernel_config_map().keys())
+    config_map = _kernel_config_map()
+    names: list[str] = []
+    for name in sorted(config_map.keys()):
+        # Hide explicit */os when the shorthand directory alias also exists.
+        if name.endswith("/os") and name[: -len("/os")] in config_map:
+            continue
+        names.append(name)
+    return names
 
 
 def _kernel_config_map() -> dict[str, str]:
@@ -72,6 +79,10 @@ def _kernel_config_map() -> dict[str, str]:
         key = rel.with_suffix("").as_posix()
         rel_path = rel.as_posix()
         selected[key] = rel_path
+        if key.endswith("/os"):
+            short = key[: -len("/os")]
+            if short:
+                selected.setdefault(short, rel_path)
     return selected
 
 
@@ -132,35 +143,52 @@ def _resolve_dep_kernel_config(raw: str) -> DepKernelConfig | None:
     return _dep_kernel_config_from_lock(dep.id, catalog.lock_deps.get(dep.id), dep.aliases)
 
 
+def _kernel_config_description(config_name: str) -> str:
+    config_map = _kernel_config_map()
+    rel_path = config_map.get(config_name)
+    if rel_path is None:
+        return Path(config_name).name or config_name
+
+    conf_path = ZOS_PATH / "configs" / rel_path
+    fallback = Path(rel_path).stem
+    return _config_file_description(conf_path, fallback)
+
+
+def _config_file_description(conf_path: Path, fallback: str) -> str:
+    try:
+        with conf_path.open("r", encoding="utf-8") as fh:
+            first_line = fh.readline().strip()
+    except OSError:
+        return fallback
+    if first_line.startswith("##"):
+        desc = first_line[2:].strip()
+        if desc:
+            return desc
+    return fallback
+
+
 def list_kernel_options() -> list[KernelOption]:
     options: list[KernelOption] = [
         KernelOption(
             action_id=f"config:{name}",
             label=name,
-            help=f"Build kernel using {name} config",
+            help=f"Build ({_kernel_config_description(name)})",
             args=[name],
         )
         for name in list_kernel_configs()
     ]
     for dep_cfg in list_dep_kernel_configs():
         label = dep_cfg.aliases[0] if dep_cfg.aliases else dep_cfg.dep_id
-        aliases = ", ".join(dep_cfg.aliases) if dep_cfg.aliases else "-"
+        fallback = dep_cfg.os_conf.stem or dep_cfg.dep_id
+        desc = _config_file_description(dep_cfg.os_conf, fallback)
         options.append(
             KernelOption(
                 action_id=f"dep:{dep_cfg.dep_id}",
                 label=label,
-                help=f"Build kernel using dep config: {dep_cfg.dep_id} (aliases: {aliases})",
+                help=f"Build ({desc})",
                 args=[dep_cfg.dep_id],
             )
         )
-    options.append(
-        KernelOption(
-            action_id="user",
-            label="user",
-            help="Build using saved user os.conf",
-            args=[],
-        )
-    )
     return options
 
 
