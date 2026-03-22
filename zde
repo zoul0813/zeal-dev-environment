@@ -97,6 +97,7 @@ print_service_statuses() {
 }
 
 case "$COMMAND" in
+  ## FLAGS
   -v|--version|version)
     print_version_info
     exit 0
@@ -109,10 +110,12 @@ case "$COMMAND" in
     fi
     finalize_exit $?
     ;;
+
+  ## HOST COMMANDS
   exec)
     if [ "${#HOST_ARGS[@]}" -eq 0 ]; then
       echo "Usage: zde exec <command> [args...]"
-      exit 1
+      finalize_exit 1
     fi
     zde_exec "${HOST_ARGS[@]}"
     finalize_exit $?
@@ -125,6 +128,12 @@ case "$COMMAND" in
     fi
     exit 0
     ;;
+  update)
+    "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]-}"
+    finalize_exit $?
+    ;;
+
+  ## SERVICES
   emu|emulator)
     "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]-}"
     finalize_exit $?
@@ -132,15 +141,6 @@ case "$COMMAND" in
   playground)
     "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]-}"
     finalize_exit $?
-    ;;
-  update)
-    "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]-}"
-    finalize_exit $?
-    ;;
-  rebuild)
-    echo "Host-only command pending reimplementation in /zde: $COMMAND"
-    echo "TODO(host): implement $COMMAND in this bash wrapper."
-    exit 1
     ;;
 esac
 

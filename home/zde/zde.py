@@ -45,7 +45,7 @@ def print_top_help() -> int:
         rendered.append(name)
     print(f"Commands:\n   {', '.join(rendered)}")
 
-    print("\nHost Commands:\n   exec, activate, update, rebuild")
+    print("\nHost Commands:\n   exec, activate, update")
 
     return 0
 
