@@ -56,10 +56,44 @@ def _dep_kernel_config_from_lock(dep_id: str, lock_entry: Any, default_aliases: 
 
 
 def list_kernel_configs() -> list[str]:
+    return sorted(_kernel_config_map().keys())
+
+
+def _kernel_config_map() -> dict[str, str]:
     configs_dir = ZOS_PATH / "configs"
     if not configs_dir.is_dir():
-        return []
-    return sorted(path.stem for path in configs_dir.glob("*.default"))
+        return {}
+
+    selected: dict[str, str] = {}
+    for path in sorted(configs_dir.rglob("*")):
+        if not path.is_file() or path.suffix != ".conf":
+            continue
+        rel = path.relative_to(configs_dir)
+        key = rel.with_suffix("").as_posix()
+        rel_path = rel.as_posix()
+        selected[key] = rel_path
+    return selected
+
+
+def _resolve_builtin_kernel_config_path(raw: str) -> str | None:
+    config_name = raw.strip()
+    if not config_name:
+        return None
+
+    if config_name.startswith("configs/"):
+        config_name = config_name[len("configs/") :]
+
+    direct = _kernel_config_map().get(config_name)
+    if direct is not None:
+        return f"configs/{direct}"
+
+    if config_name.endswith(".conf"):
+        config_name = config_name[: -len(".conf")]
+
+    resolved = _kernel_config_map().get(config_name)
+    if resolved is None:
+        return None
+    return f"configs/{resolved}"
 
 
 def list_dep_kernel_configs() -> list[DepKernelConfig]:
@@ -245,7 +279,7 @@ def build_kernel(kernel_config: str) -> int:
         build_arg = ["--target", "menuconfig"]
         show_stat = False
     else:
-        selected = f"configs/{kernel_config}.default"
+        selected = _resolve_builtin_kernel_config_path(kernel_config) or f"configs/{kernel_config}.conf"
         config_arg = [f"-Dconfig={selected}"]
         print(f"Building {selected} for {kernel_version}")
 
