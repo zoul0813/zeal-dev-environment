@@ -109,6 +109,14 @@ case "$COMMAND" in
     fi
     finalize_exit $?
     ;;
+  exec)
+    if [ "${#HOST_ARGS[@]}" -eq 0 ]; then
+      echo "Usage: zde exec <command> [args...]"
+      exit 1
+    fi
+    zde_exec "${HOST_ARGS[@]}"
+    finalize_exit $?
+    ;;
   activate)
     if [ -t 1 ]; then
       echo "⚠️  This script must be run with: eval \"\$(zde activate)\"" >&2

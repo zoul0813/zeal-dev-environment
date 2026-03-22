@@ -83,8 +83,8 @@ zde_init() {
   export HOST_CWD
 }
 
-zde_command() {
-  CONTAINER_EXEC=(
+zde_run_in_container() {
+  local exec_args=(
     "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
     -e "HOST_UID=${HOST_UID}"
     -e "HOST_GID=${HOST_GID}"
@@ -104,11 +104,21 @@ zde_command() {
     ITERM_PROFILE \
     ZDE_TUI_IMAGE_PROTOCOL; do
     if [ -n "${!passthrough_var-}" ]; then
-      CONTAINER_EXEC+=( -e "${passthrough_var}=${!passthrough_var}" )
+      exec_args+=( -e "${passthrough_var}=${!passthrough_var}" )
     fi
   done
 
-  "${CONTAINER_EXEC[@]}" "$CONTAINER_SERVICE" /home/zeal8bit/zde/zde.py "$@"
+  local service_name="$1"
+  shift
+  "${exec_args[@]}" "$service_name" "$@"
+}
+
+zde_command() {
+  zde_run_in_container "$CONTAINER_SERVICE" /home/zeal8bit/zde/zde.py "$@"
+}
+
+zde_exec() {
+  zde_run_in_container "$CONTAINER_SERVICE" "$@"
 }
 
 zde_service_exists() {
@@ -125,31 +135,7 @@ zde_shell() {
     fi
   fi
 
-  CONTAINER_EXEC=(
-    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
-    -e "HOST_UID=${HOST_UID}"
-    -e "HOST_GID=${HOST_GID}"
-    -e "HOST_HOME=${HOST_HOME}"
-    -e "HOST_CWD=${HOST_CWD}"
-    -e "ZDE_SOFT_EXIT=${ZDE_SOFT_EXIT}"
-  )
-
-  for passthrough_var in \
-    TERM \
-    COLORTERM \
-    TERM_PROGRAM \
-    TERM_PROGRAM_VERSION \
-    LC_TERMINAL \
-    LC_TERMINAL_VERSION \
-    ITERM_SESSION_ID \
-    ITERM_PROFILE \
-    ZDE_TUI_IMAGE_PROTOCOL; do
-    if [ -n "${!passthrough_var-}" ]; then
-      CONTAINER_EXEC+=( -e "${passthrough_var}=${!passthrough_var}" )
-    fi
-  done
-
-  "${CONTAINER_EXEC[@]}" "$service_name" /bin/bash
+  zde_run_in_container "$service_name" /bin/bash
 }
 
 container_running() {

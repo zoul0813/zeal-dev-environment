@@ -44,6 +44,9 @@ def print_top_help() -> int:
         name = module_name_to_command(module_name)
         rendered.append(name)
     print(f"Commands:\n   {', '.join(rendered)}")
+
+    print("\nHost Commands:\n   exec, activate, update, rebuild")
+
     return 0
 
 
