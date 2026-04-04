@@ -89,6 +89,7 @@ dependencies:
       - ZGDK_PATH
     depends_on:
       - Zeal8bit/Zeal-VideoBoard-SDK
+      - zoul0813/zeal-coreutils
     metadata:
       category:
         - core
