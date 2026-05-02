@@ -25,6 +25,7 @@ dependencies:
     repo: https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git
     path: home/Zeal-VideoBoard-SDK
     branch: main
+    build: false
     migrate: true
     env:
       - name: ZVB_SDK_PATH
@@ -40,6 +41,25 @@ dependencies:
         - library
       name: Zeal VideoBoard SDK
       description: VideoBoard SDK and tools
+
+  - id: zoul0813/zeal-game-dev-kit
+    repo: https://github.com/zoul0813/zeal-game-dev-kit.git
+    path: home/zeal-game-dev-kit
+    branch: main
+    build: false
+    migrate: true
+    env:
+      - ZGDK_PATH
+    depends_on:
+      - Zeal8bit/Zeal-VideoBoard-SDK
+      - zoul0813/zeal-coreutils
+    metadata:
+      category:
+        - core
+      name: Zeal Game Dev Kit
+      description: Game development kit
+    aliases:
+      - zgdk
 
   - id: Zeal8bit/Zeal-Bootloader
     repo: https://github.com/Zeal8bit/Zeal-Bootloader.git
@@ -80,29 +100,15 @@ dependencies:
     aliases:
       - emulator
 
-  - id: zoul0813/zeal-game-dev-kit
-    repo: https://github.com/zoul0813/zeal-game-dev-kit.git
-    path: home/zeal-game-dev-kit
-    branch: main
-    migrate: true
-    env:
-      - ZGDK_PATH
-    depends_on:
-      - Zeal8bit/Zeal-VideoBoard-SDK
-      - zoul0813/zeal-coreutils
-    metadata:
-      category:
-        - core
-      name: Zeal Game Dev Kit
-      description: Game development kit
-    aliases:
-      - zgdk
-
   - id: zoul0813/zeal-archiver
     repo: https://github.com/zoul0813/zeal-archiver.git
     path: home/zeal-archiver
     branch: main
     build:
+      tool: cmake
+      args:
+        - --target
+        - bins
       artifacts:
         - bin/zar.bin
       root: /apps
@@ -140,6 +146,9 @@ dependencies:
       - COREUTILS_PATH
     build:
       tool: cmake
+      args:
+        - --target
+        - bins
       artifacts:
         - bin/
       root: /bin
