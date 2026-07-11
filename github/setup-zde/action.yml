@@ -76,6 +76,10 @@ runs:
         set -euo pipefail
         cd "${{ github.workspace }}/${{ inputs.path }}"
 
+        # Refresh the Software Collection catalog before resolving optional
+        # dependency IDs and aliases supplied by the caller.
+        ./zde update
+
         deps=(
           "Zeal8bit/Zeal-8-bit-OS"
           "Zeal8bit/Zeal-VideoBoard-SDK"
