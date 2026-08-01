@@ -52,7 +52,7 @@ runs:
       shell: bash
 
     - name: Checkout ZDE repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
       with:
         repository: ${{ inputs.repo }}
         ref: ${{ inputs.ref || steps.setup_zde_ref.outputs.ref || 'main' }}
