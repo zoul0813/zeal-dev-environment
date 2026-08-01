@@ -150,14 +150,22 @@ def _resolve_dep_kernel_config(raw: str) -> DepKernelConfig | None:
         return None
 
     catalog = DepCatalog()
-    dep_id, separator, config_name = raw_id.rpartition("/")
-    if not separator:
-        dep_id = raw_id
-        config_name = "os"
     try:
-        dep = catalog.resolve(dep_id)
+        # Dependency IDs commonly contain "/". Resolve the complete selector
+        # first, then treat the final component as a config name only when the
+        # complete selector is not a dependency ID or alias.
+        dep = catalog.resolve(raw_id)
     except RuntimeError:
         return None
+    config_name = "os"
+    if dep is None:
+        dep_id, separator, config_name = raw_id.rpartition("/")
+        if not separator:
+            return None
+        try:
+            dep = catalog.resolve(dep_id)
+        except RuntimeError:
+            return None
     if dep is None or not dep.installed:
         return None
     configs = _dep_kernel_configs_from_lock(dep.id, catalog.lock_deps.get(dep.id), dep.aliases)
@@ -306,12 +314,14 @@ def _kernel_version(zos_path: Path) -> str:
 
 def build_kernel(kernel_config: str) -> int:
     zos_path = ZOS_PATH
+    kernel_bin = zos_path / "build" / "os.bin"
     fullbin = zos_path / "build" / "os_with_romdisk.img"
     kernel_version = _kernel_version(zos_path)
     cmd_env = os.environ.copy()
     cmd_env["ZEAL_KERNEL_VERSION"] = kernel_version
     build_arg: list[str] = []
     config_arg: list[str] = []
+    selected_config = zos_path / "os.conf"
     show_stat = True
 
     if kernel_config == "user":
@@ -329,6 +339,7 @@ def build_kernel(kernel_config: str) -> int:
         show_stat = False
     else:
         selected = _resolve_builtin_kernel_config_path(kernel_config) or f"configs/{kernel_config}.conf"
+        selected_config = zos_path / selected
         config_arg = [f"-Dconfig={selected}"]
         print(f"Building {selected} for {kernel_version}")
 
@@ -343,6 +354,32 @@ def build_kernel(kernel_config: str) -> int:
         return rc
 
     if not show_stat:
+        return 0
+
+    if not kernel_bin.is_file():
+        print(f"Build failed: missing kernel {kernel_bin}")
+        return 1
+
+    if kernel_bin.stat().st_size <= 0:
+        print(f"Build failed: {kernel_bin} has size 0")
+        return 1
+
+    artifact_config = zos_path / "build" / "os.conf"
+    try:
+        shutil.copy2(selected_config, artifact_config)
+    except OSError as exc:
+        print(f"Build failed: could not copy config {selected_config} to {artifact_config}: {exc}")
+        return 1
+
+    try:
+        romdisk_enabled = "CONFIG_ENABLE_ROMDISK=y" in selected_config.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        # Generated configs should always exist. Preserve strict historical
+        # behavior if one cannot be read.
+        romdisk_enabled = True
+
+    if not romdisk_enabled:
+        print("ROM disk disabled by kernel config; skipping ROM image copy")
         return 0
 
     if not fullbin.is_file():
@@ -385,13 +422,15 @@ def run_kernel(args: list[str]) -> int:
 
     if kernel_config in {"user", "menuconfig"}:
         if user_conf.is_file():
-            shutil.copy2(user_conf, os_conf)
+            # Do not preserve the source timestamp. The generated assembler
+            # config depends on os.conf and must see an inbound config change.
+            shutil.copyfile(user_conf, os_conf)
             print(f"Copied {user_conf} to {os_conf}")
         else:
             user_conf_create = True
             print(f"Warning: {user_conf} does not exist")
     elif dep_cfg is not None:
-        shutil.copy2(dep_cfg.os_conf, os_conf)
+        shutil.copyfile(dep_cfg.os_conf, os_conf)
         print(f"Copied {dep_cfg.os_conf} to {os_conf}")
         kernel_config = "user"
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -175,7 +176,11 @@ def test_resolve_dep_kernel_config_branches(monkeypatch: pytest.MonkeyPatch, tmp
         def resolve(self, raw_id: str):
             if self.resolve_error:
                 raise RuntimeError("bad")
-            return self.dep_obj
+            if self.dep_obj is None:
+                return None
+            if raw_id == self.dep_obj.id or raw_id in self.dep_obj.aliases:
+                return self.dep_obj
+            return None
 
     fake_mod = ModuleType("mods.deps")
     fake_mod.DepCatalog = lambda: _Catalog(None)  # type: ignore[attr-defined]
@@ -191,8 +196,17 @@ def test_resolve_dep_kernel_config_branches(monkeypatch: pytest.MonkeyPatch, tmp
     assert cfg is not None
     assert cfg.dep_id == "dep"
 
+    fake_mod.DepCatalog = lambda: _Catalog(_Dep("owner/dep", True, ["a"]))  # type: ignore[attr-defined]
+    catalog = _Catalog(_Dep("owner/dep", True, ["a"]))
+    catalog.lock_deps = {"owner/dep": {"path": str(dep_root), "kernel_config": {"path": "os.conf"}}}
+    fake_mod.DepCatalog = lambda: catalog  # type: ignore[attr-defined]
+    cfg = kernel._resolve_dep_kernel_config("owner/dep")
+    assert cfg is not None
+    assert cfg.dep_id == "owner/dep"
+
     emu_conf = dep_root / "emu.conf"
     emu_conf.write_text("E\n", encoding="utf-8")
+    fake_mod.DepCatalog = lambda: _Catalog(_Dep("dep", True, ["a"]))  # type: ignore[attr-defined]
     cfg = kernel._resolve_dep_kernel_config("a/emu")
     assert cfg is not None
     assert cfg.os_conf == emu_conf
@@ -299,11 +313,16 @@ def test_build_kernel_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, 
     zos = tmp_path / "zos"
     build_dir = zos / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
+    kernel_bin = build_dir / "os.bin"
     fullbin = build_dir / "os_with_romdisk.img"
     mnt = tmp_path / "mnt"
     monkeypatch.setattr(kernel, "ZOS_PATH", zos)
     monkeypatch.setattr(kernel, "MNT_DIR", mnt)
     monkeypatch.setattr(kernel, "_kernel_version", lambda _: "v1")
+    (zos / "os.conf").write_text("CONFIG_ENABLE_ROMDISK=y\n", encoding="utf-8")
+    zeal8bit_config = zos / "configs" / "zeal8bit" / "os.conf"
+    zeal8bit_config.parent.mkdir(parents=True)
+    zeal8bit_config.write_text("CONFIG_ENABLE_ROMDISK=y\n", encoding="utf-8")
 
     calls: list[list[str]] = []
 
@@ -313,7 +332,13 @@ def test_build_kernel_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, 
 
     monkeypatch.setattr(kernel, "run", _run_ok)
     assert kernel.build_kernel("user") == 1
-    assert "missing image" in capsys.readouterr().out
+    assert "missing kernel" in capsys.readouterr().out
+
+    kernel_bin.write_bytes(b"")
+    assert kernel.build_kernel("user") == 1
+    assert "has size 0" in capsys.readouterr().out
+
+    kernel_bin.write_bytes(b"kernel")
 
     fullbin.write_bytes(b"")
     assert kernel.build_kernel("zeal8bit") == 1
@@ -328,11 +353,24 @@ def test_build_kernel_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, 
     assert "Copied to" in out
     assert latest.is_symlink()
 
+    (zos / "os.conf").write_text("CONFIG_ENABLE_ROMDISK=y\n", encoding="utf-8")
+    trs80_config = zos / "configs" / "trs80" / "os.conf"
+    trs80_config.parent.mkdir(parents=True)
+    trs80_config.write_text("# CONFIG_ENABLE_ROMDISK is not set\n", encoding="utf-8")
+    fullbin.unlink()
+    assert kernel.build_kernel("trs80") == 0
+    assert "ROM disk disabled" in capsys.readouterr().out
+    assert (build_dir / "os.conf").read_text(encoding="utf-8") == "# CONFIG_ENABLE_ROMDISK is not set\n"
+    fullbin.write_bytes(b"abc")
+
     os_conf = zos / "os.conf"
     os_conf.write_text("x", encoding="utf-8")
     assert kernel.build_kernel("default") == 0
     assert not os_conf.exists()
     assert kernel.build_kernel("menuconfig") == 0
+    custom_config = zos / "configs" / "custom.conf"
+    custom_config.parent.mkdir(parents=True, exist_ok=True)
+    custom_config.write_text("CONFIG_ENABLE_ROMDISK=y\n", encoding="utf-8")
     assert kernel.build_kernel("custom") == 0
 
     def _run_fail_config(cmd, **kwargs):
@@ -375,6 +413,7 @@ def test_run_kernel_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, ca
 
     dep_conf = tmp_path / "dep.conf"
     dep_conf.write_text("D\n", encoding="utf-8")
+    os.utime(dep_conf, (1, 1))
     monkeypatch.setattr(
         kernel,
         "_resolve_dep_kernel_config",
@@ -382,3 +421,4 @@ def test_run_kernel_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, ca
     )
     assert kernel.run_kernel(["dep-a"]) == 0
     assert os_conf.read_text(encoding="utf-8") == "D\n"
+    assert os_conf.stat().st_mtime > dep_conf.stat().st_mtime
