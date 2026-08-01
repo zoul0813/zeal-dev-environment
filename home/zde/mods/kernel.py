@@ -25,34 +25,47 @@ class DepKernelConfig:
     dep_id: str
     aliases: list[str]
     os_conf: Path
+    config_name: str = "os"
+
+    @property
+    def selector(self) -> str:
+        return self.dep_id if self.config_name == "os" else f"{self.dep_id}/{self.config_name}"
+
+    @property
+    def selector_aliases(self) -> list[str]:
+        if self.config_name == "os":
+            return self.aliases
+        return [f"{alias}/{self.config_name}" for alias in self.aliases]
 
 
 def _dep_kernel_config_from_lock(dep_id: str, lock_entry: Any, default_aliases: list[str] | None = None) -> DepKernelConfig | None:
+    configs = _dep_kernel_configs_from_lock(dep_id, lock_entry, default_aliases)
+    return next((cfg for cfg in configs if cfg.config_name == "os"), configs[0] if configs else None)
+
+
+def _dep_kernel_configs_from_lock(
+    dep_id: str, lock_entry: Any, default_aliases: list[str] | None = None
+) -> list[DepKernelConfig]:
     if not isinstance(lock_entry, dict):
-        return None
+        return []
     dep_root_raw = lock_entry.get("path")
     if not isinstance(dep_root_raw, str) or not dep_root_raw.strip():
-        return None
+        return []
     dep_root = Path(dep_root_raw.strip())
-    kernel_cfg = lock_entry.get("kernel_config")
-    if not isinstance(kernel_cfg, dict):
-        return None
-    raw_path = kernel_cfg.get("path")
-    if not isinstance(raw_path, str) or not raw_path.strip():
-        return None
-    cfg_path = Path(raw_path.strip())
-    os_conf = cfg_path if cfg_path.is_absolute() else dep_root / cfg_path
-    if not os_conf.is_file():
-        return None
 
-    raw_aliases = kernel_cfg.get("aliases")
+    kernel_cfg = lock_entry.get("kernel_config")
+    raw_aliases = kernel_cfg.get("aliases") if isinstance(kernel_cfg, dict) else None
     aliases: list[str] = []
-    if isinstance(raw_aliases, list):
+    if isinstance(kernel_cfg, dict) and isinstance(raw_aliases, list):
         aliases = [alias for alias in raw_aliases if isinstance(alias, str) and alias.strip()]
     if not aliases and default_aliases:
         aliases = [alias for alias in default_aliases if isinstance(alias, str) and alias.strip()]
 
-    return DepKernelConfig(dep_id=dep_id, aliases=aliases, os_conf=os_conf)
+    return [
+        DepKernelConfig(dep_id=dep_id, aliases=aliases, os_conf=conf, config_name=conf.stem)
+        for conf in sorted(dep_root.glob("*.conf"), key=lambda path: path.name.casefold())
+        if conf.is_file()
+    ]
 
 
 def list_kernel_configs() -> list[str]:
@@ -117,11 +130,13 @@ def list_dep_kernel_configs() -> list[DepKernelConfig]:
     rows: list[DepKernelConfig] = []
     for dep in catalog.installed():
         lock_entry = catalog.lock_deps.get(dep.id)
-        dep_cfg = _dep_kernel_config_from_lock(dep.id, lock_entry, dep.aliases)
-        if dep_cfg is None:
-            continue
-        rows.append(dep_cfg)
-    return sorted(rows, key=lambda row: row.dep_id.casefold())
+        if isinstance(lock_entry, dict):
+            dep_root = lock_entry.get("path")
+            if isinstance(dep_root, str) and dep_root.strip():
+                if Path(dep_root.strip()).resolve() == ZOS_PATH.resolve():
+                    continue
+        rows.extend(_dep_kernel_configs_from_lock(dep.id, lock_entry, dep.aliases))
+    return sorted(rows, key=lambda row: row.selector.casefold())
 
 
 def _resolve_dep_kernel_config(raw: str) -> DepKernelConfig | None:
@@ -130,17 +145,23 @@ def _resolve_dep_kernel_config(raw: str) -> DepKernelConfig | None:
     except Exception:
         return None
 
-    catalog = DepCatalog()
     raw_id = raw.strip()
     if not raw_id:
         return None
+
+    catalog = DepCatalog()
+    dep_id, separator, config_name = raw_id.rpartition("/")
+    if not separator:
+        dep_id = raw_id
+        config_name = "os"
     try:
-        dep = catalog.resolve(raw_id)
+        dep = catalog.resolve(dep_id)
     except RuntimeError:
         return None
     if dep is None or not dep.installed:
         return None
-    return _dep_kernel_config_from_lock(dep.id, catalog.lock_deps.get(dep.id), dep.aliases)
+    configs = _dep_kernel_configs_from_lock(dep.id, catalog.lock_deps.get(dep.id), dep.aliases)
+    return next((cfg for cfg in configs if cfg.config_name == config_name), None)
 
 
 def _kernel_config_description(config_name: str) -> str:
@@ -178,15 +199,15 @@ def list_kernel_options() -> list[KernelOption]:
         for name in list_kernel_configs()
     ]
     for dep_cfg in list_dep_kernel_configs():
-        label = dep_cfg.aliases[0] if dep_cfg.aliases else dep_cfg.dep_id
+        label = dep_cfg.selector_aliases[0] if dep_cfg.selector_aliases else dep_cfg.selector
         fallback = dep_cfg.os_conf.stem or dep_cfg.dep_id
         desc = _config_file_description(dep_cfg.os_conf, fallback)
         options.append(
             KernelOption(
-                action_id=f"dep:{dep_cfg.dep_id}",
+                action_id=f"dep:{dep_cfg.selector}",
                 label=label,
                 help=f"Build ({desc})",
-                args=[dep_cfg.dep_id],
+                args=[dep_cfg.selector],
             )
         )
     return options

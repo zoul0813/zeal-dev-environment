@@ -19,9 +19,9 @@ def test_dep_kernel_config_from_lock_branches(tmp_path: Path) -> None:
 
     assert kernel._dep_kernel_config_from_lock("dep", None) is None
     assert kernel._dep_kernel_config_from_lock("dep", {"path": ""}) is None
-    assert kernel._dep_kernel_config_from_lock("dep", {"path": str(dep_root)}) is None
-    assert kernel._dep_kernel_config_from_lock("dep", {"path": str(dep_root), "kernel_config": {"path": ""}}) is None
-    assert kernel._dep_kernel_config_from_lock("dep", {"path": str(dep_root), "kernel_config": {"path": "missing.conf"}}) is None
+    assert kernel._dep_kernel_config_from_lock("dep", {"path": str(dep_root)}) == kernel.DepKernelConfig(
+        dep_id="dep", aliases=[], os_conf=conf
+    )
 
     cfg = kernel._dep_kernel_config_from_lock(
         "dep",
@@ -41,6 +41,12 @@ def test_dep_kernel_config_from_lock_branches(tmp_path: Path) -> None:
     )
     assert cfg_default_aliases is not None
     assert cfg_default_aliases.aliases == ["dep", "alt"]
+
+    emu_conf = dep_root / "emu.conf"
+    emu_conf.write_text("CONFIG_EMU=1\n", encoding="utf-8")
+    configs = kernel._dep_kernel_configs_from_lock("dep", {"path": str(dep_root)}, ["alias"])
+    assert [cfg.selector for cfg in configs] == ["dep/emu", "dep"]
+    assert configs[0].selector_aliases == ["alias/emu"]
 
 
 def test_list_kernel_configs_and_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -101,6 +107,7 @@ def test_list_dep_kernel_configs_import_and_sorting_branches(monkeypatch: pytest
     dep_root.mkdir(parents=True, exist_ok=True)
     conf = dep_root / "os.conf"
     conf.write_text("x", encoding="utf-8")
+    (dep_root / "emu.conf").write_text("x", encoding="utf-8")
 
     class _Dep:
         def __init__(self, dep_id: str, aliases: list[str]) -> None:
@@ -121,8 +128,19 @@ def test_list_dep_kernel_configs_import_and_sorting_branches(monkeypatch: pytest
     fake_mod = ModuleType("mods.deps")
     fake_mod.DepCatalog = _Catalog  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "mods.deps", fake_mod)
+    monkeypatch.setattr(kernel, "ZOS_PATH", tmp_path / "different-zos")
     rows = kernel.list_dep_kernel_configs()
-    assert [row.dep_id for row in rows] == ["alpha", "Zeta"]
+    assert [row.selector for row in rows] == [
+        "alpha",
+        "alpha/emu",
+        "skip",
+        "skip/emu",
+        "Zeta",
+        "Zeta/emu",
+    ]
+
+    monkeypatch.setattr(kernel, "ZOS_PATH", dep_root)
+    assert kernel.list_dep_kernel_configs() == []
 
 
 def test_resolve_dep_kernel_config_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -172,6 +190,13 @@ def test_resolve_dep_kernel_config_branches(monkeypatch: pytest.MonkeyPatch, tmp
     cfg = kernel._resolve_dep_kernel_config("dep")
     assert cfg is not None
     assert cfg.dep_id == "dep"
+
+    emu_conf = dep_root / "emu.conf"
+    emu_conf.write_text("E\n", encoding="utf-8")
+    cfg = kernel._resolve_dep_kernel_config("a/emu")
+    assert cfg is not None
+    assert cfg.os_conf == emu_conf
+    assert cfg.selector == "dep/emu"
 
     fake_mod.DepCatalog = lambda: _Catalog(_Dep("dep", True, []), resolve_error=True)  # type: ignore[attr-defined]
     assert kernel._resolve_dep_kernel_config("dep") is None

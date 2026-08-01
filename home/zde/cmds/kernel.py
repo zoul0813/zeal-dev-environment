@@ -24,8 +24,8 @@ def help() -> int:
     if dep_configs:
         print("Dependency configs:")
         for dep_cfg in dep_configs:
-            aliases = ", ".join(dep_cfg.aliases) if dep_cfg.aliases else "-"
-            print(f"  {dep_cfg.dep_id} (aliases: {aliases})")
+            aliases = ", ".join(dep_cfg.selector_aliases) if dep_cfg.selector_aliases else "-"
+            print(f"  {dep_cfg.selector} (aliases: {aliases})")
     print("Examples:")
     if config_names:
         print(f"  zde kernel {config_names[0]}")
