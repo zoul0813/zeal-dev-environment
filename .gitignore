@@ -1,10 +1,13 @@
 .*history
+.DS_Store
 /tmp
-/home/.npm
 .cache
 .vscode
 .cookiecutter_replay
 .cookiecutter
 /collection.yml
-/home/extras
-/home/.gitconfig
+
+# builder specific
+/build/z88dk
+/build/*.tar.bz2
+/build/*.tar.gz

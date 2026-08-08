@@ -1,4 +1,13 @@
-FROM z88dk/z88dk:20250825
+# syntax=docker/dockerfile:1
+
+FROM scratch AS zeal8bit-source
+
+COPY build/zeal8bit.sh /zeal8bit.sh
+COPY build/z88dk/lib/config/zeal8bit.cfg /lib/config/zeal8bit.cfg
+COPY build/z88dk/lib/target/zeal8bit /lib/target/zeal8bit
+COPY build/z88dk/libsrc/target/zeal8bit /libsrc/target/zeal8bit
+
+FROM z88dk/z88dk:20260803
 
 # Dev Tools
 RUN echo "Installing prerequisites" \
@@ -12,12 +21,11 @@ RUN echo "Installing prerequisites" \
   && pip3 install cookiecutter
 
 # SDCC
+COPY build/sdcc-src-4.4.0.tar.bz2 /opt/sdcc/sdcc-4.4.0.tar.bz2
 RUN echo "Building SDCC" \
-  && mkdir -p /opt/sdcc \
-  && curl -L https://sourceforge.net/projects/sdcc/files/sdcc/4.4.0/sdcc-src-4.4.0.tar.bz2/download -o /opt/sdcc/sdcc-4.4.0.tar.bz2 \
   && tar xjf /opt/sdcc/sdcc-4.4.0.tar.bz2 -C /opt/sdcc \
   && cd /opt/sdcc/sdcc-4.4.0 \
-  && ./configure \
+  && CC="gcc -std=gnu17" ./configure \
 		--disable-ds390-port --disable-ds400-port \
 		--disable-hc08-port --disable-s08-port --disable-mcs51-port \
 		--disable-pic-port --disable-pic14-port --disable-pic16-port \
@@ -42,6 +50,13 @@ RUN echo "Building GNU AS" \
   && ../configure --target=z80-elf --host=x86_64-linux-musl --prefix=/opt/gnu-as --disable-nls \
   && make MAKEINFO=true -j$(nproc) \
   && make MAKEINFO=true install
+
+# Zeal 8-bit z88dk target. Source-stage mount does not enter final image.
+RUN --mount=type=bind,from=zeal8bit-source,source=/,target=/tmp/zeal8bit-source,ro \
+    echo "Building z88dk zeal8bit target" \
+    && ZEAL8BIT_SOURCE_ROOT=/tmp/zeal8bit-source \
+      Z88DK_ROOT=/opt/z88dk \
+      sh /tmp/zeal8bit-source/zeal8bit.sh install
 
 RUN echo "Cleaning up" \
   && rm -rf /opt/sdcc/sdcc-4.4.0.tar.bz2 \

@@ -1,4 +1,5 @@
-FROM zoul0813/zde-builder:latest as builder
+ARG ZDE_BUILDER_IMAGE=docker.io/zoul0813/zde-builder:latest
+FROM ${ZDE_BUILDER_IMAGE} AS builder
 FROM alpine:latest
 COPY --from=builder /opt /opt
 
