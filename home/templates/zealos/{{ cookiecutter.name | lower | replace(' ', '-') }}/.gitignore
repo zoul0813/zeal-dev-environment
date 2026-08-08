@@ -4,3 +4,4 @@ release/
 tmp/
 assets/*.zt[spm]
 *.tiled-session
+.DS_Store

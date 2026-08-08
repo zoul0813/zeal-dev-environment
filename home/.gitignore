@@ -1,2 +1,15 @@
-__pycache__
-.gitconfig
+# Runtime home: ignore everything except ZDE-owned assets.
+*
+!.bashrc
+!.gitignore
+!motd.txt
+!templates/
+!templates/**
+!tf.base.img.gz
+!zde/
+!zde/**
+!zde.txt
+
+# Generated files within allowlisted trees.
+**/.DS_Store
+**/__pycache__/
