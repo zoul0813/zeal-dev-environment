@@ -44,9 +44,18 @@ def run_capture(cmd: list[str], cwd: Path | None = None) -> str:
 def is_git_repo(path: Path) -> bool:
     if not path.is_dir():
         return False
+    resolved_path = path.resolve()
     return (
         process_run(
-            ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+            [
+                "git",
+                "-c",
+                f"safe.directory={resolved_path}",
+                "-C",
+                str(path),
+                "rev-parse",
+                "--is-inside-work-tree",
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -366,4 +375,3 @@ def run_update(env: Env) -> int:
     if rc != 0:
         return rc
     return update_collection(env)
-
