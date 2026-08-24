@@ -2,7 +2,7 @@
 
 `tui` launches the optional Textual-based terminal UI.
 
-Detailed TUI documentation is available in [docs/tui/README.md](/Users/david.higgins@konghq.com/Documents/Private/zeal/zeal-dev-environment/docs/tui/README.md).
+Detailed TUI documentation is available in the [ZDE TUI Guide](./tui/README.md).
 
 ## Usage
 
@@ -31,7 +31,7 @@ If Textual is missing, ZDE prints:
 
 ## See Also
 
-- [ZDE TUI Guide](/Users/david.higgins@konghq.com/Documents/Private/zeal/zeal-dev-environment/docs/tui/README.md)
-- [Navigation And Shortcuts](/Users/david.higgins@konghq.com/Documents/Private/zeal/zeal-dev-environment/docs/tui/navigation.md)
-- [TUI Screens And Features](/Users/david.higgins@konghq.com/Documents/Private/zeal/zeal-dev-environment/docs/tui/screens.md)
-- [TUI vs CLI](/Users/david.higgins@konghq.com/Documents/Private/zeal/zeal-dev-environment/docs/tui/cli-differences.md)
+- [ZDE TUI Guide](./tui/README.md)
+- [Navigation And Shortcuts](./tui/navigation.md)
+- [TUI Screens And Features](./tui/screens.md)
+- [TUI vs CLI](./tui/cli-differences.md)

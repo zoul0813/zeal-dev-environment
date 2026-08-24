@@ -28,10 +28,25 @@ zde create -t
 
 - Requires `cookiecutter` to be installed in `PATH` or at `/opt/penv/bin/cookiecutter`.
 
+## Local Templates
+
+- `zealos`: Zeal OS C starter using SDCC, with application metadata and a `bin/` output directory.
+- `zealos-sdcc`: minimal Zeal OS C starter using SDCC.
+- `zealos-z88dk`: Zeal OS assembly starter using z88dk-z80asm syntax.
+- `zealos-gnuas`: Zeal OS assembly starter using GNU AS syntax.
+- `zgdk`: Zeal Game Dev Kit starter using SDCC, ZGDK, and the Zeal Video Board SDK.
+
+The `zgdk` template requires its optional dependency set. Install it before building a generated game project:
+
+```sh
+zde deps install zgdk
+```
+
 ## Examples
 
 ```sh
-zde create zealos --name hello
+zde create zealos-sdcc --name hello
+zde create zealos-z88dk --name hello-asm
 zde create zgdk --name breakout
 zde create gh:org/template --name demo
 ```

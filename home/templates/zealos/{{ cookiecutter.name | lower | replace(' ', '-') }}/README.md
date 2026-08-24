@@ -2,17 +2,22 @@
 
 {{ cookiecutter.description }}
 
-## Installation
-
-## Building from source
+## Requirements
 
 Make sure that you have [ZDE](https://github.com/zoul0813/zeal-dev-environment) installed.
 
-Then open a terminal, go to the source directory and type the following commands:
+## Build
 
-```shell
-    $ zde create zgdk
-    $ cd {project}
-    $ zde make
-    $ zde emu
+From this project directory, run:
+
+```sh
+zde cmake
+```
+
+## Create Another Project
+
+To create another Zeal OS C project from the same template, run:
+
+```sh
+zde create zealos --name my-project
 ```

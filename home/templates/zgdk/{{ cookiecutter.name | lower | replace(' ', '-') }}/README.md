@@ -2,16 +2,28 @@
 
 {{ cookiecutter.description }}
 
-## Installation
-
-## Building from source
+## Requirements
 
 Make sure that you have [ZDE](https://github.com/zoul0813/zeal-dev-environment) installed.
 
-Then open a terminal, go to the source directory and type the following commands:
+Install the ZGDK dependency and its required libraries once:
 
-```shell
-    $ zde create zgdk
-    $ cd {project}
-    $ zde make
+```sh
+zde deps install zgdk
+```
+
+## Build
+
+From this project directory, run:
+
+```sh
+zde cmake
+```
+
+## Create Another Project
+
+To create another ZGDK project from the same template, run:
+
+```sh
+zde create zgdk --name my-game
 ```

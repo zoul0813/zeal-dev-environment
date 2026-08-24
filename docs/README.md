@@ -10,6 +10,7 @@ ZDE has two execution layers:
 ## Contents
 
 - [Quick Start](#quick-start)
+- [Shell Environment Setup](./env.md)
 - [Host Commands](#host-commands)
 - [ZDE Commands](#zde-commands)
 - [Notes](#notes)
@@ -21,16 +22,19 @@ ZDE has two execution layers:
 
 ## Quick Start
 
-Typical setup flow:
+After completing the [shell environment setup](./env.md), a typical project flow is:
 
 ```sh
-./zde update
-./zde deps list
-./zde create zealos --name hello
+zde update
+mkdir -p "$HOME/zeal-projects"
+cd "$HOME/zeal-projects"
+zde deps list
+zde create zealos-sdcc --name hello
 cd hello
-./zde make
-./zde emulator
+zde cmake
 ```
+
+Create application projects outside the ZDE checkout so generated files and build artifacts do not become part of the environment repository.
 
 ## Host Commands
 
@@ -139,7 +143,7 @@ You normally should not edit `deps.env` by hand.
 
 Common user-facing variables:
 
-- `ZDE_PATH`: location of this repository. If unset, the wrapper derives it from the location of `./zde`.
+- `ZDE_PATH`: location of this repository. The wrapper derives it automatically when unset, but exporting it is recommended because generated VS Code settings reference it.
 - `ZDE_USE`: choose `docker` or `podman` for runtime auto-selection.
 - `CONTAINER_CMD`: explicitly choose the executable used for container operations. This overrides `ZDE_USE`.
 - `ZDE_IMAGE`: container image repository. Default: `zoul0813/zeal-dev-environment`.
