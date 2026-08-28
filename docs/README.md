@@ -9,6 +9,7 @@ ZDE has two execution layers:
 
 ## Contents
 
+- [Getting Started](./getting-started/README.md)
 - [Quick Start](#quick-start)
 - [Shell Environment Setup](./env.md)
 - [Host Commands](#host-commands)
@@ -21,6 +22,8 @@ ZDE has two execution layers:
 - [Host Environment Variables](#host-environment-variables)
 
 ## Quick Start
+
+For installation, shell setup, and language selection, start with the [Getting Started Guide](./getting-started/README.md).
 
 After completing the [shell environment setup](./env.md), a typical project flow is:
 

@@ -4,16 +4,12 @@
 
 Zeal Development Environment (ZDE) is the build and tooling environment for working on software for the [Zeal 8-bit Computer](https://zeal8bit.com/). It provides a consistent containerized toolchain, project scaffolding, dependency management, image staging utilities, and optional host-mode activation.
 
-See the [ZDE command reference](./docs/README.md) for detailed command documentation.
+Start with the [Getting Started Guide](./docs/getting-started/README.md), or use the [ZDE command reference](./docs/README.md) for detailed command documentation.
 
 ## Table of Contents
 
 - [What ZDE Provides](#what-zde-provides)
 - [Getting Started](#getting-started)
-- [Linux](#linux)
-- [macOS](#macos)
-- [Windows (WSL2)](#windows-wsl2)
-- [Environment Variables](#environment-variables)
 - [Quick Command Overview](#quick-command-overview)
 - [Requirements And Dependencies](#requirements-and-dependencies)
 - [Upgrading from a Previous Version](#upgrading-from-a-previous-version)
@@ -28,85 +24,9 @@ See the [ZDE command reference](./docs/README.md) for detailed command documenta
 
 ## Getting Started
 
-Clone the repository into a stable location and run the initial update:
+The [Getting Started Guide](./docs/getting-started/README.md) is the canonical installation and first-project walkthrough. It covers Linux, macOS, Windows with WSL2, language selection, project creation, builds, emulation, and physical hardware deployment.
 
-```sh
-cd "$HOME"
-git clone https://github.com/zoul0813/zeal-dev-environment.git
-cd zeal-dev-environment
-./zde update
-```
-
-ZDE does not require environment variables for normal container-based use. Setting `ZDE_PATH` is still recommended because generated VS Code settings use it to find ZDE editor support files. Add that directory to your shell’s `PATH` so you can run commands such as `zde cmake` from any project directory.
-
-See [Shell Environment Setup](./docs/env.md) if you cloned ZDE somewhere else, use another shell, or need troubleshooting help.
-
-### Linux
-
-Install `git` and a supported container runtime, then add this line to `~/.bashrc`:
-
-```sh
-export ZDE_PATH="$HOME/zeal-dev-environment"
-export PATH="$ZDE_PATH:$PATH"
-```
-
-Reload the shell configuration and verify ZDE:
-
-```sh
-source "$HOME/.bashrc"
-command -v zde
-zde --version
-```
-
-If you use Zsh, put the export in `~/.zshrc` and source that file instead. Ensure your user can run the selected container runtime.
-
-### macOS
-
-Install `git` and a container runtime. Docker Desktop and Podman are supported. Start the runtime, then add this line to `~/.zshrc`:
-
-```sh
-export ZDE_PATH="$HOME/zeal-dev-environment"
-export PATH="$ZDE_PATH:$PATH"
-```
-
-Reload the shell configuration and verify ZDE:
-
-```sh
-source "$HOME/.zshrc"
-command -v zde
-zde --version
-```
-
-### Windows (WSL2)
-
-Use ZDE from a Linux shell inside WSL2, not from PowerShell or Command Prompt. Clone ZDE inside the WSL filesystem and follow the Linux installation commands above.
-
-For the default Bash shell, add this line to `~/.bashrc` inside WSL:
-
-```sh
-export ZDE_PATH="$HOME/zeal-dev-environment"
-export PATH="$ZDE_PATH:$PATH"
-```
-
-Then reload and verify:
-
-```sh
-source "$HOME/.bashrc"
-command -v zde
-zde --version
-```
-
-Docker Desktop with WSL2 integration and Podman are supported runtime options.
-
-## Environment Variables
-
-No ZDE-specific environment variable is required for normal container-based use. The wrapper derives its repository path, state directory, image, and container runtime defaults automatically.
-
-You should still export `ZDE_PATH` with the absolute path to the ZDE checkout. Generated VS Code settings use `${env:ZDE_PATH}` to locate ZDE’s forced-include header and ClangFormat configuration. Adding `$ZDE_PATH` to `PATH` also makes the `zde` command available from any project directory.
-
-Other environment variables such as `ZDE_USER_PATH`, `ZDE_USE`, and `ZDE_IMAGE_REF` are optional overrides. See the [runtime configuration reference](./docs/README.md#runtime-configuration) for details.
-
-`zde activate` is optional host mode. It exports ZDE and dependency paths for users who intentionally run toolchains on the host instead of through the container wrapper.
+Use [Shell Environment Setup](./docs/env.md) for `ZDE_PATH`, `PATH`, VS Code integration, host-mode activation, and optional environment overrides.
 
 ## Quick Command Overview
 
