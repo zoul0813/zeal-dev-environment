@@ -20,5 +20,5 @@ _end:
     .data
     ; Define a label before and after the message, so that we can get the length of the string
     ; thanks to `_message_end - _message`.
-_message: .ascii "Hello Zeal OS!"
+_message: .ascii "Hello Zeal 8-bit OS!"
 _message_end:

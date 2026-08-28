@@ -16,7 +16,7 @@ zde cmake
 
 ## Create Another Project
 
-To create another Zeal OS C project from the same template, run:
+To create another Zeal 8-bit OS C project from the same template, run:
 
 ```sh
 zde create zealos --name my-project

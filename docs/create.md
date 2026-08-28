@@ -30,10 +30,10 @@ zde create -t
 
 ## Local Templates
 
-- `zealos`: Zeal OS C starter using SDCC, with application metadata and a `bin/` output directory.
-- `zealos-sdcc`: minimal Zeal OS C starter using SDCC.
-- `zealos-z88dk`: Zeal OS assembly starter using z88dk-z80asm syntax.
-- `zealos-gnuas`: Zeal OS assembly starter using GNU AS syntax.
+- `zealos`: Zeal 8-bit OS C starter using SDCC, with application metadata and a `bin/` output directory.
+- `zealos-sdcc`: minimal Zeal 8-bit OS C starter using SDCC.
+- `zealos-z88dk`: Zeal 8-bit OS assembly starter using z88dk-z80asm syntax.
+- `zealos-gnuas`: Zeal 8-bit OS assembly starter using GNU AS syntax.
 - `zgdk`: Zeal Game Dev Kit starter using SDCC, ZGDK, and the Zeal Video Board SDK.
 
 The `zgdk` template requires its optional dependency set. Install it before building a generated game project:
