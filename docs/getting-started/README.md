@@ -7,12 +7,26 @@ This guide takes you from installing ZDE to choosing a language workflow. The wo
 ## What You Will Need
 
 - Git.
-- Docker or Podman with Compose support.
+- Docker with Docker Compose v2, or Podman with Compose support.
 - Linux, macOS, or Windows with WSL2.
 - A terminal running Bash, Zsh, or Fish.
 - VS Code is optional.
 
 Start your container runtime before running ZDE commands. Windows users must run ZDE inside WSL2, not PowerShell or Command Prompt.
+
+ZDE invokes Compose as a runtime subcommand: `docker compose` or `podman compose`. For
+Docker, this requires Docker Compose v2, commonly installed on Linux as the
+`docker-compose-plugin` package. The legacy standalone `docker-compose` command is not
+used by ZDE. Verify your runtime before installing ZDE:
+
+```sh
+docker compose version
+```
+
+If using Podman, run `podman compose version` instead. If Docker reports
+`unknown shorthand flag: 'f' in -f` when running ZDE, its Compose v2 plugin is missing
+or unavailable. Install the plugin using your Linux distribution's package manager,
+then retry the version check.
 
 ## Install ZDE
 
@@ -45,8 +59,6 @@ Add these lines to your shell startup file so they remain available in new termi
 Open a new terminal or reload your shell configuration, then run:
 
 ```sh
-printf '%s\n' "$ZDE_PATH"
-command -v zde
 zde --version
 zde create -t
 zde deps list
@@ -54,8 +66,6 @@ zde deps list
 
 Expected results:
 
-- `ZDE_PATH` prints the absolute path to your ZDE checkout.
-- `command -v zde` finds the wrapper inside that checkout.
 - `zde --version` prints the ZDE and container-image versions.
 - `zde create -t` lists the bundled project templates.
 - `zde deps list` shows required and optional dependency state.
@@ -79,25 +89,23 @@ Choose the route matching what you want to write:
 
 | Goal | Language and toolchain | ZDE template | Detailed guide |
 | --- | --- | --- | --- |
-| Write a Zeal OS program in C | C with SDCC | `zealos-sdcc` | `c.md` |
-| Write a Zeal OS program in assembly | Assembly with z88dk-z80asm | `zealos-z88dk` | `assembly.md` |
-| Use GNU assembler syntax | Assembly with GNU AS | `zealos-gnuas` | `assembly.md` |
-| Combine C and assembly | C with SDCC and assembly with SDASZ80 | `zealos-sdcc` | `mixed.md` |
+| Write a program in C | C with SDCC | `zealos-sdcc` | [C guide](./c.md) |
+| Write a program in assembly | Assembly with z88dk-z80asm | `zealos-z88dk` | [Assembly guide](./assembly.md) |
+| Use GNU assembler syntax | Assembly with GNU AS | `zealos-gnuas` | [Assembly guide](./assembly.md) |
+| Combine C and assembly | C with SDCC and assembly with SDASZ80 | `zealos-sdcc` | [Mixed C and assembly guide](./mixed.md) |
 | Build a graphics-focused game | C with ZGDK and the Zeal Video Board SDK | `zgdk` | Advanced next step; see [`zde create`](../create.md) |
 
-If you are unsure, start with the C workflow. It provides the shortest path from a generated project to a working Zeal OS binary.
-
-The detailed workflow pages are being added after this top-level guide. Their filenames are stable so other ZDE and website documentation can link to them as they are completed.
+If you are unsure, start with the C workflow. It provides the shortest path from a generated project to a working Zeal 8-bit OS binary.
 
 ## Documentation Map
 
 This directory contains the beginner learning path:
 
-- `README.md`: installation, shell setup, verification, and workflow selection.
-- `c.md`: first Zeal OS C program using SDCC.
-- `assembly.md`: first assembly program using either z88dk-z80asm or GNU AS.
-- `mixed.md`: calling an SDASZ80 assembly routine from SDCC C.
-- `run.md`: locating build artifacts, emulator testing, UART transfer, and SD-card deployment.
+- [Getting started](./README.md): installation, shell setup, verification, and workflow selection.
+- [C](./c.md): first Zeal 8-bit OS C program using SDCC.
+- [Assembly](./assembly.md): first assembly program using either z88dk-z80asm or GNU AS.
+- [Mixed C and assembly](./mixed.md): calling an SDASZ80 assembly routine from SDCC C.
+- [Run and deploy](./run.md): locating build artifacts, emulator testing, UART transfer, and SD-card deployment.
 
 Command reference material remains one level above this directory:
 
@@ -105,7 +113,7 @@ Command reference material remains one level above this directory:
 - [`zde create`](../create.md)
 - [`zde cmake`](../cmake.md)
 - [`zde deps`](../deps.md)
-- [`zde emulator`](../emulator.md)
+- [Zeal Native Emulator](https://github.com/Zeal8bit/Zeal-NativeEmulator)
 - [`zde image`](../image.md)
 
 ## Shared Conventions

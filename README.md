@@ -60,8 +60,18 @@ For the full command map, runtime configuration, and per-command reference pages
 Base requirements:
 
 - `git`
-- a supported container runtime
-- a working container runtime with compose support
+- a supported container runtime: Docker or Podman
+- Compose support through the runtime's `compose` subcommand
+
+For Docker, ZDE requires Docker Compose v2 (`docker compose`), usually provided by the
+`docker-compose-plugin` package. The legacy standalone `docker-compose` command does not
+satisfy this requirement. Verify the installation before running ZDE:
+
+```sh
+docker compose version
+```
+
+For Podman, verify the equivalent command with `podman compose version`.
 
 ZDE dependency model:
 
