@@ -116,6 +116,8 @@ dependencies:
       - name: ZAR_PATH
         add_to_path:
           - .
+    depends_on:
+      - zoul0813/zeal-coreutils
     metadata:
       category:
         - software
