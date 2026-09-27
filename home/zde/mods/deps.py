@@ -431,7 +431,9 @@ class Dep:
             artifact_paths = renamed
 
         stage_root = self.inferred_stage_root
-        image.stage_artifacts(artifact_paths, stage_root=stage_root)
+        stage_rc = image.stage_artifacts(artifact_paths, stage_root=stage_root)
+        if stage_rc not in {None, 0}:
+            return int(stage_rc)
 
         missing = 0
         for source, _ in artifact_paths:

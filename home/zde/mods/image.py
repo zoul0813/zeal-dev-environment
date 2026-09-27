@@ -34,6 +34,38 @@ class Image(ToolingSupport):
     def path(self) -> Path:
         return MNT_DIR / f"{self.image_type}.img"
 
+    def _confined_path(
+        self,
+        relative: Path | str,
+        *,
+        allow_root: bool = False,
+        follow_leaf: bool = True,
+    ) -> Path:
+        relative_path = Path(relative)
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise ValueError(f"Path escapes {self.image_type} image root: {relative}")
+        if not allow_root and relative_path in {Path("."), Path("")}:
+            raise ValueError(f"Refusing to operate on {self.image_type} image root")
+        if self.root.is_symlink():
+            raise ValueError(f"Refusing symlinked {self.image_type} image root")
+
+        root = self.root.resolve()
+        candidate = self.root / relative_path
+        resolved = candidate.resolve(strict=False)
+        if not follow_leaf:
+            resolved = candidate.parent.resolve(strict=False) / candidate.name
+        try:
+            resolved.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"Path escapes {self.image_type} image root: {relative}") from exc
+        return candidate
+
+    def _stage_destination(self, relative: Path | str, *, allow_root: bool = False) -> Path:
+        destination = self._confined_path(relative, allow_root=allow_root, follow_leaf=False)
+        if destination.is_symlink():
+            raise ValueError(f"Refusing to stage through symlink: {relative}")
+        return destination
+
     def _normalize_stage_root(self, stage_root: str | None) -> Path:
         if not isinstance(stage_root, str) or not stage_root.strip():
             return Path(".")
@@ -42,35 +74,49 @@ class Image(ToolingSupport):
         parts = [part for part in as_path.parts if part not in {"/", "\\"}]
         if not parts:
             return Path(".")
-        return Path(*parts)
+        normalized = Path(*parts)
+        if ".." in normalized.parts:
+            raise ValueError(f"Stage root escapes {self.image_type} image root: {stage_root}")
+        return normalized
 
-    def _copy_path(self, path: Path) -> None:
+    def _copy_path(self, path: Path) -> int:
         if not path.exists():
             print(f"Warning: '{path}' does not exist, skipping")
-            return
+            return 0
 
         self.root.mkdir(parents=True, exist_ok=True)
         if path.is_file():
             print(f"  Copying file: {path}")
-            shutil.copy2(path, self.root / path.name)
-            return
+            try:
+                destination = self._stage_destination(path.name)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                return 1
+            shutil.copy2(path, destination)
+            return 0
 
         if path.is_dir():
             print(f"  Copying directory contents (top-level files only): {path}")
             for child in path.iterdir():
                 if child.is_file():
-                    shutil.copy2(child, self.root / child.name)
-            return
+                    try:
+                        destination = self._stage_destination(child.name)
+                    except ValueError as exc:
+                        print(f"Error: {exc}")
+                        return 1
+                    shutil.copy2(child, destination)
+            return 0
 
         print(f"Warning: '{path}' is not a file or directory, skipping")
+        return 0
 
     def entries(self, relative_dir: Path | str = Path(".")) -> list[tuple[str, str, bool]]:
-        target_dir = self.root / Path(relative_dir)
+        target_dir = self._confined_path(relative_dir, allow_root=True)
         target_dir.mkdir(parents=True, exist_ok=True)
         rows: list[tuple[str, str, bool]] = []
         for entry in sorted(target_dir.iterdir(), key=lambda p: p.name):
-            stat = entry.stat()
-            is_dir = entry.is_dir()
+            stat = entry.lstat()
+            is_dir = entry.is_dir() and not entry.is_symlink()
             readable = "r"
             writable = "w" if os.access(entry, os.W_OK) else "-"
             executable = "x" if (entry.suffix == ".bin" or "." not in entry.name) else "-"
@@ -89,11 +135,15 @@ class Image(ToolingSupport):
         self,
         artifacts: list[tuple[Path, Path]],
         stage_root: str | None = None,
-    ) -> None:
+    ) -> int:
         target_dir = self.root
         target_dir.mkdir(parents=True, exist_ok=True)
-        root_rel = self._normalize_stage_root(stage_root)
-        root_base = target_dir / root_rel
+        try:
+            root_rel = self._normalize_stage_root(stage_root)
+            root_base = self._stage_destination(root_rel, allow_root=True)
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return 1
         root_base.mkdir(parents=True, exist_ok=True)
 
         for source_path, rel_hint in artifacts:
@@ -104,19 +154,31 @@ class Image(ToolingSupport):
             if source_path.is_file():
                 dest_name = rel_hint.name if rel_hint.name else source_path.name
                 if self.supports_directories:
-                    dest_path = root_base / rel_hint
+                    try:
+                        dest_path = self._stage_destination(root_rel / rel_hint)
+                    except ValueError as exc:
+                        print(f"Error: {exc}")
+                        return 1
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
                     print(f"  Copying file: {source_path} -> {dest_path}")
                     shutil.copy2(source_path, dest_path)
                 else:
-                    dest_path = target_dir / dest_name
+                    try:
+                        dest_path = self._stage_destination(dest_name)
+                    except ValueError as exc:
+                        print(f"Error: {exc}")
+                        return 1
                     print(f"  Copying file: {source_path} -> {dest_path}")
                     shutil.copy2(source_path, dest_path)
                 continue
 
             if source_path.is_dir():
                 if self.supports_directories:
-                    dest_dir = root_base / rel_hint
+                    try:
+                        dest_dir = self._stage_destination(root_rel / rel_hint, allow_root=True)
+                    except ValueError as exc:
+                        print(f"Error: {exc}")
+                        return 1
                     dest_dir.parent.mkdir(parents=True, exist_ok=True)
                     print(f"  Copying directory tree: {source_path} -> {dest_dir}")
                     shutil.copytree(source_path, dest_dir, dirs_exist_ok=True)
@@ -124,10 +186,16 @@ class Image(ToolingSupport):
                     print(f"  Copying directory contents (top-level files only): {source_path}")
                     for child in source_path.iterdir():
                         if child.is_file():
-                            shutil.copy2(child, target_dir / child.name)
+                            try:
+                                dest_path = self._stage_destination(child.name)
+                            except ValueError as exc:
+                                print(f"Error: {exc}")
+                                return 1
+                            shutil.copy2(child, dest_path)
                 continue
 
             print(f"Warning: '{source_path}' is not a file or directory, skipping")
+        return 0
 
     def add(self, args: list[str]) -> int:
         if not args:
@@ -137,7 +205,9 @@ class Image(ToolingSupport):
 
         print(f"Adding files to {self.root}")
         for raw in args:
-            self._copy_path(Path(raw))
+            rc = self._copy_path(Path(raw))
+            if rc not in {None, 0}:
+                return int(rc)
 
         print()
         self.ls([])
@@ -152,11 +222,18 @@ class Image(ToolingSupport):
 
         self.root.mkdir(parents=True, exist_ok=True)
         for raw in args:
-            target = self.root / raw
-            if not target.exists():
+            try:
+                target = self._confined_path(raw, follow_leaf=False)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                return 1
+            if not target.exists() and not target.is_symlink():
                 print(f"Warning: '{raw}' does not exist in {self.image_type}, skipping")
                 continue
-            if target.is_dir():
+            if target.is_symlink():
+                print(f"  Removing symlink: {raw}")
+                target.unlink()
+            elif target.is_dir():
                 print(f"  Removing directory: {raw}")
                 shutil.rmtree(target)
             else:

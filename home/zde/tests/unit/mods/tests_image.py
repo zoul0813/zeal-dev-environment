@@ -20,6 +20,8 @@ def test_image_path_helpers_copy_entries_and_stage(tmp_path: Path, monkeypatch: 
     assert img._normalize_stage_root(" ") == Path(".")
     assert img._normalize_stage_root("/") == Path(".")
     assert img._normalize_stage_root("/apps/bin") == Path("apps/bin")
+    with pytest.raises(ValueError, match="Stage root escapes"):
+        img._normalize_stage_root("../outside")
 
     missing = tmp_path / "missing.bin"
     img._copy_path(missing)
@@ -88,6 +90,84 @@ def test_image_path_helpers_copy_entries_and_stage(tmp_path: Path, monkeypatch: 
     img_dirs.stage_artifacts([(stage_file, Path("bin/d.bin")), (stage_dir, Path("apps/tree"))], stage_root="/root")
     assert (img_dirs.root / "root/bin/d.bin").is_file()
     assert (img_dirs.root / "root/apps/tree/a.bin").is_file()
+
+
+def test_image_paths_cannot_escape_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
+    img = image.Image("tf", supports_directories=True)
+    img.root.mkdir(parents=True)
+    monkeypatch.setattr(img, "ls", lambda args: 0)
+
+    outside_file = tmp_path / "outside.txt"
+    outside_file.write_text("keep", encoding="utf-8")
+    outside_dir = tmp_path / "outside-dir"
+    outside_dir.mkdir()
+    (outside_dir / "keep.txt").write_text("keep", encoding="utf-8")
+
+    assert img.rm(["../outside.txt"]) == 1
+    assert img.rm([str(outside_file)]) == 1
+    assert img.rm(["."]) == 1
+    assert outside_file.read_text(encoding="utf-8") == "keep"
+    assert img.root.is_dir()
+
+    parent_link = img.root / "linked-dir"
+    parent_link.symlink_to(outside_dir, target_is_directory=True)
+    assert img.rm(["linked-dir/keep.txt"]) == 1
+    assert (outside_dir / "keep.txt").is_file()
+
+    file_link = img.root / "linked-file"
+    file_link.symlink_to(outside_file)
+    assert img.rm(["linked-file"]) == 0
+    assert not file_link.exists()
+    assert outside_file.read_text(encoding="utf-8") == "keep"
+
+    dir_link = img.root / "linked-directory"
+    dir_link.symlink_to(outside_dir, target_is_directory=True)
+    rows = {name: is_dir for name, _line, is_dir in img.entries()}
+    assert rows["linked-directory"] is False
+    with pytest.raises(ValueError, match="Path escapes"):
+        img.entries("linked-directory")
+
+    symlink_root = image.Image("linked-root", supports_directories=True)
+    symlink_root.root.symlink_to(outside_dir, target_is_directory=True)
+    assert symlink_root.rm(["keep.txt"]) == 1
+    assert (outside_dir / "keep.txt").is_file()
+
+    assert "Path escapes tf image root" in capsys.readouterr().out
+
+
+def test_image_staging_cannot_escape_or_follow_destination_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
+    img = image.Image("tf", supports_directories=True)
+    source = tmp_path / "source.bin"
+    source.write_text("new", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_file = outside / "target.bin"
+    outside_file.write_text("keep", encoding="utf-8")
+
+    assert img.stage_artifacts([(source, Path("target.bin"))], stage_root="../outside") == 1
+    assert outside_file.read_text(encoding="utf-8") == "keep"
+
+    assert img.stage_artifacts([(source, Path("../escaped.bin"))]) == 1
+    assert not (tmp_path / "mnt" / "escaped.bin").exists()
+
+    img.root.mkdir(parents=True, exist_ok=True)
+    (img.root / "linked-dir").symlink_to(outside, target_is_directory=True)
+    assert img.stage_artifacts([(source, Path("linked-dir/target.bin"))]) == 1
+    assert outside_file.read_text(encoding="utf-8") == "keep"
+
+    destination_link = img.root / "destination.bin"
+    destination_link.symlink_to(outside_file)
+    assert img.stage_artifacts([(source, Path("destination.bin"))]) == 1
+    assert outside_file.read_text(encoding="utf-8") == "keep"
+
+    add_source = tmp_path / "destination.bin"
+    add_source.write_text("new", encoding="utf-8")
+    assert img.add([str(add_source)]) == 1
+    assert outside_file.read_text(encoding="utf-8") == "keep"
 
 
 def test_image_command_surface(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
