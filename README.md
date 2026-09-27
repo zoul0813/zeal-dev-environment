@@ -1,3 +1,5 @@
+<img src="./docs/images/logo.svg" alt="Zeal Development Environment logo" width="240">
+
 # Zeal Development Environment
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
