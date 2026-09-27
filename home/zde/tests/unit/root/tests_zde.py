@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import zde as zde_router
+from mods.confirmation import is_auto_confirm
 
 
 def test_main_prints_top_help_when_no_args(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -66,3 +67,19 @@ def test_main_honors_required_deps_gate(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(zde_router, "require_deps", lambda dep_ids: False)
     rc = zde_router.main(["kernel"])
     assert rc == 1
+
+
+@pytest.mark.parametrize("argv", [
+    ["-y", "deps", "remove", "tools"],
+    ["deps", "remove", "tools", "--yes"],
+])
+def test_main_scopes_yes_flag(monkeypatch: pytest.MonkeyPatch, argv: list[str]) -> None:
+    seen: list[tuple[list[str], bool]] = []
+    monkeypatch.setattr(zde_router, "import_command_module", lambda name: SimpleNamespace(main=lambda args: 0))
+    monkeypatch.setattr(zde_router, "discover_subcommands", lambda module: {
+        "remove": lambda args: seen.append((args, is_auto_confirm())) or 0,
+    })
+
+    assert zde_router.main(argv) == 0
+    assert seen == [(["tools"], True)]
+    assert is_auto_confirm() is False

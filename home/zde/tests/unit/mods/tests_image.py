@@ -7,6 +7,7 @@ import stat
 import pytest
 
 from mods import image
+from mods.confirmation import confirmation_scope
 from mods.tooling import ToolSpec
 
 
@@ -160,6 +161,29 @@ def test_image_pack_create_pack_concat(tmp_path: Path, monkeypatch: pytest.Monke
     assert not img.path.exists()
 
     assert img.create(["128"]) == 0
+
+
+@pytest.mark.parametrize("image_type", ["cf", "tf"])
+def test_image_create_yes_overwrites_without_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, image_type: str
+) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
+    monkeypatch.setattr(image, "require_deps", lambda deps: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("unexpected prompt"))
+    if image_type == "cf":
+        img = image.ImagePack(image_type)
+        monkeypatch.setattr(img, "_require_configured_tools", lambda: True)
+        monkeypatch.setattr(img, "_pack", lambda output, inputs: 0)
+    else:
+        img = image.ImageZealFS(image_type, "4096")
+        monkeypatch.setattr(img, "_require_tools", lambda names: True)
+        monkeypatch.setattr(img, "_build_image", lambda size: 0)
+    img.path.parent.mkdir(parents=True, exist_ok=True)
+    img.path.write_text("old image", encoding="utf-8")
+
+    with confirmation_scope(True):
+        assert img.create([]) == 0
+    assert not img.path.exists()
 
 
 def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

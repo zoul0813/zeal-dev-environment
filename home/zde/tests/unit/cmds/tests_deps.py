@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from cmds import deps as deps_cmd
+from mods.confirmation import confirmation_scope
 
 
 class _FakeDep:
@@ -72,6 +73,16 @@ def test_subcmd_remove_blocks_when_dependents_exist(monkeypatch: pytest.MonkeyPa
     assert rc == 1
     assert "Cannot remove 'core': required by dependent" in out
     assert fake.remove_calls == []
+
+
+def test_subcmd_remove_yes_skips_prompt_but_checks_dependents(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeCatalog()
+    monkeypatch.setattr(deps_cmd, "DepCatalog", lambda: fake)
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("unexpected prompt"))
+    with confirmation_scope(True):
+        assert deps_cmd.subcmd_remove(["core"]) == 1
+        assert deps_cmd.subcmd_remove(["tools"]) == 0
+    assert fake.remove_calls == [("tools", False)]
 
 
 def test_subcmd_stage_rejects_unknown_target(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

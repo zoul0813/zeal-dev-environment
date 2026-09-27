@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mods.cli import paint
+from mods.confirmation import confirm
 from mods.deps import DepCatalog
 from mods import image as image_mod
 from mods.tui.contract import ActionSpec, CommandSpec
@@ -118,7 +119,7 @@ def subcmd_update(args: list[str]) -> int:
 def subcmd_remove(args: list[str]) -> int:
     force = "-f" in args or "--force" in args
     args = [a for a in args if a not in ("-f", "--force")]
-    catalog, dep_ids, rc = _resolve_dep_ids(args, "Usage: zde deps remove [-f] <id> [id...]")
+    catalog, dep_ids, rc = _resolve_dep_ids(args, "Usage: zde deps remove [-f] [-y|--yes] <id> [id...]")
     if rc != 0 or catalog is None or dep_ids is None:
         return rc
 
@@ -130,11 +131,7 @@ def subcmd_remove(args: list[str]) -> int:
                 return 1
 
         names = ", ".join(dep_ids)
-        try:
-            answer = input(f"Remove {names}? [y/N] ").strip().lower()
-        except EOFError:
-            answer = ""
-        if answer != "y":
+        if not confirm(f"Remove {names}? [y/N] "):
             print("Aborted.")
             return 1
 
@@ -215,7 +212,7 @@ def help() -> int:
     print("  info <id>")
     print("  build <id> [id...]")
     print("  stage <target> <id> [id...]")
-    print("  remove <id> [id...]")
+    print("  remove [-f] [-y|--yes] <id> [id...]")
     return 0
 
 

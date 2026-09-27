@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 from mods.deps import DepCatalog
+from mods.confirmation import confirm, is_auto_confirm
 
 
 def _find_missing(required_dep_ids: list[str]) -> list[str]:
@@ -81,11 +82,10 @@ def require_deps(required_dep_ids: list[str]) -> bool:
 
     _print_missing(missing)
 
-    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+    if not is_auto_confirm() and not (sys.stdin.isatty() and sys.stdout.isatty()):
         return False
 
-    reply = input("Install/sync missing required dependencies now and continue? ([Y]es, [N]o) ").strip().lower()
-    if reply not in {"y", "yes"}:
+    if not confirm("Install/sync missing required dependencies now and continue? ([Y]es, [N]o) "):
         return False
 
     if not _install_missing(missing):

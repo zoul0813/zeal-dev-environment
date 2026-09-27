@@ -50,6 +50,7 @@ Supported subcommands:
 - `cf` defaults to size `64`.
 - `tf` defaults to size `4096`.
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
+- Pass `-y` or `--yes` to `zde image ... create` to confirm overwriting without a prompt.
 - `romdisk create`:
   - Packs staged files from `mnt/romdisk` into `home/Zeal-8-bit-OS/build/disk.img`.
   - Rebuilds `home/Zeal-8-bit-OS/build/os_with_romdisk.img` by combining the latest ROM image (`mnt/roms/latest.img`) with the freshly packed disk.

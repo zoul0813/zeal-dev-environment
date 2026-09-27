@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from mods.common import HOME_DIR, MNT_DIR, ZOS_PATH
+from mods.confirmation import confirm
 from mods.process import run
 from mods.requirements import require_deps
 from mods.tooling import ToolSpec, ToolingSupport
@@ -223,8 +224,7 @@ class ImagePack(Image):
             return 1
 
         if self.path.exists():
-            reply = input("Image exists, overwrite? ([Y]es, [N]o) ").strip().lower()
-            if reply not in {"y", "yes"}:
+            if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1
             self.path.unlink()
 
@@ -312,8 +312,7 @@ class ImageZealFS(Image):
 
         size = args[0] if args else self.default_size
         if self.path.exists():
-            reply = input("Image exists, overwrite? ([Y]es, [N]o) ").strip().lower()
-            if reply not in {"y", "yes"}:
+            if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1
             self.path.unlink()
 

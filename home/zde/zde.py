@@ -16,6 +16,7 @@ from mods.commands import (
     module_name_to_command,
 )
 from mods.requirements import require_deps
+from mods.confirmation import confirmation_scope
 
 SERVICE_COMMANDS: dict[str, dict[str, object]] = {
     "emulator": {
@@ -46,6 +47,7 @@ def print_top_help() -> int:
     print(f"Commands:\n   {', '.join(rendered)}")
 
     print("\nHost Commands:\n   exec, activate, update")
+    print("\nOptions:\n   -y, --yes  Confirm prompts automatically")
 
     return 0
 
@@ -60,6 +62,13 @@ def infer_module_help(module_name: str, subcommands: dict[str, Callable[[list[st
 
 
 def main(argv: list[str]) -> int:
+    yes = any(arg in {"-y", "--yes"} for arg in argv)
+    argv = [arg for arg in argv if arg not in {"-y", "--yes"}]
+    with confirmation_scope(yes):
+        return _main(argv)
+
+
+def _main(argv: list[str]) -> int:
     if not argv or argv[0] == "help":
         return print_top_help()
 

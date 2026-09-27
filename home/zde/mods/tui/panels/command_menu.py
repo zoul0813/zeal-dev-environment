@@ -6,6 +6,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.commands import command_to_module_name, import_command_module
+from mods.confirmation import is_auto_confirm
 from mods.tui.contract import CommandSpec
 from mods.tui.exec import pause_after_run, run_action, suspend_for_external_output
 from mods.tui.panels.action_menu import ActionMenuScreen
@@ -90,6 +91,9 @@ class CommandMenuScreen(Screen[None]):
             status.remove_class("show")
 
     def action_quit_prompt(self) -> None:
+        if is_auto_confirm():
+            self.app.exit()
+            return
         self.app.push_screen(
             ConfirmModal(
                 title="Quit ZDE TUI?",

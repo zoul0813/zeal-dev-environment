@@ -10,6 +10,7 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from mods.tui.exec import pause_after_run, suspend_for_external_output
 from mods.tui.modals.confirm_modal import ConfirmModal
+from mods.confirmation import is_auto_confirm
 
 try:
     from textual.binding import Binding
@@ -447,6 +448,9 @@ class ItemActionScreen(Screen[None]):
             return
         confirm = self.confirm_action(action_id, item_id)
         if confirm is None:
+            self._execute_action(action_id, item_id)
+            return
+        if is_auto_confirm():
             self._execute_action(action_id, item_id)
             return
 

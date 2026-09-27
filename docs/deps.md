@@ -12,7 +12,7 @@ zde deps install <id> [id...]
 zde deps update <id> [id...]
 zde deps build <id> [id...]
 zde deps stage <target> <id> [id...]
-zde deps remove <id> [id...]
+zde deps remove [-y|--yes] <id> [id...]
 ```
 
 Running `zde deps` with no arguments prints help and then shows installed dependencies.
@@ -26,7 +26,7 @@ Running `zde deps` with no arguments prints help and then shows installed depend
 - `update <id> [id...]`: update one or more installed dependencies.
 - `build <id> [id...]`: run each dependency's build step.
 - `stage <target> <id> [id...]`: copy dependency build artifacts into an image target.
-- `remove <id> [id...]`: remove one or more dependencies.
+- `remove <id> [id...]`: remove one or more dependencies. `-y` / `--yes` skips confirmation but still checks for dependents. `-f` / `--force` skips both.
 
 ## Dependency IDs And Aliases
 

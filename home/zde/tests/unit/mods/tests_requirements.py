@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pytest
 
 from mods import requirements
+from mods.confirmation import confirmation_scope
 
 
 @dataclass
@@ -111,6 +112,27 @@ def test_require_deps_non_interactive_returns_false(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(requirements.sys.stdin, "isatty", lambda: False)
     monkeypatch.setattr(requirements.sys.stdout, "isatty", lambda: True)
     assert requirements.require_deps(["dep-a"]) is False
+
+
+def test_require_deps_yes_installs_without_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"find": 0, "install": 0}
+
+    def _find_missing(ids):
+        calls["find"] += 1
+        return ["dep-a"] if calls["find"] == 1 else []
+
+    def _install_missing(ids):
+        calls["install"] += 1
+        return True
+
+    monkeypatch.setattr(requirements, "_find_missing", _find_missing)
+    monkeypatch.setattr(requirements, "_print_missing", lambda missing: None)
+    monkeypatch.setattr(requirements, "_install_missing", _install_missing)
+    monkeypatch.setattr(requirements.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("unexpected prompt"))
+    with confirmation_scope(True):
+        assert requirements.require_deps(["dep-a"]) is True
+    assert calls == {"find": 2, "install": 1}
 
 
 def test_require_deps_user_declines_install(monkeypatch: pytest.MonkeyPatch) -> None:

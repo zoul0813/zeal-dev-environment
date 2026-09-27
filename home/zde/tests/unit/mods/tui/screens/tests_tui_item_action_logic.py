@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from mods.tui.panels.item_action_screen import ActionResult, ItemAction, ItemActionScreen, ItemEntry
+from mods.confirmation import confirmation_scope
+from mods.tui.panels.item_action_screen import ActionResult, ConfirmRequest, ItemAction, ItemActionScreen, ItemEntry
 
 
 class _Screen(ItemActionScreen):
@@ -81,3 +82,16 @@ def test_item_action_visibility_shortcuts_and_helpers() -> None:
     screen._selected_item_id = lambda: None  # type: ignore[method-assign]
     assert screen._shortcut_action_for_key("f3") is None
     assert screen._shortcut_action_for_key("f5") == "a2"
+
+
+def test_item_action_yes_skips_confirmation_modal() -> None:
+    screen = _Screen()
+    screen._action_defs = {"remove": ItemAction(id="remove", label="remove")}
+    screen._selected_item_id = lambda: "x"  # type: ignore[method-assign]
+    screen.confirm_action = lambda action_id, item_id: ConfirmRequest("Remove", "Confirm?")  # type: ignore[method-assign]
+    calls: list[tuple[str, str | None]] = []
+    screen._execute_action = lambda action_id, item_id: calls.append((action_id, item_id))  # type: ignore[method-assign]
+
+    with confirmation_scope(True):
+        screen._run_action_by_id("remove")
+    assert calls == [("remove", "x")]
