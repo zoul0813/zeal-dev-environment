@@ -233,12 +233,19 @@ def test_image_pack_create_pack_concat(tmp_path: Path, monkeypatch: pytest.Monke
     assert img.path.exists()
 
     packed: list[tuple[Path, list[Path]]] = []
-    monkeypatch.setattr(img, "_pack", lambda output, inputs, skip_hidden=False: packed.append((output, inputs)) or 0)
+
+    def _pack(output, inputs, skip_hidden=False):
+        packed.append((output, inputs))
+        output.write_text("new image", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(img, "_pack", _pack)
     monkeypatch.setattr("builtins.input", lambda _: "yes")
     assert img.create([]) == 0
-    assert packed[-1][0] == img.path
+    assert packed[-1][0] != img.path
+    assert packed[-1][0].parent.parent == img.path.parent
     assert packed[-1][1] == [img.root]
-    assert not img.path.exists()
+    assert img.path.read_text(encoding="utf-8") == "new image"
 
     assert img.create(["128"]) == 0
 
@@ -253,17 +260,51 @@ def test_image_create_yes_overwrites_without_prompt(
     if image_type == "cf":
         img = image.ImagePack(image_type)
         monkeypatch.setattr(img, "_require_configured_tools", lambda: True)
-        monkeypatch.setattr(img, "_pack", lambda output, inputs: 0)
+
+        def _build(output, inputs):
+            output.write_text("new image", encoding="utf-8")
+            return 0
+
+        monkeypatch.setattr(img, "_pack", _build)
     else:
         img = image.ImageZealFS(image_type, "4096")
         monkeypatch.setattr(img, "_require_tools", lambda names: True)
-        monkeypatch.setattr(img, "_build_image", lambda size: 0)
+
+        def _build(size, output):
+            output.write_text("new image", encoding="utf-8")
+            return 0
+
+        monkeypatch.setattr(img, "_build_image", _build)
     img.path.parent.mkdir(parents=True, exist_ok=True)
     img.path.write_text("old image", encoding="utf-8")
 
     with confirmation_scope(True):
         assert img.create([]) == 0
-    assert not img.path.exists()
+    assert img.path.read_text(encoding="utf-8") == "new image"
+
+
+@pytest.mark.parametrize("image_type", ["cf", "tf"])
+def test_failed_image_replacement_preserves_existing_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, image_type: str
+) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
+    monkeypatch.setattr(image, "require_deps", lambda deps: True)
+    if image_type == "cf":
+        img = image.ImagePack(image_type)
+        monkeypatch.setattr(img, "_require_configured_tools", lambda: True)
+        monkeypatch.setattr(img, "_pack", lambda output, inputs: 9)
+    else:
+        img = image.ImageZealFS(image_type, "4096")
+        monkeypatch.setattr(img, "_require_tools", lambda names: True)
+        monkeypatch.setattr(img, "_build_image", lambda size, output: 9)
+    img.path.parent.mkdir(parents=True, exist_ok=True)
+    img.path.write_text("working image", encoding="utf-8")
+
+    with confirmation_scope(True):
+        assert img.create([]) == 9
+
+    assert img.path.read_text(encoding="utf-8") == "working image"
+    assert not list(img.path.parent.glob(f".{img.path.name}.*"))
 
 
 def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -303,7 +344,13 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr("builtins.input", lambda _: "n")
     assert tf.create([]) == 1
     monkeypatch.setattr("builtins.input", lambda _: "y")
-    monkeypatch.setattr(tf, "_build_image", lambda size: 0 if size in {"4096", "77"} else 1)
+    def _build(size, output):
+        if size not in {"4096", "77"}:
+            return 1
+        output.write_text(f"image {size}", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(tf, "_build_image", _build)
     assert tf.create([]) == 0
     assert tf.create(["77"]) == 0
 
@@ -368,19 +415,47 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
         "CONFIG_ROMDISK_OFFSET_PAGES=2\nCONFIG_ROMDISK_INCLUDE_INIT_BIN=y\nCONFIG_ROMDISK_IGNORE_HIDDEN=on\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(img, "_pack", lambda output, inputs, skip_hidden=False: 5)
+    disk_img = mnt / "romdisk.img"
+    output_img = mnt / "roms" / "os_with_romdisk.img"
+    output_img.parent.mkdir(parents=True, exist_ok=True)
+    disk_img.write_bytes(b"old disk")
+    output_img.write_bytes(b"old combined")
+
+    def _pack_fail(output, inputs, skip_hidden=False):
+        output.write_bytes(b"partial disk")
+        return 5
+
+    monkeypatch.setattr(img, "_pack", _pack_fail)
     assert img.create([]) == 5
+    assert disk_img.read_bytes() == b"old disk"
+    assert output_img.read_bytes() == b"old combined"
     assert "CONFIG_ROMDISK_INCLUDE_INIT_BIN=y" in capsys.readouterr().out
 
     init_bin = zos / "build" / "romdisk" / "init" / "build" / "init.bin"
     init_bin.parent.mkdir(parents=True, exist_ok=True)
     init_bin.write_bytes(b"i")
-    monkeypatch.setattr(img, "_pack", lambda output, inputs, skip_hidden=False: 0)
-    monkeypatch.setattr(img, "_concat", lambda output, parts: 6)
-    assert img.create([]) == 6
+    def _pack_success(output, inputs, skip_hidden=False):
+        output.write_bytes(b"new disk")
+        return 0
 
-    monkeypatch.setattr(img, "_concat", lambda output, parts: 0)
+    def _concat_fail(output, parts):
+        output.write_bytes(b"partial combined")
+        return 6
+
+    monkeypatch.setattr(img, "_pack", _pack_success)
+    monkeypatch.setattr(img, "_concat", _concat_fail)
+    assert img.create([]) == 6
+    assert disk_img.read_bytes() == b"old disk"
+    assert output_img.read_bytes() == b"old combined"
+
+    def _concat_success(output, parts):
+        output.write_bytes(b"new combined")
+        return 0
+
+    monkeypatch.setattr(img, "_concat", _concat_success)
     assert img.create([]) == 0
+    assert disk_img.read_bytes() == b"new disk"
+    assert output_img.read_bytes() == b"new combined"
     out = capsys.readouterr().out
     assert "Created" in out
 

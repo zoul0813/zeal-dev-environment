@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
+from typing import Callable
 
 from mods.common import HOME_DIR, MNT_DIR, ZOS_PATH
 from mods.confirmation import confirm
@@ -65,6 +67,24 @@ class Image(ToolingSupport):
         if destination.is_symlink():
             raise ValueError(f"Refusing to stage through symlink: {relative}")
         return destination
+
+    def _build_and_publish(self, build: Callable[[Path], int]) -> int:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        prefix = f".{self.path.name}."
+        with tempfile.TemporaryDirectory(prefix=prefix, dir=self.path.parent) as temporary_dir:
+            temporary_path = Path(temporary_dir) / self.path.name
+            rc = build(temporary_path)
+            if rc != 0:
+                return rc
+            if not temporary_path.is_file():
+                print(f"Image build did not produce output: {temporary_path}")
+                return 1
+            try:
+                os.replace(temporary_path, self.path)
+            except OSError as exc:
+                print(f"Failed to publish image '{self.path}': {exc}")
+                return 1
+        return 0
 
     def _normalize_stage_root(self, stage_root: str | None) -> Path:
         if not isinstance(stage_root, str) or not stage_root.strip():
@@ -303,14 +323,13 @@ class ImagePack(Image):
         if self.path.exists():
             if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1
-            self.path.unlink()
 
         size = args[0] if args else (self.default_create_size or "")
         print(f"Image Name: {self.image_type}")
         print(f"Image Size: {size}")
 
         self.root.mkdir(parents=True, exist_ok=True)
-        return self._pack(self.path, [self.root])
+        return self._build_and_publish(lambda output: self._pack(output, [self.root]))
 
     def _pack(self, output: Path, inputs: list[Path], *, skip_hidden: bool = False) -> int:
         cmd: list[str] = []
@@ -341,15 +360,16 @@ class ImageZealFS(Image):
         )
         self.default_size = default_size
 
-    def _build_image(self, size: str) -> int:
+    def _build_image(self, size: str, output: Path | None = None) -> int:
         self.root.mkdir(parents=True, exist_ok=True)
         zealfs_bin = self._TOOLS["zealfs"].path
         media_dir = "/media/zealfs"
+        output_path = output or self.path
         cmd = [
             "sudo",
             str(zealfs_bin),
             "-v2",
-            f"--image={self.path}",
+            f"--image={output_path}",
             f"--size={size}",
         ]
         if self.image_type == "tf":
@@ -391,12 +411,11 @@ class ImageZealFS(Image):
         if self.path.exists():
             if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1
-            self.path.unlink()
 
         print("Image Name:", self.image_type)
         print("Image Size:", size)
 
-        return self._build_image(size)
+        return self._build_and_publish(lambda output: self._build_image(size, output))
 
 
 class ImageRomdisk(ImagePack):
@@ -489,13 +508,31 @@ class ImageRomdisk(ImagePack):
             print(f"Warning: CONFIG_ROMDISK_INCLUDE_INIT_BIN=y but '{init_bin}' is missing")
         pack_inputs.append(stage_dir)
 
-        rc = self._pack(disk_img, pack_inputs, skip_hidden=ignore_hidden)
-        if rc != 0:
-            return rc
+        with tempfile.TemporaryDirectory(prefix=".romdisk.", dir=MNT_DIR) as temporary_dir:
+            temporary_root = Path(temporary_dir)
+            temporary_disk = temporary_root / disk_img.name
+            temporary_output = temporary_root / output_img.name
 
-        rc = self._concat(output_img, [(0x0000, kernel_bin), (offset_bytes, disk_img)])
-        if rc != 0:
-            return rc
+            rc = self._pack(temporary_disk, pack_inputs, skip_hidden=ignore_hidden)
+            if rc != 0:
+                return rc
+            if not temporary_disk.is_file():
+                print(f"ROMDISK build did not produce output: {temporary_disk}")
+                return 1
+
+            rc = self._concat(temporary_output, [(0x0000, kernel_bin), (offset_bytes, temporary_disk)])
+            if rc != 0:
+                return rc
+            if not temporary_output.is_file():
+                print(f"Combined ROM build did not produce output: {temporary_output}")
+                return 1
+
+            try:
+                os.replace(temporary_disk, disk_img)
+                os.replace(temporary_output, output_img)
+            except OSError as exc:
+                print(f"Failed to publish ROMDISK images: {exc}")
+                return 1
 
         print(f"Created {disk_img}")
         print(f"Created {output_img}")
