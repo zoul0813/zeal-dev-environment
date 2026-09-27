@@ -108,6 +108,10 @@ def _cookiecutter_bin() -> str | None:
     return None
 
 
+def _create_out_dir() -> Path:
+    return Path("/src")
+
+
 def main(args: list[str]) -> int:
     if not args:
         return _print_usage()
@@ -128,9 +132,9 @@ def main(args: list[str]) -> int:
         print("A project name is required. Use --name <project-name>.")
         return 1
 
+    out_dir = _create_out_dir()
     env = dict(os.environ)
-    env["ZDE_CREATE_OUT"] = "/src"
-    out_dir = Path(env.get("ZDE_CREATE_OUT", "/tmp"))
+    env["ZDE_CREATE_OUT"] = str(out_dir)
     project_dir = out_dir / project_name
     if project_dir.exists():
         print(f"Project path already exists: {project_dir}")
@@ -140,7 +144,6 @@ def main(args: list[str]) -> int:
     cmd = [
         cookiecutter,
         "--no-input",
-        "-f",
         "-o",
         str(out_dir),
         template,
