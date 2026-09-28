@@ -2,10 +2,13 @@
 
 `update` is a host-managed command that also runs ZDE maintenance steps.
 
+Use `zde sync` when only catalog, migration, and dependency maintenance is needed. `sync` never updates the ZDE checkout or pulls a container image, making it suitable for pinned CI checkouts.
+
 ## Usage
 
 ```sh
 zde update
+zde sync
 ```
 
 ## Host-Side Behavior
@@ -24,6 +27,8 @@ After the host update finishes, the wrapper runs the ZDE `update` command, which
 - runs legacy migration steps when needed
 - synchronizes required dependencies
 - refreshes dependency lock state
+
+`zde sync` runs only these maintenance tasks. `zde update` performs host-side repository and image updates first, then runs the same maintenance tasks.
 
 ## Related Environment Variables
 

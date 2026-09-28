@@ -76,10 +76,11 @@ runs:
       run: |
         set -euo pipefail
         cd "${{ github.workspace }}/${{ inputs.path }}"
+        zde_head="$(git rev-parse HEAD)"
 
         # Refresh the Software Collection catalog before resolving optional
-        # dependency IDs and aliases supplied by the caller.
-        ./zde update
+        # dependency IDs and aliases without changing the selected checkout.
+        ./zde sync
 
         deps=(
           "Zeal8bit/Zeal-8-bit-OS"
@@ -109,6 +110,11 @@ runs:
         deduped=()
         dedupe deps deduped
         ./zde deps install "${deduped[@]}"
+
+        if [ "$(git rev-parse HEAD)" != "$zde_head" ]; then
+          echo "ZDE checkout changed during dependency setup" >&2
+          exit 1
+        fi
       shell: bash
 
     - name: Normalize ZDE Workspace Permissions

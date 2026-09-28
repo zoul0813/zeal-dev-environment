@@ -5,7 +5,7 @@ from mods.tui.contract import ActionSpec, CommandSpec
 from mods.update import resolve_env, run_update
 
 
-def main(args: list[str]) -> int:
+def run_maintenance() -> int:
     print("Running in-container update tasks")
 
     env = resolve_env()
@@ -19,6 +19,10 @@ def main(args: list[str]) -> int:
 
     print("In-container update tasks complete")
     return 0
+
+
+def main(args: list[str]) -> int:
+    return run_maintenance()
 
 
 def get_tui_spec() -> CommandSpec:

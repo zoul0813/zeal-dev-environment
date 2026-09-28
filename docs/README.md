@@ -58,6 +58,7 @@ Create application projects outside the ZDE checkout so generated files and buil
 - [`image`](./image.md): manage EEPROM, CF, TF, and romdisk staging areas and image files.
 - [`kernel`](./kernel.md): build the Zeal kernel with preset or user config.
 - [`make`](./make.md): run `make` in the current project.
+- [`sync`](./update.md): run migration, catalog, and dependency maintenance without updating the ZDE checkout.
 - [`test`](./test.md): run ZDE Python unit tests with pytest.
 - [`tui`](./tui.md): launch the optional Textual interface.
 

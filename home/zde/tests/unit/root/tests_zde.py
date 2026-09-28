@@ -24,6 +24,9 @@ def _stub_runtime(tmp_path: Path) -> Path:
         'if [ -n "${STUB_LOG:-}" ]; then\n'
         '  printf "%s" "${ZDE_IMAGE_REF:-}" > "$STUB_LOG"\n'
         'fi\n'
+        'if [ -n "${STUB_ARGS_LOG:-}" ]; then\n'
+        '  printf "%s\\n" "$@" > "$STUB_ARGS_LOG"\n'
+        'fi\n'
         'exit "${STUB_RC:-0}"\n',
         encoding="utf-8",
     )
@@ -258,6 +261,24 @@ def test_version_fallback_handles_registry_ports_and_digests(
     assert completed.returncode == 0
     assert f"Image: {reference}" in completed.stdout
     assert f"  - {repository_tag}" in completed.stdout
+
+
+def test_wrapper_sync_routes_directly_to_container_maintenance(tmp_path: Path) -> None:
+    args_log = tmp_path / "runtime-args.log"
+
+    assert (
+        _run_wrapper(
+            tmp_path,
+            ["sync"],
+            tty=False,
+            extra_env={"STUB_ARGS_LOG": str(args_log)},
+            stub_rc=0,
+        )
+        == 0
+    )
+
+    runtime_args = args_log.read_text(encoding="utf-8").splitlines()
+    assert runtime_args[-2:] == ["/home/zeal8bit/zde/zde.py", "sync"]
 
 
 @pytest.mark.parametrize("argv", [

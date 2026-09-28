@@ -46,6 +46,7 @@ Host wrapper and service commands:
 Core ZDE commands:
 
 - [`zde deps`](./docs/deps.md): manage required and optional dependencies.
+- [`zde sync`](./docs/update.md): refresh migrations, catalogs, and dependencies without changing the ZDE checkout.
 - [`zde create`](./docs/create.md): scaffold a new project from a template.
 - [`zde make`](./docs/make.md): run `make` in the current project.
 - [`zde cmake`](./docs/cmake.md): configure and build CMake projects.
