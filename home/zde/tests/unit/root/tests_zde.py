@@ -1,11 +1,79 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import zde as zde_router
 from mods.confirmation import is_auto_confirm
+
+
+REPO_ROOT = Path(__file__).resolve().parents[5]
+WRAPPER = REPO_ROOT / "zde"
+ROUTER = REPO_ROOT / "home" / "zde" / "zde.py"
+
+
+def _stub_runtime(tmp_path: Path) -> Path:
+    runtime = tmp_path / "container-runtime"
+    runtime.write_text('#!/bin/sh\nexit "${STUB_RC:-0}"\n', encoding="utf-8")
+    runtime.chmod(0o755)
+    return runtime
+
+
+def _run_wrapper(
+    tmp_path: Path,
+    args: list[str],
+    *,
+    tty: bool,
+    soft_exit: str | None = None,
+    strict_exit: str | None = None,
+) -> int:
+    env = dict(os.environ)
+    env.update(
+        {
+            "CONTAINER_CMD": str(_stub_runtime(tmp_path)),
+            "STUB_RC": "7",
+            "ZDE_USER_PATH": str(tmp_path / "state"),
+        }
+    )
+    for name, value in (("ZDE_SOFT_EXIT", soft_exit), ("ZDE_STRICT_EXIT", strict_exit)):
+        if value is None:
+            env.pop(name, None)
+        else:
+            env[name] = value
+
+    command = [str(WRAPPER), *args]
+    if not tty:
+        return subprocess.run(
+            command,
+            cwd=tmp_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+            timeout=10,
+        ).returncode
+
+    master_fd, slave_fd = os.openpty()
+    try:
+        return subprocess.run(
+            command,
+            cwd=tmp_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            check=False,
+            timeout=10,
+        ).returncode
+    finally:
+        os.close(slave_fd)
+        os.close(master_fd)
 
 
 def test_main_prints_top_help_when_no_args(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -67,6 +135,43 @@ def test_main_honors_required_deps_gate(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(zde_router, "require_deps", lambda dep_ids: False)
     rc = zde_router.main(["kernel"])
     assert rc == 1
+
+
+@pytest.mark.parametrize("args", [["config", "get", "bad-key"], ["exec", "false"]])
+@pytest.mark.parametrize("tty", [False, True])
+def test_wrapper_preserves_failures_by_default(tmp_path: Path, args: list[str], tty: bool) -> None:
+    assert _run_wrapper(tmp_path, args, tty=tty) == 7
+
+
+@pytest.mark.parametrize("args", [["config", "get", "bad-key"], ["exec", "false"]])
+@pytest.mark.parametrize("tty", [False, True])
+def test_wrapper_soft_exit_is_explicit_and_consistent(tmp_path: Path, args: list[str], tty: bool) -> None:
+    assert _run_wrapper(tmp_path, args, tty=tty, soft_exit="1") == 0
+
+
+@pytest.mark.parametrize("args", [["config", "get", "bad-key"], ["exec", "false"]])
+@pytest.mark.parametrize("tty", [False, True])
+def test_wrapper_strict_exit_overrides_soft_exit(tmp_path: Path, args: list[str], tty: bool) -> None:
+    assert _run_wrapper(tmp_path, args, tty=tty, soft_exit="1", strict_exit="1") == 7
+
+
+def test_router_does_not_rewrite_failure_status(tmp_path: Path) -> None:
+    env = dict(os.environ)
+    env["ZDE_SOFT_EXIT"] = "1"
+    env["ZDE_USER_PATH"] = str(tmp_path / "state")
+
+    completed = subprocess.run(
+        [sys.executable, str(ROUTER), "config", "get", "bad-key"],
+        cwd=tmp_path,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        timeout=10,
+    )
+
+    assert completed.returncode != 0
 
 
 @pytest.mark.parametrize("argv", [

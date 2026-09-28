@@ -8,13 +8,20 @@ zde_init "$@" || exit 1
 
 finalize_exit() {
   local rc="$1"
-  # In interactive terminals, ZDE already prints actionable errors.
-  # Returning 0 avoids outer wrappers printing redundant "Error: executing ..." noise.
-  # Set ZDE_STRICT_EXIT=1 to preserve non-zero exit codes interactively.
-  if [ "$rc" -ne 0 ] && [ -t 1 ] && [ "${ZDE_STRICT_EXIT:-0}" != "1" ]; then
+  if [ "$rc" -ne 0 ] && [ "$ZDE_SOFT_EXIT" = "1" ]; then
     exit 0
   fi
   exit "$rc"
+}
+
+run_and_finalize() {
+  local rc
+  if "$@"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  finalize_exit "$rc"
 }
 
 zde_version() {
@@ -104,11 +111,10 @@ case "$COMMAND" in
     ;;
   -i)
     if [ "${HOST_ARGS[0]-}" = "-b" ]; then
-      zde_shell "${ZDE_BUILD_SERVICE:-zeal8bit-build-env}"
+      run_and_finalize zde_shell "${ZDE_BUILD_SERVICE:-zeal8bit-build-env}"
     else
-      zde_shell "$CONTAINER_SERVICE"
+      run_and_finalize zde_shell "$CONTAINER_SERVICE"
     fi
-    finalize_exit $?
     ;;
 
   ## HOST COMMANDS
@@ -117,8 +123,7 @@ case "$COMMAND" in
       echo "Usage: zde exec <command> [args...]"
       finalize_exit 1
     fi
-    zde_exec "${HOST_ARGS[@]}"
-    finalize_exit $?
+    run_and_finalize zde_exec "${HOST_ARGS[@]}"
     ;;
   activate)
     if [ -t 1 ]; then
@@ -129,27 +134,26 @@ case "$COMMAND" in
     exit 0
     ;;
   update)
-    "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]-}"
-    finalize_exit $?
+    run_and_finalize "$ZDE_PATH/home/zde/svcs/update" "${HOST_ARGS[@]-}"
     ;;
 
   ## SERVICES
   emu|emulator)
-    "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]-}"
-    finalize_exit $?
+    run_and_finalize "$ZDE_PATH/home/zde/svcs/emulator" "${HOST_ARGS[@]-}"
     ;;
   playground)
-    "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]-}"
-    finalize_exit $?
+    run_and_finalize "$ZDE_PATH/home/zde/svcs/playground" "${HOST_ARGS[@]-}"
     ;;
 esac
 
 if [ -z "$COMMAND" ] || [ "$COMMAND" = "help" ]; then
-  zde_command "$@"
-  rc=$?
+  if zde_command "$@"; then
+    rc=0
+  else
+    rc=$?
+  fi
   print_service_statuses
-  finalize_exit $rc
+  finalize_exit "$rc"
 fi
 
-zde_command "$@"
-finalize_exit $?
+run_and_finalize zde_command "$@"

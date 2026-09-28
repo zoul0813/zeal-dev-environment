@@ -143,7 +143,8 @@ These variables are not required for normal use:
 - `ZDE_USER_PATH`: change the user-state directory from its `~/.zeal8bit` default.
 - `ZDE_IMAGE`, `ZDE_VERSION`, or `ZDE_IMAGE_REF`: override the container image selection.
 - `ZDE_BRANCH`: select the branch used by `zde update`.
-- `ZDE_STRICT_EXIT`: preserve nonzero interactive command exit codes when set to `1`.
+- `ZDE_SOFT_EXIT`: translate failed host-wrapper commands to exit code 0 when set to `1`. Defaults to `0`.
+- `ZDE_STRICT_EXIT`: force real command exit codes when set to `1`, overriding `ZDE_SOFT_EXIT`.
 
 See the [runtime configuration reference](./README.md#runtime-configuration) for behavior and precedence.
 

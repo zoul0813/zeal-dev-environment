@@ -48,11 +48,17 @@ zde_init() {
   HOST_UID="${HOST_UID:-$(id -u)}"
   HOST_GID="${HOST_GID:-$(id -g)}"
   HOST_HOME="${HOST_HOME:-$HOME}"
-  if [ -t 1 ]; then
-    ZDE_SOFT_EXIT="${ZDE_SOFT_EXIT:-1}"
-  else
-    ZDE_SOFT_EXIT="${ZDE_SOFT_EXIT:-0}"
+  ZDE_SOFT_EXIT="${ZDE_SOFT_EXIT:-0}"
+  if [ "${ZDE_STRICT_EXIT:-0}" = "1" ]; then
+    ZDE_SOFT_EXIT=0
   fi
+  case "$ZDE_SOFT_EXIT" in
+    0|1) ;;
+    *)
+      echo "WARNING: Unsupported ZDE_SOFT_EXIT value '$ZDE_SOFT_EXIT' (expected: 0|1); using 0"
+      ZDE_SOFT_EXIT=0
+      ;;
+  esac
   ZDE_IMAGE_REF="${ZDE_IMAGE_REF:-${ZDE_IMAGE}:${ZDE_VERSION}}"
   LAUNCH_PWD="${LAUNCH_PWD:-$PWD}"
   HOST_CWD="${HOST_CWD:-$LAUNCH_PWD}"
@@ -90,7 +96,6 @@ zde_run_in_container() {
     -e "HOST_GID=${HOST_GID}"
     -e "HOST_HOME=${HOST_HOME}"
     -e "HOST_CWD=${HOST_CWD}"
-    -e "ZDE_SOFT_EXIT=${ZDE_SOFT_EXIT}"
   )
 
   for passthrough_var in \

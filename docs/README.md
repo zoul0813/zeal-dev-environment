@@ -154,7 +154,8 @@ Common user-facing variables:
 - `ZDE_IMAGE_REF`: full image reference override. Default: `${ZDE_IMAGE}:${ZDE_VERSION}`.
 - `ZDE_USER_PATH`: host path for ZDE state files. Default: `$HOME/.zeal8bit`.
 - `ZDE_BRANCH`: branch used by `zde update` when pulling the ZDE repository.
-- `ZDE_STRICT_EXIT`: set to `1` to preserve non-zero exit codes in interactive terminals.
+- `ZDE_SOFT_EXIT`: set to `1` to translate failed host-wrapper commands to exit code 0. Defaults to `0`.
+- `ZDE_STRICT_EXIT`: set to `1` to force real command exit codes, overriding `ZDE_SOFT_EXIT`.
 
 Command-specific variables:
 
