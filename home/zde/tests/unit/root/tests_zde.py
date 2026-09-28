@@ -19,7 +19,14 @@ ROUTER = REPO_ROOT / "home" / "zde" / "zde.py"
 
 def _stub_runtime(tmp_path: Path) -> Path:
     runtime = tmp_path / "container-runtime"
-    runtime.write_text('#!/bin/sh\nexit "${STUB_RC:-0}"\n', encoding="utf-8")
+    runtime.write_text(
+        '#!/bin/sh\n'
+        'if [ -n "${STUB_LOG:-}" ]; then\n'
+        '  printf "%s" "${ZDE_IMAGE_REF:-}" > "$STUB_LOG"\n'
+        'fi\n'
+        'exit "${STUB_RC:-0}"\n',
+        encoding="utf-8",
+    )
     runtime.chmod(0o755)
     return runtime
 
@@ -31,12 +38,14 @@ def _run_wrapper(
     tty: bool,
     soft_exit: str | None = None,
     strict_exit: str | None = None,
+    extra_env: dict[str, str] | None = None,
+    stub_rc: int = 7,
 ) -> int:
     env = dict(os.environ)
     env.update(
         {
             "CONTAINER_CMD": str(_stub_runtime(tmp_path)),
-            "STUB_RC": "7",
+            "STUB_RC": str(stub_rc),
             "ZDE_USER_PATH": str(tmp_path / "state"),
         }
     )
@@ -45,6 +54,8 @@ def _run_wrapper(
             env.pop(name, None)
         else:
             env[name] = value
+    if extra_env:
+        env.update(extra_env)
 
     command = [str(WRAPPER), *args]
     if not tty:
@@ -172,6 +183,81 @@ def test_router_does_not_rewrite_failure_status(tmp_path: Path) -> None:
     )
 
     assert completed.returncode != 0
+
+
+@pytest.mark.parametrize(
+    ("image_env", "expected"),
+    [
+        ({"ZDE_IMAGE_REF": "example/zde:review"}, "example/zde:review"),
+        ({"ZDE_IMAGE_REF": "localhost:5000/example/zde:review"}, "localhost:5000/example/zde:review"),
+        ({"ZDE_IMAGE_REF": f"example/zde@sha256:{'a' * 64}"}, f"example/zde@sha256:{'a' * 64}"),
+        (
+            {"ZDE_IMAGE": "localhost:5000/example/zde", "ZDE_VERSION": "dev"},
+            "localhost:5000/example/zde:dev",
+        ),
+    ],
+)
+def test_wrapper_uses_one_resolved_image_reference(
+    tmp_path: Path, image_env: dict[str, str], expected: str
+) -> None:
+    log = tmp_path / "image-ref.log"
+    clean_image_env = {
+        "ZDE_IMAGE_REF": "",
+        "ZDE_IMAGE": "zoul0813/zeal-dev-environment",
+        "ZDE_VERSION": "latest",
+    }
+    clean_image_env.update(image_env)
+    clean_image_env["STUB_LOG"] = str(log)
+
+    assert (
+        _run_wrapper(tmp_path, ["config", "list"], tty=False, extra_env=clean_image_env, stub_rc=0) == 0
+    )
+    assert log.read_text(encoding="utf-8") == expected
+
+
+@pytest.mark.parametrize(
+    ("reference", "repository_tag"),
+    [
+        ("localhost:5000/example/zde:review", "localhost:5000/example/zde:cached"),
+        (f"example/zde@sha256:{'a' * 64}", "example/zde:cached"),
+    ],
+)
+def test_version_fallback_handles_registry_ports_and_digests(
+    tmp_path: Path, reference: str, repository_tag: str
+) -> None:
+    runtime = tmp_path / "image-runtime"
+    runtime.write_text(
+        '#!/bin/sh\n'
+        'if [ "$1" = "images" ]; then\n'
+        '  printf "%s\\n" "$STUB_IMAGE_TAG"\n'
+        'fi\n',
+        encoding="utf-8",
+    )
+    runtime.chmod(0o755)
+    env = dict(os.environ)
+    env.update(
+        {
+            "CONTAINER_CMD": str(runtime),
+            "STUB_IMAGE_TAG": repository_tag,
+            "ZDE_IMAGE_REF": reference,
+            "ZDE_USER_PATH": str(tmp_path / "state"),
+        }
+    )
+
+    completed = subprocess.run(
+        [str(WRAPPER), "--version"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0
+    assert f"Image: {reference}" in completed.stdout
+    assert f"  - {repository_tag}" in completed.stdout
 
 
 @pytest.mark.parametrize("argv", [

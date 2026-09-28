@@ -149,9 +149,9 @@ Common user-facing variables:
 - `ZDE_PATH`: location of this repository. The wrapper derives it automatically when unset, but exporting it is recommended because generated VS Code settings reference it.
 - `ZDE_USE`: choose `docker` or `podman` for runtime auto-selection.
 - `CONTAINER_CMD`: explicitly choose the executable used for container operations. This overrides `ZDE_USE`.
-- `ZDE_IMAGE`: container image repository. Default: `zoul0813/zeal-dev-environment`.
-- `ZDE_VERSION`: container image tag. Default: `latest`.
-- `ZDE_IMAGE_REF`: full image reference override. Default: `${ZDE_IMAGE}:${ZDE_VERSION}`.
+- `ZDE_IMAGE_REF`: canonical image reference used by Compose, services, and updates. Supports tags and digests. Default: `zoul0813/zeal-dev-environment:latest`.
+- `ZDE_IMAGE`: legacy image repository input used when `ZDE_IMAGE_REF` is unset. Default: `zoul0813/zeal-dev-environment`.
+- `ZDE_VERSION`: legacy image tag input used when `ZDE_IMAGE_REF` is unset. Default: `latest`.
 - `ZDE_USER_PATH`: host path for ZDE state files. Default: `$HOME/.zeal8bit`.
 - `ZDE_BRANCH`: branch used by `zde update` when pulling the ZDE repository.
 - `ZDE_SOFT_EXIT`: set to `1` to translate failed host-wrapper commands to exit code 0. Defaults to `0`.

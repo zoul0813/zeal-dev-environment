@@ -53,11 +53,16 @@ zde_version() {
 print_version_info() {
   local image_tags=""
   local image_repo=""
+  local image_name=""
   local escaped_repo=""
   echo "ZDE: $(zde_version)"
   echo "Image: $ZDE_IMAGE_REF"
 
-  image_repo="${ZDE_IMAGE_REF%%:*}"
+  image_repo="${ZDE_IMAGE_REF%%@*}"
+  image_name="${image_repo##*/}"
+  if [[ "$image_name" == *:* ]]; then
+    image_repo="${image_repo%:*}"
+  fi
   image_tags="$("$CONTAINER_CMD" image inspect "$ZDE_IMAGE_REF" --format '{{range .RepoTags}}{{println .}}{{end}}' 2>/dev/null || true)"
   if [ -z "$image_tags" ]; then
     image_tags="$("$CONTAINER_CMD" image inspect "docker.io/$ZDE_IMAGE_REF" --format '{{range .RepoTags}}{{println .}}{{end}}' 2>/dev/null || true)"

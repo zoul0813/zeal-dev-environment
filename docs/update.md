@@ -28,7 +28,7 @@ After the host update finishes, the wrapper runs the ZDE `update` command, which
 ## Related Environment Variables
 
 - `ZDE_BRANCH`: force the branch used for the repository update.
-- `ZDE_IMAGE` and `ZDE_VERSION`: control the image reference.
+- `ZDE_IMAGE_REF`: controls the image reference. `ZDE_IMAGE` and `ZDE_VERSION` remain legacy fallback inputs.
 - `ZDE_USE`: force `docker` or `podman`.
 
 ## Notes
