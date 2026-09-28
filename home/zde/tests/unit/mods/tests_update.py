@@ -264,6 +264,25 @@ def test_write_lock_yaml_and_yq_branches(tmp_path: Path, monkeypatch: pytest.Mon
     assert lock_file.read_text(encoding="utf-8") == "a: b\n"
 
 
+def test_write_lock_failure_preserves_previous_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    lock_file = tmp_path / "deps-lock.yml"
+    lock_file.write_text("working: lock\n", encoding="utf-8")
+
+    class _BrokenYaml:
+        @staticmethod
+        def safe_dump(lock, output, sort_keys=True):
+            output.write("partial:")
+            raise OSError("disk full")
+
+    monkeypatch.setattr(update_mod, "yaml", _BrokenYaml)
+
+    with pytest.raises(OSError, match="disk full"):
+        write_lock(lock_file, {"dependencies": {}})
+
+    assert lock_file.read_text(encoding="utf-8") == "working: lock\n"
+    assert not list(tmp_path.glob(".deps-lock.yml.*"))
+
+
 def test_wants_tag_fetch() -> None:
     assert wants_tag_fetch({"tag": True}) is True
     assert wants_tag_fetch({"tag": "v1"}) is False

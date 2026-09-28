@@ -792,9 +792,10 @@ class DepCatalog:
         self.env.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
         lock = load_lock(self.env.lock_file)
-        lock.setdefault("dependencies", {})
-        lock_deps: dict[str, Any] = {}
+        existing_deps = lock.get("dependencies", {})
+        lock_deps: dict[str, Any] = dict(existing_deps) if isinstance(existing_deps, dict) else {}
         lock["dependencies"] = lock_deps
+        retained_dep_ids: set[str] = set()
 
         skip_installed_sync = self._skip_sync_for_installed()
         announced_skip_mode = False
@@ -837,6 +838,7 @@ class DepCatalog:
                     current_commit_value=current_commit(dep_path),
                     resolved_path=dep_path,
                 )
+                retained_dep_ids.add(dep.id)
                 continue
 
             newly_installed = not has_git
@@ -846,16 +848,15 @@ class DepCatalog:
                 rc = update_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
 
             if rc != 0:
-                if has_git:
-                    lock_deps[dep.id] = build_lock_entry(
-                        dep=dep.raw,
-                        ref_type=ref_type,
-                        ref_value=ref_value,
-                        status="sync_failed",
-                        updated_at=now,
-                        current_commit_value=current_commit(dep_path),
-                        resolved_path=dep_path,
-                    )
+                lock_deps[dep.id] = build_lock_entry(
+                    dep=dep.raw,
+                    ref_type=ref_type,
+                    ref_value=ref_value,
+                    status="sync_failed",
+                    updated_at=now,
+                    current_commit_value=current_commit(dep_path),
+                    resolved_path=dep_path,
+                )
                 lock["updated_at"] = now
                 write_lock(self.env.lock_file, lock)
                 print(f"Failed syncing dependency: {dep.id}", file=sys.stderr)
@@ -889,9 +890,14 @@ class DepCatalog:
                 current_commit_value=current_commit(dep_path),
                 resolved_path=dep_path,
             )
+            retained_dep_ids.add(dep.id)
             self.installed_by_id[dep.id] = True
             self._write_managed_env_file()
 
+        lock["dependencies"] = {
+            dep_id: lock_deps[dep_id]
+            for dep_id in retained_dep_ids
+        }
         lock["updated_at"] = now
         write_lock(self.env.lock_file, lock)
         self.refresh()

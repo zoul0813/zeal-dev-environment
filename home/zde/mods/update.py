@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TextIO
 
 from mods.catalog import load_deps_yaml
 from mods.common import COLLECTION_URL
@@ -100,10 +100,24 @@ def current_commit(path: Path) -> str | None:
         return None
 
 
+def _atomic_write(lock_file: Path, writer: Callable[[TextIO], None]) -> None:
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{lock_file.name}.", dir=lock_file.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as temporary_file:
+            writer(temporary_file)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_path, lock_file)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
 def write_lock(lock_file: Path, lock: dict[str, Any]) -> None:
     if yaml is not None:
-        with lock_file.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(lock, f, sort_keys=True)
+        _atomic_write(lock_file, lambda output: yaml.safe_dump(lock, output, sort_keys=True))
         return
 
     if process_run(["yq", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
@@ -114,7 +128,8 @@ def write_lock(lock_file: Path, lock: dict[str, Any]) -> None:
         rendered = process_run_capture(["yq", "-P", "-o=yaml", ".", "-"], input_text=payload)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Failed to serialise lock file with yq: {e}") from e
-    lock_file.write_text(rendered + ("\n" if rendered and not rendered.endswith("\n") else ""), encoding="utf-8")
+    payload = rendered + ("\n" if rendered and not rendered.endswith("\n") else "")
+    _atomic_write(lock_file, lambda output: output.write(payload))
 
 
 def configured_ref(dep: dict[str, Any]) -> tuple[str, str]:

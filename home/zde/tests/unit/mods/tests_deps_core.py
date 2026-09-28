@@ -554,6 +554,115 @@ def test_sync_for_update_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert writes
 
 
+@pytest.mark.parametrize("failure_index", [0, 1, 2])
+def test_sync_for_update_failure_preserves_untouched_lock_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_index: int
+) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(
+        env.deps_file,
+        """
+        dependencies:
+          - id: a
+            repo: repo-a
+            path: home/a
+          - id: b
+            repo: repo-b
+            path: home/b
+          - id: c
+            repo: repo-c
+            path: home/c
+        """,
+    )
+    original = {
+        "a": {"status": "old-a"},
+        "b": {"status": "old-b"},
+        "c": {"status": "old-c"},
+        "unrelated": {"status": "old-unrelated"},
+    }
+    monkeypatch.setattr("mods.deps.load_lock", lambda _: {"dependencies": original.copy()})
+    monkeypatch.setattr("mods.deps.is_git_repo", lambda path: True)
+    monkeypatch.setattr("mods.deps.get_skip_sync_installed_config", lambda: False)
+    monkeypatch.setattr("mods.deps.current_commit", lambda path: "abc")
+    monkeypatch.setattr(
+        "mods.deps.build_lock_entry",
+        lambda **kwargs: {"status": kwargs["status"]},
+    )
+    update_calls = 0
+
+    def _update_repo(*args, **kwargs):
+        nonlocal update_calls
+        rc = 9 if update_calls == failure_index else 0
+        update_calls += 1
+        return rc
+
+    monkeypatch.setattr("mods.deps.update_repo", _update_repo)
+    writes: list[dict[str, object]] = []
+
+    def _write_lock(path, lock):
+        deps = lock["dependencies"]
+        writes.append({dep_id: dict(entry) for dep_id, entry in deps.items()})
+
+    monkeypatch.setattr("mods.deps.write_lock", _write_lock)
+    cat = DepCatalog(env)
+    monkeypatch.setattr(cat, "_write_managed_env_file", lambda: None)
+
+    assert cat.sync_for_update() == 9
+    persisted = writes[-1]
+    ids = ["a", "b", "c"]
+    for index, dep_id in enumerate(ids):
+        if index < failure_index:
+            assert persisted[dep_id]["status"] == "synced"
+        elif index == failure_index:
+            assert persisted[dep_id]["status"] == "sync_failed"
+        else:
+            assert persisted[dep_id] == original[dep_id]
+    assert persisted["unrelated"] == original["unrelated"]
+
+
+def test_sync_for_update_prunes_stale_entries_only_after_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(
+        env.deps_file,
+        """
+        dependencies:
+          - id: installed
+            repo: repo-installed
+            path: home/installed
+          - id: absent
+            repo: repo-absent
+            path: home/absent
+        """,
+    )
+    original = {
+        "installed": {"status": "old"},
+        "absent": {"status": "old"},
+        "removed-from-catalog": {"status": "old"},
+    }
+    monkeypatch.setattr("mods.deps.load_lock", lambda _: {"dependencies": original.copy()})
+    monkeypatch.setattr("mods.deps.is_git_repo", lambda path: path.name == "installed")
+    monkeypatch.setattr("mods.deps.get_skip_sync_installed_config", lambda: False)
+    monkeypatch.setattr("mods.deps.update_repo", lambda *args, **kwargs: 0)
+    monkeypatch.setattr("mods.deps.current_commit", lambda path: "abc")
+    monkeypatch.setattr(
+        "mods.deps.build_lock_entry",
+        lambda **kwargs: {"status": kwargs["status"]},
+    )
+    writes: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "mods.deps.write_lock",
+        lambda path, lock: writes.append(dict(lock["dependencies"])),
+    )
+    cat = DepCatalog(env)
+    monkeypatch.setattr(cat, "_write_managed_env_file", lambda: None)
+    monkeypatch.setattr(cat, "refresh", lambda: None)
+
+    assert cat.sync_for_update() == 0
+    assert writes[-1] == {"installed": {"status": "synced"}}
+
+
 def test_prune_write_env_and_lock_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env = _make_env(tmp_path)
     _write_yaml(
