@@ -598,12 +598,59 @@ def test_update_deps_and_update_collection_and_run_update(env_factory, monkeypat
     assert env.collection_file.read_text(encoding="utf-8").endswith("\n")
     assert "Collection catalog updated" in capsys.readouterr().out
 
-    monkeypatch.setattr(update_mod, "update_deps", lambda _env: 7)
-    monkeypatch.setattr(update_mod, "update_collection", lambda _env: 0)
+    calls: list[str] = []
+    monkeypatch.setattr(update_mod, "update_deps", lambda _env: calls.append("deps") or 7)
+    monkeypatch.setattr(update_mod, "update_collection", lambda _env: calls.append("collection") or 0)
     assert run_update(env) == 7
+    assert calls == ["collection", "deps"]
+    calls.clear()
     monkeypatch.setattr(update_mod, "update_deps", lambda _env: 0)
-    monkeypatch.setattr(update_mod, "update_collection", lambda _env: 0)
+    monkeypatch.setattr(update_mod, "update_collection", lambda _env: calls.append("collection") or 8)
+    assert run_update(env) == 8
+    assert calls == ["collection"]
+    calls.clear()
+    monkeypatch.setattr(update_mod, "update_collection", lambda _env: calls.append("collection") or 0)
+    monkeypatch.setattr(update_mod, "update_deps", lambda _env: calls.append("deps") or 0)
     assert run_update(env) == 0
+    assert calls == ["collection", "deps"]
+
+
+def test_update_collection_rejects_invalid_merged_graph(env_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+    env: Env = env_factory()
+    env.deps_file.write_text(
+        """dependencies:
+  - id: a
+    repo: https://example.invalid/a.git
+  - id: b
+    repo: https://example.invalid/b.git
+""",
+        encoding="utf-8",
+    )
+    env.collection_file.parent.mkdir(parents=True, exist_ok=True)
+    env.collection_file.write_text("previous catalog\n", encoding="utf-8")
+    payload = b"""dependencies:
+  - id: a
+    repo: https://example.invalid/a.git
+    depends_on: [b]
+  - id: b
+    repo: https://example.invalid/b.git
+    depends_on: [a]
+"""
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return payload
+
+    monkeypatch.setattr(update_mod.urllib.request, "urlopen", lambda url: _Resp())
+
+    assert update_collection(env) == 1
+    assert env.collection_file.read_text(encoding="utf-8") == "previous catalog\n"
 
 
 def test_yaml_import_fallback_branch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

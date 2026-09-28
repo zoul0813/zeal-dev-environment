@@ -179,6 +179,32 @@ def test_depcatalog_resolve_and_dependency_chain(tmp_path: Path, monkeypatch: py
     assert catalog.dependency_chain("app") == ["OrgA/tool", "app"]
 
 
+def test_depcatalog_keeps_hidden_dependencies_out_of_visible_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(
+        env.deps_file,
+        """
+        dependencies:
+          - id: parent
+            repo: https://example.invalid/parent.git
+            zde: false
+          - id: child
+            repo: https://example.invalid/child.git
+            depends_on: [parent]
+        """,
+    )
+    monkeypatch.setattr("mods.deps.load_lock", lambda _: {"dependencies": {}})
+    monkeypatch.setattr("mods.deps.is_git_repo", lambda _: False)
+
+    catalog = DepCatalog(env)
+
+    assert [dep.id for dep in catalog.deps] == ["child"]
+    assert catalog.get("parent") is not None
+    assert catalog.dependency_chain("child") == ["parent", "child"]
+
+
 def test_depcatalog_dependency_chain_cycle_and_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env = _make_env(tmp_path)
     _write_yaml(

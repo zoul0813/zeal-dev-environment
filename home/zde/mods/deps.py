@@ -537,9 +537,10 @@ class DepCatalog:
         if self.env.collection_file.is_file():
             collection_raw = load_deps_yaml(self.env.collection_file)
             deps_raw = merge_deps_lists(deps_raw, collection_raw)
-        deps_raw = filter_zde_visible_deps(deps_raw)
         self._deps_raw = order_deps_by_dependency(deps_raw)
         self.by_id: dict[str, Dep] = {dep["id"]: Dep(self, dep) for dep in self._deps_raw}
+        self._visible_ids = {dep["id"] for dep in filter_zde_visible_deps(self._deps_raw)}
+        self._all_deps = [self.by_id[dep["id"]] for dep in self._deps_raw]
         self.lock: dict[str, Any] = {}
         self.lock_deps: dict[str, Any] = {}
         self.installed_by_id: dict[str, bool] = {}
@@ -547,7 +548,7 @@ class DepCatalog:
 
     @property
     def deps(self) -> list[Dep]:
-        return [self.by_id[dep_id] for dep_id in sorted(self.by_id.keys())]
+        return [self.by_id[dep_id] for dep_id in sorted(self._visible_ids)]
 
     @property
     def categories(self) -> list[str]:
@@ -844,7 +845,7 @@ class DepCatalog:
         skip_installed_sync = self._skip_sync_for_installed()
         announced_skip_mode = False
         now = datetime.now(timezone.utc).isoformat()
-        for dep in self.deps:
+        for dep in self._all_deps:
             ref_type, ref_value = configured_ref(dep.raw)
             fetch_tags = wants_tag_fetch(dep.raw)
             dep_path = dep.path_resolved
@@ -1002,7 +1003,7 @@ class DepCatalog:
 
         managed: dict[str, str] = {}
         managed_paths: list[str] = []
-        for dep in self.deps:
+        for dep in self._all_deps:
             for name, value in dep.exposed_env():
                 managed[name] = value
             managed_paths.extend(dep.env_export_paths())
@@ -1028,7 +1029,7 @@ class DepCatalog:
         env = os.environ.copy()
         path_parts: list[str] = []
 
-        for dep in self.deps:
+        for dep in self._all_deps:
             for name, value in dep.runtime_env():
                 env[name] = value
             path_parts.extend(dep.runtime_paths())

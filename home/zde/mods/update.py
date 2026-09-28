@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
-from mods.catalog import load_deps_yaml
+from mods.catalog import load_deps_yaml, merge_deps_lists, order_deps_by_dependency
 from mods.common import COLLECTION_URL
 from mods.process import run as process_run
 from mods.process import run_capture as process_run_capture
@@ -387,7 +387,9 @@ def update_collection(env: Env) -> int:
         source_file.write_text(rendered, encoding="utf-8")
 
         try:
-            load_deps_yaml(source_file)
+            collection_deps = load_deps_yaml(source_file)
+            base_deps = load_deps_yaml(env.deps_file)
+            order_deps_by_dependency(merge_deps_lists(base_deps, collection_deps))
         except (FileNotFoundError, RuntimeError) as exc:
             print(f"Invalid collection catalog: {exc}", file=sys.stderr)
             return 1
@@ -400,7 +402,7 @@ def update_collection(env: Env) -> int:
 
 
 def run_update(env: Env) -> int:
-    rc = update_deps(env)
+    rc = update_collection(env)
     if rc != 0:
         return rc
-    return update_collection(env)
+    return update_deps(env)
