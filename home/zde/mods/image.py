@@ -301,8 +301,8 @@ class ImagePack(Image):
         image_type: str,
         *,
         supports_directories: bool = False,
-        create_usage: str | None = "create [size]",
-        default_create_size: str | None = "64",
+        create_usage: str | None = "create",
+        default_create_size: str | None = None,
     ) -> None:
         super().__init__(
             image_type,
@@ -312,10 +312,10 @@ class ImagePack(Image):
         )
 
     def create(self, args: list[str]) -> int:
-        if not self._require_configured_tools():
+        if args:
+            print(f"Usage: zde image {self.image_type} create")
             return 1
-        if len(args) > 1:
-            print(f"Usage: zde image {self.image_type} create [size]")
+        if not self._require_configured_tools():
             return 1
 
         if not require_deps(["Zeal8bit/ZealFS"]):
@@ -325,9 +325,7 @@ class ImagePack(Image):
             if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1
 
-        size = args[0] if args else (self.default_create_size or "")
         print(f"Image Name: {self.image_type}")
-        print(f"Image Size: {size}")
 
         self.root.mkdir(parents=True, exist_ok=True)
         return self._build_and_publish(lambda output: self._pack(output, [self.root]))

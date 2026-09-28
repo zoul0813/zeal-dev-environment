@@ -40,7 +40,8 @@ class ImageMenuScreen(ItemActionScreen):
 
     def _action_create(self, item: ItemEntry) -> ActionResult:
         image = image_mod.get_image(item.id)
-        if item.id == "romdisk":
+        default_size = image.default_create_size
+        if default_size is None:
             with suspend_for_external_output(self.app):
                 rc = int(image.create([]))
             self._pause_after_run()
@@ -55,9 +56,6 @@ class ImageMenuScreen(ItemActionScreen):
             self._set_output("")
             return ActionResult(status="")
 
-        default_size = image.default_create_size
-        if default_size is None:
-            return ActionResult(rc=1, status=f"[warn] create is not supported for {item.id}")
         self.app.push_screen(
             PromptModal(
                 title=f"Create {item.id} Image",

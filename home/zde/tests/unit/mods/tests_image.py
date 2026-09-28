@@ -204,7 +204,9 @@ def test_image_command_surface(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
     assert "a.bin" in capsys.readouterr().out
 
 
-def test_image_pack_create_pack_concat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_image_pack_create_pack_concat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
     img = image.ImagePack("cf")
 
@@ -220,7 +222,8 @@ def test_image_pack_create_pack_concat(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(img, "_require_configured_tools", lambda: False)
     assert img.create([]) == 1
     monkeypatch.setattr(img, "_require_configured_tools", lambda: True)
-    assert img.create(["1", "2"]) == 1
+    assert img.create(["64"]) == 1
+    assert "Usage: zde image cf create" in capsys.readouterr().out
 
     monkeypatch.setattr(image, "require_deps", lambda deps: False)
     assert img.create([]) == 1
@@ -247,7 +250,9 @@ def test_image_pack_create_pack_concat(tmp_path: Path, monkeypatch: pytest.Monke
     assert packed[-1][1] == [img.root]
     assert img.path.read_text(encoding="utf-8") == "new image"
 
-    assert img.create(["128"]) == 0
+    packed_count = len(packed)
+    assert img.create(["128"]) == 1
+    assert len(packed) == packed_count
 
 
 @pytest.mark.parametrize("image_type", ["cf", "tf"])
@@ -476,7 +481,10 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
 
 
 def test_image_registry_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert image.get_image("cf").image_type == "cf"
+    cf = image.get_image("cf")
+    assert cf.image_type == "cf"
+    assert cf.create_usage == "create"
+    assert cf.default_create_size is None
     with pytest.raises(ValueError, match="Unknown image type"):
         image.get_image("nope")
     all_images = image.images()

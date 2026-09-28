@@ -16,7 +16,8 @@ Supported subcommands:
 - `add <path1> [path2] [path3] ...`
 - `rm <path1> [path2] [path3] ...`
 - `ls`
-- `create [size]` for `eeprom`, `cf`, and `tf`
+- `create [size]` for `eeprom` and `tf`
+- `create` for `cf`
 - `create` for `romdisk`
 
 ## Targets
@@ -47,7 +48,7 @@ Supported subcommands:
 
 - Requires dependency `Zeal8bit/ZealFS`.
 - `eeprom` defaults to size `32`.
-- `cf` defaults to size `64`.
+- `cf` uses the packed image format and does not accept a size argument.
 - `tf` defaults to size `4096`.
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
 - Pass `-y` or `--yes` to `zde image ... create` to confirm overwriting without a prompt.
