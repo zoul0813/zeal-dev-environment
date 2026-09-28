@@ -364,6 +364,7 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
 def test_image_zealfs_unmounts_after_copy_failures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
     zealfs = tmp_path / "zealfs"
     zealfs.write_text("bin", encoding="utf-8")
     monkeypatch.setattr(image.ImageZealFS, "_TOOLS", {"zealfs": ToolSpec(zealfs, required=True)})
