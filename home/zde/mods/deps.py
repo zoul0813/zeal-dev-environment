@@ -107,8 +107,30 @@ class Dep:
         return self.id in self.catalog.lock_deps
 
     @property
-    def installed(self) -> bool:
+    def source_present(self) -> bool:
         return bool(self.catalog.installed_by_id.get(self.id, False))
+
+    @property
+    def build_required(self) -> bool:
+        build = self.raw.get("build")
+        if build is False:
+            return False
+        if build is not None and not isinstance(build, dict):
+            return True
+        if isinstance(build, dict) and ("commands" in build or "tool" in build):
+            return True
+        return self.catalog._infer_build_tool(self) is not None
+
+    @property
+    def installed(self) -> bool:
+        if not self.source_present:
+            return False
+        if not self.build_required:
+            return True
+        lock_entry = self.catalog.lock_deps.get(self.id)
+        if not isinstance(lock_entry, dict):
+            return False
+        return lock_entry.get("status") in {"synced", "local"}
 
     @property
     def aliases(self) -> list[str]:
@@ -183,10 +205,19 @@ class Dep:
 
     @property
     def missing_dependency_ids(self) -> list[str]:
-        return [parent for parent in self.depends_on if not self.catalog.installed_by_id.get(parent, False)]
+        return [
+            parent
+            for parent in self.depends_on
+            if parent not in self.catalog.by_id or not self.catalog.by_id[parent].installed
+        ]
 
     @property
     def state(self) -> str:
+        if self.source_present and not self.installed:
+            lock_entry = self.catalog.lock_deps.get(self.id)
+            if isinstance(lock_entry, dict) and lock_entry.get("status") == "build_failed":
+                return "build-failed"
+            return "incomplete"
         if self.required and not self.installed:
             return "required-miss"
         missing = self.missing_dependency_ids
@@ -203,7 +234,7 @@ class Dep:
 
     @property
     def has_error(self) -> bool:
-        return self.state.startswith("broken") or self.state == "required-miss"
+        return self.state.startswith("broken") or self.state in {"required-miss", "build-failed", "incomplete"}
 
     @property
     def marker(self) -> str:
@@ -481,6 +512,7 @@ class Dep:
             lines.append(f"{indent}{value}")  # pragma: no cover - defensive fallback
 
         lines.append(f"Id: {self.id}")
+        lines.append(f"Source Present: {'yes' if self.source_present else 'no'}")
         lines.append(f"Installed: {'yes' if self.installed else 'no'}")
         lines.append(f"Tracked: {'yes' if self.tracked else 'no'}")
         lines.append(f"State: {self.state}")
@@ -616,6 +648,7 @@ class DepCatalog:
 
             ref_type, ref_value = configured_ref(install_dep.raw)
             fetch_tags = wants_tag_fetch(install_dep.raw)
+            needs_build = install_dep.build_required and not install_dep.installed
 
             if dep_path.exists() and not has_git:
                 try:
@@ -632,6 +665,15 @@ class DepCatalog:
                     self._write_dep_lock_entry(install_dep, "sync_failed")
                     print(f"Failed updating dependency: {install_id}")
                     return rc
+
+                if needs_build:
+                    rc = self._run_build_for_dep(install_dep)
+                    if rc != 0:
+                        self.installed_by_id[install_id] = True
+                        self._write_dep_lock_entry(install_dep, "build_failed")
+                        self._write_managed_env_file()
+                        print(f"Failed building dependency: {install_id}")
+                        return rc
 
                 self.installed_by_id[install_id] = True
                 self._write_dep_lock_entry(install_dep, "synced")
@@ -747,6 +789,7 @@ class DepCatalog:
 
             ref_type, ref_value = configured_ref(dep.raw)
             fetch_tags = wants_tag_fetch(dep.raw)
+            needs_build = dep.build_required and not dep.installed
 
             if dep_path.exists() and not has_git:
                 try:
@@ -768,7 +811,7 @@ class DepCatalog:
                 print(f"Failed updating dependency: {update_id}")
                 return rc
 
-            if newly_installed:
+            if newly_installed or needs_build:
                 rc = self._run_build_for_dep(dep)
                 if rc != 0:
                     self.installed_by_id[dep.id] = True
@@ -795,6 +838,7 @@ class DepCatalog:
         existing_deps = lock.get("dependencies", {})
         lock_deps: dict[str, Any] = dict(existing_deps) if isinstance(existing_deps, dict) else {}
         lock["dependencies"] = lock_deps
+        self.lock_deps = lock_deps
         retained_dep_ids: set[str] = set()
 
         skip_installed_sync = self._skip_sync_for_installed()
@@ -805,6 +849,7 @@ class DepCatalog:
             fetch_tags = wants_tag_fetch(dep.raw)
             dep_path = dep.path_resolved
             has_git = is_git_repo(dep_path)
+            needs_build = dep.build_required and not dep.installed
 
             if not has_git and not dep.required:
                 continue
@@ -829,6 +874,24 @@ class DepCatalog:
                 if not announced_skip_mode:
                     print("Local dep mode enabled: skipping git sync for already-installed dependencies.")
                     announced_skip_mode = True
+                if needs_build:
+                    rc = self._run_build_for_dep(dep)
+                    if rc != 0:
+                        self.installed_by_id[dep.id] = True
+                        lock_deps[dep.id] = build_lock_entry(
+                            dep=dep.raw,
+                            ref_type=ref_type,
+                            ref_value=ref_value,
+                            status="build_failed",
+                            updated_at=now,
+                            current_commit_value=current_commit(dep_path),
+                            resolved_path=dep_path,
+                        )
+                        lock["updated_at"] = now
+                        write_lock(self.env.lock_file, lock)
+                        self._write_managed_env_file()
+                        print(f"Failed building dependency: {dep.id}", file=sys.stderr)
+                        return rc
                 lock_deps[dep.id] = build_lock_entry(
                     dep=dep.raw,
                     ref_type=ref_type,
@@ -862,7 +925,7 @@ class DepCatalog:
                 print(f"Failed syncing dependency: {dep.id}", file=sys.stderr)
                 return rc
 
-            if newly_installed:
+            if newly_installed or needs_build:
                 rc = self._run_build_for_dep(dep)
                 if rc != 0:
                     self.installed_by_id[dep.id] = True
@@ -894,12 +957,15 @@ class DepCatalog:
             self.installed_by_id[dep.id] = True
             self._write_managed_env_file()
 
-        lock["dependencies"] = {
+        lock_deps = {
             dep_id: lock_deps[dep_id]
             for dep_id in retained_dep_ids
         }
+        lock["dependencies"] = lock_deps
         lock["updated_at"] = now
         write_lock(self.env.lock_file, lock)
+        self.lock = lock
+        self.lock_deps = lock_deps
         self.refresh()
         print(f"Dependency lock updated: {self.env.lock_file}")
         return 0
@@ -1092,6 +1158,8 @@ class DepCatalog:
         )
         lock["updated_at"] = now
         write_lock(self.env.lock_file, lock)
+        self.lock = lock
+        self.lock_deps = lock_deps
 
     def _remove_dep_lock_entry(self, dep_id: str) -> None:
         lock = load_lock(self.env.lock_file)

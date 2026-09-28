@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from mods.deps import Dep, DepCatalog
-from mods.update import Env
+from mods.update import Env, load_lock, write_lock
 
 
 def _write_yaml(path: Path, text: str) -> None:
@@ -35,10 +35,16 @@ def _make_env(tmp_path: Path) -> Env:
 def _fake_catalog(tmp_path: Path, *, installed_by_id: dict[str, bool], lock_deps: dict[str, object] | None = None):
     env = _make_env(tmp_path)
     by_id: dict[str, Dep] = {}
+    if lock_deps is None:
+        lock_deps = {
+            dep_id: {"status": "synced"}
+            for dep_id, installed in installed_by_id.items()
+            if installed
+        }
     return SimpleNamespace(
         env=env,
         installed_by_id=installed_by_id,
-        lock_deps=lock_deps or {},
+        lock_deps=lock_deps,
         by_id=by_id,
         _infer_build_tool=lambda dep: "make",
     )
@@ -63,11 +69,14 @@ def test_dep_state_variants_and_markers(tmp_path: Path) -> None:
     assert dep_a.has_error is True
 
     catalog.installed_by_id["dep-b"] = True
+    catalog.lock_deps["dep-b"] = {"status": "synced"}
     assert dep_a.state == "ok"
     assert dep_a.marker == "[x]"
 
     catalog.lock_deps = {}
-    assert dep_a.state == "untracked"
+    assert dep_a.state == "incomplete"
+    dep_untracked = Dep(catalog, {"id": "dep-a", "repo": "x", "path": "extras/dep-a", "build": False})
+    assert dep_untracked.state == "untracked"
 
 
 def test_dep_env_exports_runtime_paths_and_media(tmp_path: Path) -> None:
@@ -857,6 +866,7 @@ def test_install_dep_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
         import shutil
 
         shutil.rmtree(dep_path)
+
     def _clone_fail(path, repo, ref_type, ref_value, *, fetch_tags=False):
         Path(path).mkdir(parents=True, exist_ok=True)
         (Path(path) / "partial").write_text("x", encoding="utf-8")
@@ -872,6 +882,103 @@ def test_install_dep_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
     assert cat.install_dep("dep-a", include_dependencies=False) == 7
     monkeypatch.setattr(cat, "_run_build_for_dep", lambda dep: 0)
     assert cat.install_dep("dep-a", include_dependencies=False) == 0
+
+
+def test_install_retry_rebuilds_failed_checkout_before_marking_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(
+        env.deps_file,
+        """
+        dependencies:
+          - id: dep-a
+            repo: x
+            path: home/dep-a
+            build:
+              commands: [unused]
+            env:
+              - DEP_A_ROOT
+        """,
+    )
+    dep_path = env.zde_home / "dep-a"
+    dep_path.mkdir(parents=True)
+    monkeypatch.setattr("mods.deps.is_git_repo", lambda path: True)
+    monkeypatch.setattr("mods.deps.update_repo", lambda *args, **kwargs: 0)
+    monkeypatch.setattr("mods.deps.current_commit", lambda path: "abc")
+    cat = DepCatalog(env)
+    build_calls = 0
+    artifact = dep_path / "build" / "artifact.bin"
+
+    def _build(dep):
+        nonlocal build_calls
+        build_calls += 1
+        if build_calls == 1:
+            return 7
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("ready", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(cat, "_run_build_for_dep", _build)
+
+    assert cat.install_dep("dep-a", include_dependencies=False) == 7
+    assert build_calls == 1
+    assert load_lock(env.lock_file)["dependencies"]["dep-a"]["status"] == "build_failed"
+    assert cat.by_id["dep-a"].installed is False
+    assert cat.by_id["dep-a"].state == "build-failed"
+    assert "DEP_A_ROOT=" not in env.managed_env_file.read_text(encoding="utf-8")
+
+    from mods import requirements
+
+    monkeypatch.setattr(requirements, "DepCatalog", lambda: cat)
+    assert requirements._find_missing(["dep-a"]) == ["dep-a"]
+
+    assert cat.install_dep("dep-a", include_dependencies=False) == 0
+    assert build_calls == 2
+    assert artifact.read_text(encoding="utf-8") == "ready"
+    assert load_lock(env.lock_file)["dependencies"]["dep-a"]["status"] == "synced"
+    assert cat.by_id["dep-a"].installed is True
+    assert cat.by_id["dep-a"].state == "ok"
+    assert "DEP_A_ROOT=" in env.managed_env_file.read_text(encoding="utf-8")
+    assert requirements._find_missing(["dep-a"]) == []
+
+
+@pytest.mark.parametrize("operation", ["update", "sync"])
+def test_existing_update_paths_rebuild_failed_dependency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(
+        env.deps_file,
+        """
+        dependencies:
+          - id: dep-a
+            repo: x
+            path: home/dep-a
+            required: true
+            build:
+              commands: [unused]
+        """,
+    )
+    dep_path = env.zde_home / "dep-a"
+    dep_path.mkdir(parents=True)
+    write_lock(env.lock_file, {"dependencies": {"dep-a": {"status": "build_failed"}}})
+    monkeypatch.setattr("mods.deps.is_git_repo", lambda path: True)
+    monkeypatch.setattr("mods.deps.update_repo", lambda *args, **kwargs: 0)
+    monkeypatch.setattr("mods.deps.current_commit", lambda path: "abc")
+    monkeypatch.setattr("mods.deps.get_skip_sync_installed_config", lambda: False)
+    cat = DepCatalog(env)
+    build_calls: list[str] = []
+    monkeypatch.setattr(cat, "_run_build_for_dep", lambda dep: build_calls.append(dep.id) or 0)
+
+    if operation == "update":
+        assert cat.update_dep("dep-a", include_dependencies=False) == 0
+    else:
+        assert cat.sync_for_update() == 0
+
+    assert build_calls == ["dep-a"]
+    assert load_lock(env.lock_file)["dependencies"]["dep-a"]["status"] == "synced"
+    assert cat.by_id["dep-a"].installed is True
 
 
 def test_remove_dep_dependents_and_file_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
@@ -1065,7 +1172,11 @@ def test_dep_remaining_property_and_artifact_branches(tmp_path: Path) -> None:
 
 
 def test_dep_state_broken_deps_without_labels(tmp_path: Path) -> None:
-    catalog = _fake_catalog(tmp_path, installed_by_id={"dep-a": True, "unknown": False}, lock_deps={"dep-a": {}})
+    catalog = _fake_catalog(
+        tmp_path,
+        installed_by_id={"dep-a": True, "unknown": False},
+        lock_deps={"dep-a": {"status": "synced"}},
+    )
     dep = Dep(catalog, {"id": "dep-a", "repo": "x", "path": "home/dep-a", "depends_on": ["unknown"]})
     assert dep.state == "broken-deps"
 
