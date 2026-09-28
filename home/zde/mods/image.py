@@ -10,6 +10,7 @@ from mods.common import HOME_DIR, MNT_DIR, ZOS_PATH
 from mods.confirmation import confirm
 from mods.process import run
 from mods.requirements import require_deps
+from mods.rom import publish_rom_image
 from mods.tooling import ToolSpec, ToolingSupport
 
 
@@ -461,7 +462,7 @@ class ImageRomdisk(ImagePack):
 
         zos_path = ZOS_PATH
         build_dir = zos_path / "build"
-        os_conf = zos_path / "os.conf"
+        os_conf = build_dir / "os.conf"
         stage_dir = MNT_DIR / "romdisk"
         roms_dir = MNT_DIR / "roms"
         kernel_bin = build_dir / "os.bin"
@@ -529,13 +530,14 @@ class ImageRomdisk(ImagePack):
 
             try:
                 os.replace(temporary_disk, disk_img)
-                os.replace(temporary_output, output_img)
+                output_img, latest = publish_rom_image(temporary_output, roms_dir, output_img.name)
             except OSError as exc:
                 print(f"Failed to publish ROMDISK images: {exc}")
                 return 1
 
         print(f"Created {disk_img}")
         print(f"Created {output_img}")
+        print(f"Linked {latest} -> {output_img.name}")
         return 0
 
 

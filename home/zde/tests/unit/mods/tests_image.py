@@ -394,6 +394,7 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
     build = zos / "build"
     build.mkdir(parents=True, exist_ok=True)
     kernel_bin = build / "os.bin"
+    artifact_conf = build / "os.conf"
     kernel_bin.write_bytes(b"x")
 
     # Missing stage dir
@@ -401,25 +402,28 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
 
     stage = mnt / "romdisk"
     stage.mkdir(parents=True, exist_ok=True)
-    os_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=oops\n", encoding="utf-8")
+    artifact_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=oops\n", encoding="utf-8")
     assert img.create([]) == 1
-    os_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=0\n", encoding="utf-8")
+    artifact_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=0\n", encoding="utf-8")
     assert img.create([]) == 1
 
     kernel_bin.write_bytes(b"x" * 70000)
-    os_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=1\n", encoding="utf-8")
+    artifact_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=1\n", encoding="utf-8")
     assert img.create([]) == 1
 
     kernel_bin.write_bytes(b"x")
-    os_conf.write_text(
+    artifact_conf.write_text(
         "CONFIG_ROMDISK_OFFSET_PAGES=2\nCONFIG_ROMDISK_INCLUDE_INIT_BIN=y\nCONFIG_ROMDISK_IGNORE_HIDDEN=on\n",
         encoding="utf-8",
     )
+    os_conf.write_text("CONFIG_ROMDISK_OFFSET_PAGES=99\n", encoding="utf-8")
     disk_img = mnt / "romdisk.img"
     output_img = mnt / "roms" / "os_with_romdisk.img"
+    latest = mnt / "roms" / "latest.img"
     output_img.parent.mkdir(parents=True, exist_ok=True)
     disk_img.write_bytes(b"old disk")
     output_img.write_bytes(b"old combined")
+    latest.write_bytes(b"old default")
 
     def _pack_fail(output, inputs, skip_hidden=False):
         output.write_bytes(b"partial disk")
@@ -429,6 +433,7 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
     assert img.create([]) == 5
     assert disk_img.read_bytes() == b"old disk"
     assert output_img.read_bytes() == b"old combined"
+    assert latest.read_bytes() == b"old default"
     assert "CONFIG_ROMDISK_INCLUDE_INIT_BIN=y" in capsys.readouterr().out
 
     init_bin = zos / "build" / "romdisk" / "init" / "build" / "init.bin"
@@ -447,8 +452,12 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
     assert img.create([]) == 6
     assert disk_img.read_bytes() == b"old disk"
     assert output_img.read_bytes() == b"old combined"
+    assert latest.read_bytes() == b"old default"
+
+    concat_parts: list[list[tuple[int, Path]]] = []
 
     def _concat_success(output, parts):
+        concat_parts.append(parts)
         output.write_bytes(b"new combined")
         return 0
 
@@ -456,6 +465,12 @@ def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pyte
     assert img.create([]) == 0
     assert disk_img.read_bytes() == b"new disk"
     assert output_img.read_bytes() == b"new combined"
+    assert len(concat_parts) == 1
+    assert concat_parts[0][0] == (0x0000, kernel_bin)
+    assert concat_parts[0][1][0] == 0x8000
+    assert latest.is_symlink()
+    assert latest.readlink() == Path("os_with_romdisk.img")
+    assert latest.read_bytes() == b"new combined"
     out = capsys.readouterr().out
     assert "Created" in out
 

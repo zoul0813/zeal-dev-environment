@@ -52,9 +52,9 @@ Supported subcommands:
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
 - Pass `-y` or `--yes` to `zde image ... create` to confirm overwriting without a prompt.
 - `romdisk create`:
-  - Packs staged files from `mnt/romdisk` into `home/Zeal-8-bit-OS/build/disk.img`.
-  - Rebuilds `home/Zeal-8-bit-OS/build/os_with_romdisk.img` by combining the latest ROM image (`mnt/roms/latest.img`) with the freshly packed disk.
-  - Updates `mnt/roms/latest.img` in place and writes `mnt/romdisk.img`.
+  - Packs staged files from `mnt/romdisk` into `mnt/romdisk.img`.
+  - Uses `home/Zeal-8-bit-OS/build/os.bin` and its matching `build/os.conf` to rebuild `mnt/roms/os_with_romdisk.img`.
+  - Atomically updates `mnt/roms/latest.img` to select the regenerated image used by the default emulator launch.
 
 ## Legacy Alias
 

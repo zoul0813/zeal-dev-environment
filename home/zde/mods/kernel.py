@@ -10,6 +10,7 @@ from typing import Any
 
 from mods.common import MNT_DIR, USER_STATE_DIR, ZOS_PATH
 from mods.process import run
+from mods.rom import publish_rom_image
 
 
 @dataclass(frozen=True)
@@ -392,14 +393,12 @@ def build_kernel(kernel_config: str) -> int:
         return 1
 
     roms_dir = MNT_DIR / "roms"
-    roms_dir.mkdir(parents=True, exist_ok=True)
     rom_file = f"zeal8bit-{kernel_version}.img"
-    rom_path = roms_dir / rom_file
-    shutil.copy2(fullbin, rom_path)
-    latest = roms_dir / "latest.img"
-    if latest.exists() or latest.is_symlink():
-        latest.unlink()
-    latest.symlink_to(Path(rom_file))
+    try:
+        rom_path, latest = publish_rom_image(fullbin, roms_dir, rom_file)
+    except OSError as exc:
+        print(f"Build failed: could not publish ROM image: {exc}")
+        return 1
     print(f"Copied to {rom_path}")
     print(f"Linked {latest} -> {rom_file}")
     return 0
