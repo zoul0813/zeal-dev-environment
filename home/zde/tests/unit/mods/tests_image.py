@@ -320,7 +320,7 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
 
     tf = image.ImageZealFS("tf", "4096")
     calls: list[list[str]] = []
-    returns = [3, 0, 4, 0, 0, 0]
+    returns = [3, 0, 4, 0, 0, 0, 0]
 
     def _run(cmd):
         calls.append(cmd)
@@ -331,6 +331,7 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
     assert tf._build_image("64") == 4
     assert tf._build_image("64") == 0
     assert any("--mbr" in cmd for cmd in calls)
+    assert len([cmd for cmd in calls if cmd[1] == "umount"]) == 2
 
     ee = image.ImageZealFS("eeprom", "32")
     monkeypatch.setattr(image, "run", lambda cmd: 0)
@@ -358,6 +359,63 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(tf, "_build_image", _build)
     assert tf.create([]) == 0
     assert tf.create(["77"]) == 0
+
+
+def test_image_zealfs_unmounts_after_copy_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    zealfs = tmp_path / "zealfs"
+    zealfs.write_text("bin", encoding="utf-8")
+    monkeypatch.setattr(image.ImageZealFS, "_TOOLS", {"zealfs": ToolSpec(zealfs, required=True)})
+    img = image.ImageZealFS("tf", "4096")
+    mount_dirs: list[Path] = []
+
+    def _mkdtemp(prefix):
+        mount_dir = tmp_path / f"{prefix}{len(mount_dirs)}"
+        mount_dir.mkdir()
+        mount_dirs.append(mount_dir)
+        return str(mount_dir)
+
+    monkeypatch.setattr(image.tempfile, "mkdtemp", _mkdtemp)
+    scenario: dict[str, object] = {}
+    calls: list[list[str]] = []
+
+    def _run(cmd):
+        calls.append(cmd)
+        if cmd[1] == "rsync":
+            copy_result = scenario["copy"]
+            if isinstance(copy_result, BaseException):
+                raise copy_result
+            return copy_result
+        if cmd[1] == "umount":
+            return scenario["unmount"]
+        return 0
+
+    monkeypatch.setattr(image, "run", _run)
+
+    scenario.update(copy=RuntimeError("copy exploded"), unmount=0)
+    with pytest.raises(RuntimeError, match="copy exploded"):
+        img._build_image("64")
+    assert not mount_dirs[-1].exists()
+
+    scenario.update(copy=KeyboardInterrupt(), unmount=0)
+    with pytest.raises(KeyboardInterrupt):
+        img._build_image("64")
+    assert not mount_dirs[-1].exists()
+
+    scenario.update(copy=23, unmount=5)
+    assert img._build_image("64") == 23
+    assert mount_dirs[-1].exists()
+    assert "Failed to unmount ZealFS image" in capsys.readouterr().out
+
+    scenario.update(copy=0, unmount=6)
+    assert img._build_image("64") == 6
+    assert mount_dirs[-1].exists()
+    assert "Failed to unmount ZealFS image" in capsys.readouterr().out
+
+    unmount_calls = [cmd for cmd in calls if cmd[1] == "umount"]
+    assert len(unmount_calls) == 4
+    assert len({cmd[-1] for cmd in unmount_calls}) == 4
 
 
 def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:

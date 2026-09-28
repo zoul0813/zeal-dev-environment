@@ -362,7 +362,7 @@ class ImageZealFS(Image):
     def _build_image(self, size: str, output: Path | None = None) -> int:
         self.root.mkdir(parents=True, exist_ok=True)
         zealfs_bin = self._TOOLS["zealfs"].path
-        media_dir = "/media/zealfs"
+        media_dir = Path(tempfile.mkdtemp(prefix="zde-zealfs-"))
         output_path = output or self.path
         cmd = [
             "sudo",
@@ -373,27 +373,61 @@ class ImageZealFS(Image):
         ]
         if self.image_type == "tf":
             cmd.append("--mbr")
-        cmd.append(media_dir)
+        cmd.append(str(media_dir))
 
-        rc = run(cmd)
-        if rc != 0:
-            return rc
-        rc = run(
-            [
-                "sudo",
-                "rsync",
-                "-ruLkv",
-                "--temp-dir=/tmp",
-                "--no-perms",
-                "--whole-file",
-                "--delete",
-                f"{self.root}/",
-                f"{media_dir}/",
-            ]
-        )
-        if rc != 0:
-            return rc
-        return run(["sudo", "umount", media_dir])
+        mounted = False
+        unmounted = False
+        try:
+            rc = run(cmd)
+            if rc != 0:
+                return rc
+            mounted = True
+
+            copy_rc = 0
+            copy_error: BaseException | None = None
+            try:
+                copy_rc = run(
+                    [
+                        "sudo",
+                        "rsync",
+                        "-ruLkv",
+                        "--temp-dir=/tmp",
+                        "--no-perms",
+                        "--whole-file",
+                        "--delete",
+                        f"{self.root}/",
+                        f"{media_dir}/",
+                    ]
+                )
+            except BaseException as exc:
+                copy_error = exc
+
+            unmount_rc = 0
+            unmount_error: BaseException | None = None
+            try:
+                unmount_rc = run(["sudo", "umount", str(media_dir)])
+                unmounted = unmount_rc == 0
+            except BaseException as exc:
+                unmount_error = exc
+
+            if unmount_error is not None:
+                print(f"Failed to unmount ZealFS image at {media_dir}: {unmount_error}")
+            elif unmount_rc != 0:
+                print(f"Failed to unmount ZealFS image at {media_dir}: exit {unmount_rc}")
+
+            if copy_error is not None:
+                raise copy_error.with_traceback(copy_error.__traceback__)
+            if copy_rc != 0:
+                return copy_rc
+            if unmount_error is not None:
+                raise unmount_error.with_traceback(unmount_error.__traceback__)
+            return unmount_rc
+        finally:
+            if not mounted or unmounted:
+                try:
+                    media_dir.rmdir()
+                except OSError as exc:
+                    print(f"Failed to remove ZealFS mount directory {media_dir}: {exc}")
 
     def create(self, args: list[str]) -> int:
         if len(args) > 1:
