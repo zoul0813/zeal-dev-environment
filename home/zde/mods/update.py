@@ -211,12 +211,25 @@ def update_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_t
         return rc
 
     if ref_type == "branch":
+        remote_ref = f"refs/remotes/origin/{ref_value}"
+        rc = run(
+            [
+                "git",
+                "-C",
+                str(path),
+                "fetch",
+                "origin",
+                f"+refs/heads/{ref_value}:{remote_ref}",
+            ]
+        )
+        if rc != 0:
+            return rc
         rc = run(["git", "-C", str(path), "checkout", ref_value])
         if rc != 0:
-            rc = run(["git", "-C", str(path), "checkout", "-B", ref_value, f"origin/{ref_value}"])
+            rc = run(["git", "-C", str(path), "checkout", "-b", ref_value, remote_ref])
             if rc != 0:
                 return rc
-        rc = run(["git", "-C", str(path), "pull", "--ff-only", "origin", ref_value])
+        rc = run(["git", "-C", str(path), "merge", "--ff-only", remote_ref])
         if rc != 0:
             return rc
         if fetch_tags:

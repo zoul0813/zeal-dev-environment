@@ -359,23 +359,34 @@ def test_update_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     assert update_repo(repo, "https://x", "branch", "main") == 9
 
     monkeypatch.setattr(update_mod, "ensure_origin", lambda path, url: 0)
-    seq = [1, 0, 0]
+    calls: list[list[str]] = []
+    seq = [0, 1, 0, 0]
 
     def _run_branch(cmd, cwd=None):
+        calls.append(cmd)
         return seq.pop(0)
 
     monkeypatch.setattr(update_mod, "run", _run_branch)
     assert update_repo(repo, "https://x", "branch", "main") == 0
+    assert calls[0][-2:] == [
+        "origin",
+        "+refs/heads/main:refs/remotes/origin/main",
+    ]
+    assert calls[-1][-3:] == ["merge", "--ff-only", "refs/remotes/origin/main"]
 
-    seq = [1, 2]
+    seq = [8]
+    monkeypatch.setattr(update_mod, "run", _run_branch)
+    assert update_repo(repo, "https://x", "branch", "main") == 8
+
+    seq = [0, 1, 2]
     monkeypatch.setattr(update_mod, "run", _run_branch)
     assert update_repo(repo, "https://x", "branch", "main") == 2
 
-    seq = [0, 3]
+    seq = [0, 0, 3]
     monkeypatch.setattr(update_mod, "run", _run_branch)
     assert update_repo(repo, "https://x", "branch", "main") == 3
 
-    seq = [0, 0, 0]
+    seq = [0, 0, 0, 0]
     monkeypatch.setattr(update_mod, "run", _run_branch)
     assert update_repo(repo, "https://x", "branch", "main", fetch_tags=True) == 0
 
@@ -415,6 +426,78 @@ def test_update_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     seq = [0, 0]
     monkeypatch.setattr(update_mod, "run", _run_commit)
     assert update_repo(repo, "https://x", "commit", "deadbeef") == 0
+
+
+def test_update_repo_switches_branches_in_shallow_clone(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    checkout = tmp_path / "checkout"
+    dirty_checkout = tmp_path / "dirty-checkout"
+
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    subprocess.run(["git", "-C", str(source), "checkout", "-q", "-b", "main"], check=True)
+    (source / "tracked.txt").write_text("main\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(source), "add", "tracked.txt"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=ZDE Tests",
+            "-c",
+            "user.email=zde-tests@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "main",
+        ],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(source), "checkout", "-q", "-b", "next"], check=True)
+    (source / "tracked.txt").write_text("next\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(source), "add", "tracked.txt"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=ZDE Tests",
+            "-c",
+            "user.email=zde-tests@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "next",
+        ],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(source), "checkout", "-q", "main"], check=True)
+
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--branch", "main", source.as_uri(), str(checkout)],
+        check=True,
+    )
+    remote_branches = subprocess.run(
+        ["git", "-C", str(checkout), "branch", "--remotes"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "origin/next" not in remote_branches
+
+    assert update_repo(checkout, source.as_uri(), "branch", "next") == 0
+    assert run_capture(["git", "-C", str(checkout), "branch", "--show-current"]) == "next"
+    assert (checkout / "tracked.txt").read_text(encoding="utf-8") == "next\n"
+
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--branch", "main", source.as_uri(), str(dirty_checkout)],
+        check=True,
+    )
+    (dirty_checkout / "tracked.txt").write_text("local edit\n", encoding="utf-8")
+    assert update_repo(dirty_checkout, source.as_uri(), "branch", "next") != 0
+    assert run_capture(["git", "-C", str(dirty_checkout), "branch", "--show-current"]) == "main"
+    assert (dirty_checkout / "tracked.txt").read_text(encoding="utf-8") == "local edit\n"
 
 
 def test_resolve_env_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
