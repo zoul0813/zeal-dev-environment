@@ -95,10 +95,77 @@ def test_is_git_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     path = tmp_path / "repo"
     assert is_git_repo(path) is False
     path.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(update_mod, "process_run", lambda cmd, **kwargs: 0)
+    monkeypatch.setattr(update_mod, "process_run_capture", lambda cmd, **kwargs: str(path))
     assert is_git_repo(path) is True
-    monkeypatch.setattr(update_mod, "process_run", lambda cmd, **kwargs: 1)
+    monkeypatch.setattr(update_mod, "process_run_capture", lambda cmd, **kwargs: str(tmp_path))
     assert is_git_repo(path) is False
+
+    def _raise(*args, **kwargs):
+        raise subprocess.CalledProcessError(128, "git")
+
+    monkeypatch.setattr(update_mod, "process_run_capture", _raise)
+    assert is_git_repo(path) is False
+
+
+def test_is_git_repo_requires_own_worktree_root(tmp_path: Path) -> None:
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    subprocess.run(["git", "init", "-q", str(outer)], check=True)
+    child = outer / "dependency"
+    child.mkdir()
+
+    assert is_git_repo(outer) is True
+    assert is_git_repo(child) is False
+
+
+def test_is_git_repo_accepts_git_file_worktrees_and_submodules(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    (source / "tracked.txt").write_text("tracked", encoding="utf-8")
+    subprocess.run(["git", "-C", str(source), "add", "tracked.txt"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=ZDE Test",
+            "-c",
+            "user.email=zde@example.invalid",
+            "commit",
+            "-qm",
+            "initial",
+        ],
+        check=True,
+    )
+
+    linked = tmp_path / "linked"
+    subprocess.run(["git", "-C", str(source), "worktree", "add", "-q", str(linked), "-b", "linked"], check=True)
+    assert (linked / ".git").is_file()
+    assert is_git_repo(linked) is True
+
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    subprocess.run(["git", "init", "-q", str(parent)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "protocol.file.allow=always",
+            "-C",
+            str(parent),
+            "submodule",
+            "add",
+            "-q",
+            str(source),
+            "dependency",
+        ],
+        check=True,
+    )
+    submodule = parent / "dependency"
+    assert (submodule / ".git").is_file()
+    assert is_git_repo(submodule) is True
 
 
 def test_load_lock_yaml_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

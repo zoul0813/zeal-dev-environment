@@ -45,8 +45,8 @@ def is_git_repo(path: Path) -> bool:
     if not path.is_dir():
         return False
     resolved_path = path.resolve()
-    return (
-        process_run(
+    try:
+        top_level = process_run_capture(
             [
                 "git",
                 "-c",
@@ -54,13 +54,14 @@ def is_git_repo(path: Path) -> bool:
                 "-C",
                 str(path),
                 "rev-parse",
-                "--is-inside-work-tree",
+                "--show-toplevel",
             ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
         )
-        == 0
-    )
+    except (subprocess.CalledProcessError, RuntimeError):
+        return False
+    if not top_level:
+        return False
+    return Path(top_level).resolve() == resolved_path
 
 
 def load_lock(lock_file: Path) -> dict[str, Any]:
