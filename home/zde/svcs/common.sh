@@ -90,8 +90,14 @@ zde_init() {
 }
 
 zde_run_in_container() {
+  # Preserve Docker Compose's explicit interactive/TTY behavior. podman-compose
+  # keeps stdin open by default but does not accept the interactive option.
+  local interactive_args=()
+  if "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run --help 2>/dev/null | grep -- '--interactive' >/dev/null; then
+    interactive_args=(-i)
+  fi
   local exec_args=(
-    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run -i --rm
+    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run ${interactive_args[@]+"${interactive_args[@]}"} --rm
     -e "HOST_UID=${HOST_UID}"
     -e "HOST_GID=${HOST_GID}"
     -e "HOST_HOME=${HOST_HOME}"
