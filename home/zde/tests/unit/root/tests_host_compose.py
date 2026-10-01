@@ -31,7 +31,7 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
     env.update(
         CONTAINER_CMD=str(executable), COMPOSE_PATH="/compose path/compose.yml",
         HOST_UID="1000", HOST_GID="1000", HOST_HOME="/host home",
-        HOST_CWD="/project dir", ZDE_SOFT_EXIT="0", TERM="xterm-256color",
+        HOST_CWD="/project dir", ZDE_SOFT_EXIT="1", TERM="xterm-256color",
     )
     result = subprocess.run(
         ["bash", "-c", 'source "$1"; zde_run_in_container service sh -c "exit 7"', "bash", str(common)],
@@ -47,9 +47,11 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
     prefix.append("--rm")
     assert argv[:len(prefix)] == prefix
     assert "--interactive" not in argv
-    for key in ["HOST_UID", "HOST_GID", "HOST_HOME", "HOST_CWD", "ZDE_SOFT_EXIT", "TERM"]:
+    for key in ["HOST_UID", "HOST_GID", "HOST_HOME", "HOST_CWD", "TERM"]:
         index = argv.index(f"{key}={env[key]}")
         assert argv[index - 1] == "-e"
+    # Soft-exit policy belongs to the host wrapper; the launcher preserves status.
+    assert not any(arg.startswith("ZDE_SOFT_EXIT=") for arg in argv)
     assert argv[-4:] == ["service", "sh", "-c", "exit 7"]
     assert payload == "stdin payload\n"
     assert result.stderr == "runtime stderr\n"
