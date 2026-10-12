@@ -386,6 +386,7 @@ class ImageZealFS(Image):
             copy_rc = 0
             copy_error: BaseException | None = None
             try:
+                print("Warning: ZealFS skips file and directory names longer than 16 bytes; staged files are unchanged.")
                 copy_rc = run(
                     [
                         "sudo",
@@ -395,6 +396,8 @@ class ImageZealFS(Image):
                         "--no-perms",
                         "--whole-file",
                         "--delete",
+                        # rsync wildcards match bytes; ZealFS allows 16 per name.
+                        "--exclude=?????????????????*",
                         f"{self.root}/",
                         f"{media_dir}/",
                     ]

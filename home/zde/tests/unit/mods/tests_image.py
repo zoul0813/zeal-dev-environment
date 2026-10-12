@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import stat
+import subprocess
 
 import pytest
 
@@ -359,6 +361,46 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(tf, "_build_image", _build)
     assert tf.create([]) == 0
     assert tf.create(["77"]) == 0
+
+
+@pytest.mark.parametrize("image_type", ["tf", "eeprom"])
+def test_image_zealfs_skips_overlong_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], image_type: str
+) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
+    img = image.ImageZealFS(image_type, "64")
+    assets = img.root / "games" / "poker" / "assets"
+    assets.mkdir(parents=True)
+    names = ["cards.tiled-project", "cards.gif", "1234567890123456", "12345678901234567", "é" * 8, "é" * 9]
+    for name in names:
+        (assets / name).write_text("asset", encoding="utf-8")
+    long_dir = img.root / "directory-too-long"
+    long_dir.mkdir()
+    (long_dir / "child").write_text("asset", encoding="utf-8")
+    (img.root / "linked").symlink_to(assets, target_is_directory=True)
+    copied: set[str] = set()
+
+    def _run(cmd):
+        if cmd[1] == "rsync":
+            # Exercise rsync's actual filtering without requiring a FUSE mount.
+            return subprocess.run(cmd[1:], check=False).returncode
+        if cmd[1] == "umount":
+            media_dir = Path(cmd[-1])
+            copied.update(str(path.relative_to(media_dir)) for path in media_dir.rglob("*") if path.is_file())
+            for child in media_dir.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+        return 0
+
+    monkeypatch.setattr(image, "run", _run)
+    assert img._build_image("64") == 0
+    expected_names = {"cards.gif", "1234567890123456", "é" * 8}
+    assert copied == {f"{directory}/{name}" for directory in ["games/poker/assets", "linked"] for name in expected_names}
+    assert all((assets / name).read_text(encoding="utf-8") == "asset" for name in names)
+    assert (long_dir / "child").is_file()
+    assert "longer than 16 bytes" in capsys.readouterr().out
 
 
 def test_image_zealfs_unmounts_after_copy_failures(

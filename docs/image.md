@@ -50,6 +50,7 @@ Supported subcommands:
 - `eeprom` defaults to size `32`.
 - `cf` uses the packed image format and does not accept a size argument.
 - `tf` defaults to size `4096`.
+- `eeprom` and `tf` skip file and directory names longer than ZealFS's 16-byte limit, including their subtrees, and print a warning. Staged files remain unchanged; rename an excluded entry before creating the image if it is needed.
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
 - Pass `-y` or `--yes` to `zde image ... create` to confirm overwriting without a prompt.
 - `romdisk create`:
