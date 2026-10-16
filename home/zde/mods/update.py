@@ -202,11 +202,28 @@ def clone_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_ta
     return 0
 
 
+def restore_generated_libraries(path: Path) -> int:
+    # SDK builds regenerate tracked SDCC archives. Restore only these outputs,
+    # including staged changes, so source edits still receive Git's protection.
+    try:
+        libraries = run_capture(["git", "-C", str(path), "ls-files", "--with-tree=HEAD", "-z", "--", "*.lib"])
+    except subprocess.CalledProcessError as exc:
+        return exc.returncode
+    if not libraries:
+        return 0
+    print(f"Restoring generated .lib files before updating: {path}")
+    return run(["git", "-C", str(path), "restore", "--source=HEAD", "--staged", "--worktree", "--", "*.lib"])
+
+
 def update_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_tags: bool = False) -> int:
     if not (path / ".git").exists():
         return 1
 
     rc = ensure_origin(path, repo)
+    if rc != 0:
+        return rc
+
+    rc = restore_generated_libraries(path)
     if rc != 0:
         return rc
 

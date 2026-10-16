@@ -28,6 +28,13 @@ After the host update finishes, the wrapper runs the ZDE `update` command, which
 - synchronizes required dependencies
 - refreshes dependency lock state
 
+Before updating an installed dependency, ZDE restores its tracked `.lib` build
+outputs to the current commit, discarding staged and unstaged changes to those
+files. This prevents regenerated SDK libraries from blocking checkout or
+fast-forward updates. Source edits, untracked files, and local commits are
+preserved; conflicting source edits or diverged commits can still block an update.
+Local dependency mode skips this restoration along with Git synchronization.
+
 `zde sync` runs only these maintenance tasks. `zde update` performs host-side repository and image updates first, then runs the same maintenance tasks.
 
 ## Related Environment Variables

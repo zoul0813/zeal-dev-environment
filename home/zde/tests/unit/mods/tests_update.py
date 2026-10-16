@@ -359,6 +359,7 @@ def test_update_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     assert update_repo(repo, "https://x", "branch", "main") == 9
 
     monkeypatch.setattr(update_mod, "ensure_origin", lambda path, url: 0)
+    monkeypatch.setattr(update_mod, "restore_generated_libraries", lambda path: 0)
     calls: list[list[str]] = []
     seq = [0, 1, 0, 0]
 
@@ -426,6 +427,78 @@ def test_update_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     seq = [0, 0]
     monkeypatch.setattr(update_mod, "run", _run_commit)
     assert update_repo(repo, "https://x", "commit", "deadbeef") == 0
+
+
+def test_restore_generated_libraries_errors_and_no_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_if_run(*args, **kwargs):
+        pytest.fail("No restore should run when listing fails or no libraries are tracked")
+
+    monkeypatch.setattr(update_mod, "run", fail_if_run)
+    monkeypatch.setattr(update_mod, "run_capture", lambda cmd: "")
+    assert update_mod.restore_generated_libraries(tmp_path) == 0
+
+    def fail_listing(cmd):
+        raise subprocess.CalledProcessError(7, cmd)
+
+    monkeypatch.setattr(update_mod, "run_capture", fail_listing)
+    assert update_mod.restore_generated_libraries(tmp_path) == 7
+
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(update_mod, "ensure_origin", lambda path, repo: 0)
+    monkeypatch.setattr(update_mod, "run_capture", lambda cmd: "lib/sdk.lib\0")
+    calls = []
+    monkeypatch.setattr(update_mod, "run", lambda cmd: calls.append(cmd) or 8)
+    assert update_repo(tmp_path, "unused", "branch", "main") == 8
+    assert len(calls) == 1
+    assert "restore" in calls[0]
+
+
+@pytest.mark.parametrize("ref_type", ["branch", "tag", "commit"])
+def test_update_repo_restores_generated_libraries(tmp_path: Path, ref_type: str) -> None:
+    source = tmp_path / "source"
+    checkout = tmp_path / "checkout"
+
+    def git(path: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(path), "-c", "user.name=ZDE Tests",
+             "-c", "user.email=zde-tests@example.invalid", *args],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    source.mkdir()
+    git(source, "init", "-q")
+    git(source, "checkout", "-q", "-b", "main")
+    (source / "lib").mkdir()
+    library_names = ["sdk.lib", "staged.lib", "deleted.lib", "staged-deleted.lib"]
+    for name in library_names:
+        (source / "lib" / name).write_text("original\n", encoding="utf-8")
+    (source / "source.c").write_text("source\n", encoding="utf-8")
+    git(source, "add", ".")
+    git(source, "commit", "-qm", "initial")
+    git(tmp_path, "clone", "-q", source.as_uri(), str(checkout))
+
+    for name in library_names:
+        (source / "lib" / name).write_text("upstream\n", encoding="utf-8")
+    git(source, "add", ".")
+    git(source, "commit", "-qm", "new libraries")
+    git(source, "tag", "v2")
+    ref_value = {"branch": "main", "tag": "v2", "commit": git(source, "rev-parse", "HEAD")}[ref_type]
+
+    (checkout / "lib/sdk.lib").write_text("regenerated\n", encoding="utf-8")
+    (checkout / "lib/staged.lib").write_text("staged build\n", encoding="utf-8")
+    git(checkout, "add", "lib/staged.lib")
+    (checkout / "lib/deleted.lib").unlink()
+    git(checkout, "rm", "lib/staged-deleted.lib")
+    (checkout / "source.c").write_text("local source edit\n", encoding="utf-8")
+    (checkout / "lib/untracked.lib").write_text("untracked\n", encoding="utf-8")
+
+    assert update_repo(checkout, source.as_uri(), ref_type, ref_value) == 0
+    assert git(checkout, "rev-parse", "HEAD") == git(source, "rev-parse", "HEAD")
+    for name in library_names:
+        assert (checkout / "lib" / name).read_text(encoding="utf-8") == "upstream\n"
+    assert git(checkout, "diff", "--cached", "--name-only") == ""
+    assert (checkout / "source.c").read_text(encoding="utf-8") == "local source edit\n"
+    assert (checkout / "lib/untracked.lib").read_text(encoding="utf-8") == "untracked\n"
 
 
 def test_update_repo_switches_branches_in_shallow_clone(tmp_path: Path) -> None:
