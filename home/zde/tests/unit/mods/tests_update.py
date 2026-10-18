@@ -321,7 +321,7 @@ def test_clone_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(update_mod, "run", _run)
     assert clone_repo(repo, "https://x", "branch", "main") == 0
     assert clone_repo(repo, "https://x", "tag", "v1", fetch_tags=True) == 0
-    assert any("--tags" in c for c in calls)
+    assert any("+refs/tags/*:refs/tags/*" in c for c in calls)
 
     def _run_fail_first(cmd, cwd=None):
         return 2 if cmd[:2] == ["git", "clone"] else 0
@@ -427,6 +427,60 @@ def test_update_repo_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     seq = [0, 0]
     monkeypatch.setattr(update_mod, "run", _run_commit)
     assert update_repo(repo, "https://x", "commit", "deadbeef") == 0
+
+
+@pytest.mark.parametrize("annotated", [False, True])
+@pytest.mark.parametrize("mode", ["branch", "tag", "commit", "host", "dirty", "diverged"])
+def test_update_with_moved_tag(tmp_path: Path, annotated: bool, mode: str) -> None:
+    source = tmp_path / "source"
+    checkout = tmp_path / "checkout"
+
+    def git(path: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(path), "-c", "user.name=ZDE Tests",
+             "-c", "user.email=zde-tests@example.invalid", *args],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    source.mkdir()
+    git(source, "init", "-q")
+    git(source, "checkout", "-q", "-b", "main")
+    (source / "tracked.txt").write_text("original\n", encoding="utf-8")
+    git(source, "add", ".")
+    git(source, "commit", "-qm", "initial")
+    tag_args = ["-a", "-m", "rolling release"] if annotated else []
+    git(source, "tag", *tag_args, "latest")
+    initial = git(source, "rev-parse", "HEAD")
+    ref_type = "tag" if mode in {"tag", "dirty"} else "branch"
+    ref_value = "latest" if ref_type == "tag" else "main"
+    assert clone_repo(checkout, source.as_uri(), ref_type, ref_value) == 0
+
+    (source / "tracked.txt").write_text("updated\n", encoding="utf-8")
+    git(source, "commit", "-qam", "upstream update")
+    git(source, "tag", "-f", *tag_args, "latest")
+    latest = git(source, "rev-parse", "HEAD")
+
+    if mode in {"dirty", "diverged"}:
+        (checkout / "tracked.txt").write_text("local edit\n", encoding="utf-8")
+        if mode == "diverged":
+            git(checkout, "commit", "-qam", "local commit")
+        before = git(checkout, "rev-parse", "HEAD")
+        assert update_repo(checkout, source.as_uri(), ref_type, ref_value, fetch_tags=True) != 0
+        assert git(checkout, "rev-parse", "HEAD") == before
+        assert (checkout / "tracked.txt").read_text(encoding="utf-8") == "local edit\n"
+        return
+
+    if mode == "host":
+        # The host wrapper updates ZDE itself with this branch-only pull.
+        git(checkout, "pull", "--ff-only", "origin", "main")
+    else:
+        if mode == "commit":
+            ref_type, ref_value = "commit", initial
+        assert update_repo(checkout, source.as_uri(), ref_type, ref_value, fetch_tags=mode != "tag") == 0
+        assert git(checkout, "rev-parse", "refs/tags/latest") == git(source, "rev-parse", "refs/tags/latest")
+    expected = initial if mode == "commit" else latest
+    assert git(checkout, "rev-parse", "HEAD") == expected
+    assert (checkout / "tracked.txt").read_text(encoding="utf-8") == ("original\n" if mode == "commit" else "updated\n")
 
 
 def test_restore_generated_libraries_errors_and_no_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

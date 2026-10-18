@@ -35,6 +35,12 @@ fast-forward updates. Source edits, untracked files, and local commits are
 preserved; conflicting source edits or diverged commits can still block an update.
 Local dependency mode skips this restoration along with Git synchronization.
 
+Dependency tag fetches accept tags moved upstream, such as `latest`, and replace
+the corresponding local tags. Dependencies configured with a named tag follow
+its new commit; branch and commit selections remain unchanged by tag refreshes.
+Branch updates still require a fast-forward, and conflicting source edits still
+block checkout.
+
 `zde sync` runs only these maintenance tasks. `zde update` performs host-side repository and image updates first, then runs the same maintenance tasks.
 
 ## Related Environment Variables

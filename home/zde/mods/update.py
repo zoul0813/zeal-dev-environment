@@ -174,7 +174,8 @@ def ensure_origin(path: Path, repo: str) -> int:
 
 
 def _fetch_tags(path: Path) -> int:
-    return run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", "--tags"])
+    # Rolling tags (for example, latest) intentionally move upstream.
+    return run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", "+refs/tags/*:refs/tags/*"])
 
 
 def clone_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_tags: bool = False) -> int:
@@ -254,7 +255,7 @@ def update_repo(path: Path, repo: str, ref_type: str, ref_value: str, *, fetch_t
         return 0
 
     if ref_type == "tag":
-        rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", "tag", ref_value])
+        rc = run(["git", "-C", str(path), "fetch", "--depth", "1", "origin", f"+refs/tags/{ref_value}:refs/tags/{ref_value}"])
         if rc != 0:
             return rc
         rc = run(["git", "-C", str(path), "checkout", "--detach", f"tags/{ref_value}"])
