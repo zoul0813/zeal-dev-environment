@@ -1,4 +1,8 @@
 {
   "name": "zgdk_project",
-  "description": "Short description of the project"
+  "description": "Short description of the project",
+  "_copy_without_render": [
+    "*.aseprite",
+    "*.gif"
+  ]
 }
