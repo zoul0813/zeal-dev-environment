@@ -13,6 +13,7 @@ ZDE has two execution layers:
 - [Quick Start](#quick-start)
 - [Shell Environment Setup](./env.md)
 - [Host Commands](#host-commands)
+- [Global Host Options](#global-host-options)
 - [ZDE Commands](#zde-commands)
 - [Notes](#notes)
 - [Examples](#examples)
@@ -44,10 +45,29 @@ Create application projects outside the ZDE checkout so generated files and buil
 - `-v` / `--version`: print the current ZDE version and configured image reference.
 - [`activate`](./activate.md): emit shell exports for host mode.
 - [`-i`](./interactive.md): open an interactive shell inside the container.
+- `exec <command> [args...]`: run a command directly inside the container.
 - [`emulator` / `emu`](./emulator.md): run the Zeal Web Emulator service.
 - [`playground`](./playground.md): run the Zeal Playground service.
 - [`update`](./update.md): update the repo, pull the container image, and run ZDE sync tasks.
 - [`rebuild`](./rebuild.md): reserved host command that is not implemented yet.
+
+## Global Host Options
+
+Use `zde --no-tty <command> [args...]` for automated builds and scripts with
+Docker Compose or podman-compose. Place the flag before the command; the host
+wrapper consumes it instead of forwarding it to the container's Python CLI.
+
+This mode disables TTY allocation and disconnects stdin from the calling
+terminal. Interactive input is unavailable. It does not imply `--yes` or approve
+confirmation prompts. Stdout and stderr still stream to the caller, and command
+arguments and exit codes are preserved (subject to the existing `ZDE_SOFT_EXIT`
+override). Without this flag, terminal attachment behaves as before.
+
+```sh
+zde --no-tty deps install TurBoss/Zeal-8bit_conway
+zde --no-tty deps build TurBoss/Zeal-8bit_conway
+zde --no-tty exec python3 script.py
+```
 
 ## ZDE Commands
 

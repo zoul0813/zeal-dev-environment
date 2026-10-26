@@ -90,14 +90,21 @@ zde_init() {
 }
 
 zde_run_in_container() {
-  # Preserve Docker Compose's explicit interactive/TTY behavior. podman-compose
-  # keeps stdin open by default but does not accept the interactive option.
-  local interactive_args=()
-  if "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run --help 2>/dev/null | grep -- '--interactive' >/dev/null; then
-    interactive_args=(-i)
+  # Detect the Compose provider rather than the runtime: Podman can use Docker
+  # Compose too. podman-compose does not accept --interactive.
+  local terminal_args=()
+  if [ "${_ZDE_NO_TTY:-0}" = "1" ]; then
+    terminal_args=(-T)
+  fi
+  if "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run --help </dev/null 2>/dev/null | grep -- '--interactive' >/dev/null; then
+    if [ "${_ZDE_NO_TTY:-0}" = "1" ]; then
+      terminal_args+=(--interactive=false)
+    else
+      terminal_args=(-i)
+    fi
   fi
   local exec_args=(
-    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run ${interactive_args[@]+"${interactive_args[@]}"} --rm
+    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run ${terminal_args[@]+"${terminal_args[@]}"} --rm
     -e "HOST_UID=${HOST_UID}"
     -e "HOST_GID=${HOST_GID}"
     -e "HOST_HOME=${HOST_HOME}"
@@ -121,7 +128,11 @@ zde_run_in_container() {
 
   local service_name="$1"
   shift
-  "${exec_args[@]}" "$service_name" "$@"
+  if [ "${_ZDE_NO_TTY:-0}" = "1" ]; then
+    "${exec_args[@]}" "$service_name" "$@" </dev/null
+  else
+    "${exec_args[@]}" "$service_name" "$@"
+  fi
 }
 
 zde_command() {

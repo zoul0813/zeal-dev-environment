@@ -17,6 +17,17 @@ zde deps remove [-y|--yes] <id> [id...]
 
 Running `zde deps` with no arguments prints help and then shows installed dependencies.
 
+For automated installation and builds on Docker or Podman, place the global
+[`--no-tty`](./README.md#global-host-options) flag before `deps`:
+
+```sh
+zde --no-tty deps install TurBoss/Zeal-8bit_conway
+zde --no-tty deps build TurBoss/Zeal-8bit_conway
+```
+
+Interactive input is unavailable in this mode. The flag controls terminal
+attachment only and does not confirm prompts automatically.
+
 ## Subcommands
 
 - `list [category]`: show dependency state, aliases, and health. With a category, filter the list.

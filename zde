@@ -4,6 +4,13 @@ set +x
 
 ZDE_PATH=$(dirname "$0")
 source "$ZDE_PATH/home/zde/svcs/common.sh"
+# Host-only option: consume it before dispatch and preserve command arguments.
+# Export internal state for host service scripts that also use common.sh.
+export _ZDE_NO_TTY=0
+while [ "${1:-}" = "--no-tty" ]; do
+  _ZDE_NO_TTY=1
+  shift
+done
 zde_init "$@" || exit 1
 
 finalize_exit() {
@@ -157,6 +164,16 @@ if [ -z "$COMMAND" ] || [ "$COMMAND" = "help" ]; then
   else
     rc=$?
   fi
+  cat <<'EOF'
+
+Global host option (before the command):
+  --no-tty  Disable terminal attachment and interactive input (Docker/Podman).
+            Does not confirm prompts automatically.
+Examples:
+  zde --no-tty deps install TurBoss/Zeal-8bit_conway
+  zde --no-tty deps build TurBoss/Zeal-8bit_conway
+  zde --no-tty exec python3 script.py
+EOF
   print_service_statuses
   finalize_exit "$rc"
 fi

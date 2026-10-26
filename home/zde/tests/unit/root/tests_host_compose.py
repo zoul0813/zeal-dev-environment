@@ -12,7 +12,8 @@ import pytest
 @pytest.mark.parametrize("runtime", ["docker", "podman"])
 @pytest.mark.parametrize("provider", ["docker-compose", "podman-compose"])
 @pytest.mark.parametrize("exit_code", [0, 7])
-def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, runtime: str, provider: str, exit_code: int) -> None:
+@pytest.mark.parametrize("no_tty", [False, True])
+def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, runtime: str, provider: str, exit_code: int, no_tty: bool) -> None:
     common = Path(__file__).resolve().parents[3] / "svcs" / "common.sh"
     executable = tmp_path / runtime
     executable.write_text(
@@ -32,6 +33,7 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
         CONTAINER_CMD=str(executable), COMPOSE_PATH="/compose path/compose.yml",
         HOST_UID="1000", HOST_GID="1000", HOST_HOME="/host home",
         HOST_CWD="/project dir", ZDE_SOFT_EXIT="1", TERM="xterm-256color",
+        _ZDE_NO_TTY="1" if no_tty else "0",
     )
     result = subprocess.run(
         ["bash", "-c", 'source "$1"; zde_run_in_container service sh -c "exit 7"', "bash", str(common)],
@@ -40,19 +42,28 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
     arguments, payload = result.stdout.split("\n", 1)
     argv = json.loads(arguments)
     prefix = ["compose", "-f", env["COMPOSE_PATH"], "run"]
-    if provider == "docker-compose":
+    if no_tty:
+        prefix.append("-T")
+        if provider == "docker-compose":
+            prefix.append("--interactive=false")
+        else:
+            assert not any(arg.startswith("--interactive") for arg in argv)
+        assert "-i" not in argv
+    elif provider == "docker-compose":
         prefix.append("-i")
     else:
         assert "-i" not in argv
     prefix.append("--rm")
     assert argv[:len(prefix)] == prefix
     assert "--interactive" not in argv
+    if not no_tty:
+        assert "-T" not in argv
     for key in ["HOST_UID", "HOST_GID", "HOST_HOME", "HOST_CWD", "TERM"]:
         index = argv.index(f"{key}={env[key]}")
         assert argv[index - 1] == "-e"
     # Soft-exit policy belongs to the host wrapper; the launcher preserves status.
     assert not any(arg.startswith("ZDE_SOFT_EXIT=") for arg in argv)
     assert argv[-4:] == ["service", "sh", "-c", "exit 7"]
-    assert payload == "stdin payload\n"
+    assert payload == ("" if no_tty else "stdin payload\n")
     assert result.stderr == "runtime stderr\n"
     assert result.returncode == exit_code

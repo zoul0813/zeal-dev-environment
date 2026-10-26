@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import termios
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -151,7 +152,7 @@ def test_main_honors_required_deps_gate(monkeypatch: pytest.MonkeyPatch) -> None
     assert rc == 1
 
 
-@pytest.mark.parametrize("args", [["config", "get", "bad-key"], ["exec", "false"]])
+@pytest.mark.parametrize("args", [["config", "get", "bad-key"], ["exec", "false"], ["--no-tty", "deps", "build", "app"], ["--no-tty", "exec", "false"]])
 @pytest.mark.parametrize("tty", [False, True])
 def test_wrapper_preserves_failures_by_default(tmp_path: Path, args: list[str], tty: bool) -> None:
     assert _run_wrapper(tmp_path, args, tty=tty) == 7
@@ -279,6 +280,86 @@ def test_wrapper_sync_routes_directly_to_container_maintenance(tmp_path: Path) -
 
     runtime_args = args_log.read_text(encoding="utf-8").splitlines()
     assert runtime_args[-2:] == ["/home/zeal8bit/zde/zde.py", "sync"]
+
+
+@pytest.mark.parametrize("args, forwarded", [
+    (["deps", "install", "TurBoss/Zeal-8bit_conway"], ["/home/zeal8bit/zde/zde.py", "deps", "install", "TurBoss/Zeal-8bit_conway"]),
+    (["deps", "build", "TurBoss/Zeal-8bit_conway"], ["/home/zeal8bit/zde/zde.py", "deps", "build", "TurBoss/Zeal-8bit_conway"]),
+    (["exec", "python3", "script.py", "--no-tty", "argument with spaces", ""], ["python3", "script.py", "--no-tty", "argument with spaces", ""]),
+    (["-i"], ["/bin/bash"]),
+])
+def test_wrapper_consumes_only_leading_no_tty(tmp_path: Path, args: list[str], forwarded: list[str]) -> None:
+    log = tmp_path / "args.log"
+    assert _run_wrapper(
+        tmp_path, ["--no-tty", *args], tty=False,
+        extra_env={"STUB_ARGS_LOG": str(log)}, stub_rc=0,
+    ) == 0
+    argv = log.read_text().splitlines()
+    assert "-T" in argv
+    assert "-i" not in argv
+    assert argv[argv.index("zeal8bit-dev-env") + 1:] == forwarded
+    assert "-y" not in argv
+    assert "--yes" not in argv
+
+
+def test_wrapper_help_documents_no_tty(tmp_path: Path) -> None:
+    env = dict(os.environ, CONTAINER_CMD=str(_stub_runtime(tmp_path)), STUB_RC="0")
+    result = subprocess.run([str(WRAPPER), "--no-tty", "help"], env=env, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0
+    assert "--no-tty  Disable terminal attachment and interactive input" in result.stdout
+    assert "Does not confirm prompts automatically" in result.stdout
+    for command in ("deps install", "deps build", "exec python3 script.py"):
+        assert f"zde --no-tty {command}" in result.stdout
+
+
+def test_wrapper_no_tty_disconnects_terminal_and_streams_output(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.write_text(
+        f"#!{sys.executable}\n"
+        "import os, sys\n"
+        "if sys.argv[-1] == '--help':\n"
+        "    print('--interactive Keep STDIN open')\n"
+        "    sys.exit(0)\n"
+        "assert not os.isatty(0)\n"
+        "assert os.fstat(0).st_rdev == os.stat('/dev/null').st_rdev\n"
+        "assert sys.stdin.read() == ''\n"
+        "print('streamed stdout', flush=True)\n"
+        "print('streamed stderr', file=sys.stderr, flush=True)\n"
+        # Hold the process open until the test has observed both output streams.
+        "import time\n"
+        "from pathlib import Path\n"
+        "while not Path(os.environ['RELEASE_FILE']).exists():\n"
+        "    time.sleep(0.01)\n"
+        "sys.exit(7)\n"
+    )
+    runtime.chmod(0o755)
+    release = tmp_path / "release"
+    env = dict(os.environ, CONTAINER_CMD=str(runtime), RELEASE_FILE=str(release))
+    env.pop("ZDE_SOFT_EXIT", None)
+    env.pop("ZDE_STRICT_EXIT", None)
+    master, slave = os.openpty()
+    try:
+        before = termios.tcgetattr(slave)
+        with subprocess.Popen(
+            [str(WRAPPER), "--no-tty", "exec", "python3", "script.py"],
+            env=env, stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        ) as process:
+            try:
+                # select bounds the wait if output is accidentally buffered.
+                import select
+
+                for stream, expected in ((process.stdout, "streamed stdout\n"), (process.stderr, "streamed stderr\n")):
+                    assert select.select([stream], [], [], 10)[0]
+                    assert stream.readline() == expected
+                assert process.poll() is None
+            finally:
+                release.touch()
+                process.wait(timeout=10)
+            assert process.returncode == 7
+        assert termios.tcgetattr(slave) == before
+    finally:
+        os.close(slave)
+        os.close(master)
 
 
 @pytest.mark.parametrize("argv", [
