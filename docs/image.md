@@ -52,6 +52,7 @@ Supported subcommands:
 - `tf` defaults to size `4096`.
 - `eeprom` and `tf` skip file and directory names longer than ZealFS's 16-byte limit, including their subtrees, and print a warning. Staged files remain unchanged; rename an excluded entry before creating the image if it is needed.
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
+- Created images belong to the user running ZDE (`HOST_UID`/`HOST_GID`, which default to the host user's UID/GID), including TF/EEPROM images built with `sudo`. Recreate an existing root-owned image to correct its ownership.
 - Pass `-y` or `--yes` to `zde image ... create` to confirm overwriting without a prompt.
 - `romdisk create`:
   - Packs staged files from `mnt/romdisk` into `mnt/romdisk.img`.

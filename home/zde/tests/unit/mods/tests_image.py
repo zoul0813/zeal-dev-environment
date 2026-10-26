@@ -314,6 +314,36 @@ def test_failed_image_replacement_preserves_existing_image(
     assert not list(img.path.parent.glob(f".{img.path.name}.*"))
 
 
+@pytest.mark.parametrize("chown_rc", [0, 7])
+def test_image_restores_caller_ownership_before_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chown_rc: int
+) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path)
+    img = image.ImageZealFS("tf", "64")
+    img.path.write_text("old image")
+    uid, gid = os.getuid() + 1, os.getgid() + 1
+    monkeypatch.setattr(image.os, "getuid", lambda: uid)
+    monkeypatch.setattr(image.os, "getgid", lambda: gid)
+    calls = []
+
+    def build(output):
+        output.write_text("new image")
+        return 0
+
+    def run(cmd):
+        assert img.path.read_text() == "old image"
+        assert Path(cmd[-1]).read_text() == "new image"
+        assert cmd[:3] == ["sudo", "chown", f"{uid}:{gid}"]
+        calls.append(cmd)
+        return chown_rc
+
+    monkeypatch.setattr(image, "run", run)
+    assert img._build_and_publish(build) == chown_rc
+    assert len(calls) == 1
+    assert img.path.read_text() == ("old image" if chown_rc else "new image")
+    assert not list(tmp_path.glob(".tf.img.*"))
+
+
 def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
     zealfs = tmp_path / "zealfs"

@@ -80,6 +80,14 @@ class Image(ToolingSupport):
             if not temporary_path.is_file():
                 print(f"Image build did not produce output: {temporary_path}")
                 return 1
+            # Privileged builders (ZealFS) create root-owned files. Publish
+            # artifacts as the mapped caller, just like unprivileged builders.
+            owner = temporary_path.stat()
+            uid, gid = os.getuid(), os.getgid()
+            if (owner.st_uid, owner.st_gid) != (uid, gid):
+                rc = run(["sudo", "chown", f"{uid}:{gid}", str(temporary_path)])
+                if rc != 0:
+                    return rc
             try:
                 os.replace(temporary_path, self.path)
             except OSError as exc:
