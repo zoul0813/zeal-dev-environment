@@ -4,6 +4,10 @@ version: 1
 dependencies:
   - id: zoul0813/zeal-archiver
     path: home/zeal-archiver
+    env:
+      - name: ZAR_PATH
+        add_to_path:
+          - .
 
   - id: Zeal8bit/Zeal-8-bit-OS
     tag: true

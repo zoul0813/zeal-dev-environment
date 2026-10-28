@@ -435,7 +435,14 @@ def test_depcatalog_init_with_collection_merge_branch(env_factory, fs_builder, m
 
 def test_collection_archiver_keeps_legacy_path_and_collection_settings(tmp_path: Path) -> None:
     env = _make_env(tmp_path)
-    _write_yaml(env.deps_file, "dependencies:\n  - id: zoul0813/zeal-archiver\n    path: home/zeal-archiver")
+    _write_yaml(env.deps_file, """
+        dependencies:
+          - id: zoul0813/zeal-archiver
+            path: home/zeal-archiver
+            env:
+              - name: ZAR_PATH
+                add_to_path: [.]
+    """)
     _write_yaml(
         env.collection_file,
         """
@@ -455,6 +462,10 @@ def test_collection_archiver_keeps_legacy_path_and_collection_settings(tmp_path:
     assert dep.raw["branch"] == "collection-branch"
     assert dep.raw["build"] is False
     assert dep.raw["metadata"]["name"] == "Collection Archiver"
+    cat = dep.catalog
+    cat.installed_by_id[dep.id] = True
+    assert dict(dep.runtime_env())["ZAR_PATH"] == str(env.zde_home / "zeal-archiver")
+    assert str(env.zde_home / "zeal-archiver") in dep.runtime_paths()
 
 
 def test_depcatalog_misc_getters_and_repo_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
