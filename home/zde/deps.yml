@@ -100,33 +100,6 @@ dependencies:
     aliases:
       - emulator
 
-  - id: zoul0813/zeal-archiver
-    repo: https://github.com/zoul0813/zeal-archiver.git
-    path: home/zeal-archiver
-    branch: main
-    build:
-      tool: cmake
-      args:
-        - --target
-        - bins
-      artifacts:
-        - bin/zar.bin
-      root: /apps
-    env:
-      - name: ZAR_PATH
-        add_to_path:
-          - .
-    depends_on:
-      - zoul0813/zeal-coreutils
-    metadata:
-      category:
-        - software
-        - library
-      name: Zeal Archiver
-      description: Zeal archiving tools
-    aliases:
-      - zar
-
   - id: Zeal8bit/Zeal-Playground
     repo: https://github.com/Zeal8bit/Zeal-Playground.git
     path: home/Zeal-Playground
@@ -164,21 +137,3 @@ dependencies:
       description: Core utility programs for Zeal
     aliases:
       - coreutils
-
-  - id: zoul0813/zeal-zshell
-    repo: https://github.com/zoul0813/zeal-zshell.git
-    branch: main
-    build:
-      tool: cmake
-      artifacts:
-        - bin/
-      root: /apps
-    depends_on:
-      - zoul0813/zeal-coreutils
-    metadata:
-      category:
-        - software
-      name: ZShell
-      description: A Shell for Zeal 8-bit OS
-    aliases:
-      - zshell
