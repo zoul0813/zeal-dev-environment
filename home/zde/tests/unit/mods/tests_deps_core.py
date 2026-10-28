@@ -614,7 +614,7 @@ def test_sync_for_update_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.parametrize("failure_index", [0, 1, 2])
-def test_sync_for_update_failure_preserves_untouched_lock_entries(
+def test_sync_for_update_continues_after_sync_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_index: int
 ) -> None:
     env = _make_env(tmp_path)
@@ -670,13 +670,48 @@ def test_sync_for_update_failure_preserves_untouched_lock_entries(
     persisted = writes[-1]
     ids = ["a", "b", "c"]
     for index, dep_id in enumerate(ids):
-        if index < failure_index:
-            assert persisted[dep_id]["status"] == "synced"
-        elif index == failure_index:
+        if index == failure_index:
             assert persisted[dep_id]["status"] == "sync_failed"
         else:
-            assert persisted[dep_id] == original[dep_id]
+            assert persisted[dep_id]["status"] == "synced"
+    assert update_calls == 3
     assert persisted["unrelated"] == original["unrelated"]
+
+
+@pytest.mark.parametrize("skip_sync", [False, True])
+def test_sync_for_update_continues_after_build_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, skip_sync: bool
+) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(env.deps_file, """
+        dependencies:
+          - id: broken
+            repo: x
+            path: home/broken
+            build: {tool: cmake}
+          - id: later
+            repo: y
+            path: home/later
+    """)
+    monkeypatch.setattr("mods.deps.load_lock", lambda _: {"dependencies": {}})
+    monkeypatch.setattr("mods.deps.is_git_repo", lambda _: True)
+    monkeypatch.setattr("mods.deps.get_skip_sync_installed_config", lambda: skip_sync)
+    calls = []
+    monkeypatch.setattr("mods.deps.update_repo", lambda path, *args, **kwargs: calls.append(path.name) or 0)
+    monkeypatch.setattr("mods.deps.current_commit", lambda _: "abc")
+    monkeypatch.setattr("mods.deps.build_lock_entry", lambda **kwargs: {"status": kwargs["status"]})
+    writes = []
+    monkeypatch.setattr("mods.deps.write_lock", lambda path, lock: writes.append(dict(lock["dependencies"])))
+    cat = DepCatalog(env)
+    monkeypatch.setattr(cat, "_run_build_for_dep", lambda dep: 8 if dep.id == "broken" else 0)
+    monkeypatch.setattr(cat, "_write_managed_env_file", lambda: None)
+    monkeypatch.setattr(cat, "refresh", lambda: None)
+
+    assert cat.sync_for_update() == 8
+    assert writes[-1] == {"broken": {"status": "build_failed"}, "later": {"status": "local" if skip_sync else "synced"}}
+    if not skip_sync:
+        assert calls == ["broken", "later"]
+    assert "Dependencies failed to update: broken" in capsys.readouterr().err
 
 
 def test_sync_for_update_prunes_stale_entries_only_after_success(

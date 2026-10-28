@@ -840,6 +840,7 @@ class DepCatalog:
         lock["dependencies"] = lock_deps
         self.lock_deps = lock_deps
         retained_dep_ids: set[str] = set()
+        failures: list[tuple[str, int]] = []
 
         skip_installed_sync = self._skip_sync_for_installed()
         announced_skip_mode = False
@@ -862,13 +863,17 @@ class DepCatalog:
                 if has_entries:
                     if not dep.required:
                         continue
-                    lock["updated_at"] = now
-                    write_lock(self.env.lock_file, lock)
+                    lock_deps[dep.id] = build_lock_entry(
+                        dep=dep.raw, ref_type=ref_type, ref_value=ref_value,
+                        status="sync_failed", updated_at=now,
+                        current_commit_value=None, resolved_path=dep_path,
+                    )
                     print(
                         f"Dependency path exists but is not a git repo: {dep.id} ({dep_path})",
                         file=sys.stderr,
                     )
-                    return 1
+                    failures.append((dep.id, 1))
+                    continue
 
             if has_git and skip_installed_sync:
                 if not announced_skip_mode:
@@ -887,11 +892,10 @@ class DepCatalog:
                             current_commit_value=current_commit(dep_path),
                             resolved_path=dep_path,
                         )
-                        lock["updated_at"] = now
-                        write_lock(self.env.lock_file, lock)
                         self._write_managed_env_file()
                         print(f"Failed building dependency: {dep.id}", file=sys.stderr)
-                        return rc
+                        failures.append((dep.id, rc))
+                        continue
                 lock_deps[dep.id] = build_lock_entry(
                     dep=dep.raw,
                     ref_type=ref_type,
@@ -920,10 +924,9 @@ class DepCatalog:
                     current_commit_value=current_commit(dep_path),
                     resolved_path=dep_path,
                 )
-                lock["updated_at"] = now
-                write_lock(self.env.lock_file, lock)
                 print(f"Failed syncing dependency: {dep.id}", file=sys.stderr)
-                return rc
+                failures.append((dep.id, rc))
+                continue
 
             if newly_installed or needs_build:
                 rc = self._run_build_for_dep(dep)
@@ -938,11 +941,10 @@ class DepCatalog:
                         current_commit_value=current_commit(dep_path),
                         resolved_path=dep_path,
                     )
-                    lock["updated_at"] = now
-                    write_lock(self.env.lock_file, lock)
                     self._write_managed_env_file()
                     print(f"Failed building dependency: {dep.id}", file=sys.stderr)
-                    return rc
+                    failures.append((dep.id, rc))
+                    continue
 
             lock_deps[dep.id] = build_lock_entry(
                 dep=dep.raw,
@@ -957,10 +959,11 @@ class DepCatalog:
             self.installed_by_id[dep.id] = True
             self._write_managed_env_file()
 
-        lock_deps = {
-            dep_id: lock_deps[dep_id]
-            for dep_id in retained_dep_ids
-        }
+        if not failures:
+            lock_deps = {
+                dep_id: lock_deps[dep_id]
+                for dep_id in retained_dep_ids
+            }
         lock["dependencies"] = lock_deps
         lock["updated_at"] = now
         write_lock(self.env.lock_file, lock)
@@ -968,6 +971,9 @@ class DepCatalog:
         self.lock_deps = lock_deps
         self.refresh()
         print(f"Dependency lock updated: {self.env.lock_file}")
+        if failures:
+            print("Dependencies failed to update: " + ", ".join(dep_id for dep_id, _ in failures), file=sys.stderr)
+            return failures[0][1]
         return 0
 
     def _skip_sync_for_installed(self) -> bool:

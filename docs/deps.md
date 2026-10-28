@@ -67,6 +67,8 @@ State strings include values such as `ok`, `required-miss`, `broken(...)`, `untr
 ## Notes
 
 - Required dependencies are usually handled by `zde update`.
+- `zde update` continues through the remaining dependencies after a sync or
+  build failure, reports the failures, and exits with a nonzero status.
 - `install` can also target required dependencies when you need an install/update without running `zde update`.
 - Installing an already-installed dependency performs an update/sync instead of being a no-op.
 - Optional dependencies are installed only when you request them.
