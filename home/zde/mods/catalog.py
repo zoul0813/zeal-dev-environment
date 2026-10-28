@@ -287,6 +287,8 @@ def merge_deps_lists(primary: list[dict[str, Any]], secondary: list[dict[str, An
     for dep in merged:
         if "repo" not in dep and dep.get("required"):
             raise RuntimeError(f"Required dependency '{dep['id']}' is missing from the Software Collection catalog")
+        if "repo" in dep and "path" not in dep:
+            dep["path"] = _default_dep_path(dep)
     # An override alone is not an installable dependency.
     return [dep for dep in merged if "repo" in dep]
 

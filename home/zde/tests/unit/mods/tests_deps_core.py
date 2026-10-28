@@ -714,6 +714,28 @@ def test_sync_for_update_continues_after_build_failure(
     assert "Dependencies failed to update: broken" in capsys.readouterr().err
 
 
+def test_dependency_update_output_hides_success_and_shows_failure_logs(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    import sys
+    from mods.deps import _dependency_update_output
+    from mods.process import run
+
+    monkeypatch.setattr("mods.deps.paint", lambda label, color: f"<{color}>{label}</{color}>")
+    failures = []
+    with _dependency_update_output("good", failures):
+        print("quiet Python output")
+        assert run([sys.executable, "-c", "import sys; print('quiet child output'); print('quiet child error', file=sys.stderr)"]) == 0
+    with _dependency_update_output("bad", failures):
+        print("Python failure")
+        assert run([sys.executable, "-c", "import sys; print('child failure', file=sys.stderr)"]) == 0
+        failures.append(("bad", 1))
+
+    output = capsys.readouterr().out
+    assert "good ... <green>[OK]</green>" in output
+    assert "quiet" not in output
+    assert "bad ... <red>[FAIL]</red>" in output
+    assert output.index("bad ...") < output.index("Python failure") < output.index("child failure")
+
+
 def test_sync_for_update_prunes_stale_entries_only_after_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1176,7 +1198,7 @@ def test_sync_for_update_error_and_build_fail_paths(tmp_path: Path, monkeypatch:
     cat = DepCatalog(env)
     assert cat.sync_for_update() == 1
     assert writes
-    assert "exists but is not a git repo" in capsys.readouterr().err
+    assert "exists but is not a git repo" in capsys.readouterr().out
 
     # clean required dir then hit clone + build fail for newly installed
     import shutil

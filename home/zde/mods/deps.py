@@ -4,6 +4,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +14,8 @@ from typing import Any, ClassVar, TYPE_CHECKING
 from mods.migrate import migrate_broken_submodule_checkout
 from mods.catalog import filter_zde_visible_deps, load_deps_yaml, merge_deps_lists, order_deps_by_dependency
 from mods.config import Config
+from mods.cli import paint
+from mods.process import capture_command_output, captured_command_output
 from mods.update import (
     build_lock_entry,
     update_repo,
@@ -28,6 +32,26 @@ from mods.update import (
 
 if TYPE_CHECKING:
     from mods.image import Image
+
+
+@contextmanager
+def _dependency_update_output(dep_id: str, failures: list[tuple[str, int]]):
+    """Show a compact result, revealing captured output only on failure."""
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as output:
+        failure_count = len(failures)
+        with redirect_stdout(output), redirect_stderr(output), capture_command_output(output):
+            yield
+        failed = len(failures) > failure_count
+        label = paint("[FAIL]", "red") if failed else paint("[OK]", "green")
+        print(f"{dep_id} ... {label}")
+        if failed:
+            output.seek(0)
+            last = ""
+            while chunk := output.read(65536):
+                sys.stdout.write(chunk)
+                last = chunk[-1]
+            if last and last != "\n":
+                print()
 
 
 
@@ -855,31 +879,81 @@ class DepCatalog:
             if not has_git and not dep.required:
                 continue
 
-            if dep_path.exists() and not has_git:
-                try:
-                    has_entries = next(dep_path.iterdir(), None) is not None
-                except OSError:
-                    has_entries = True
-                if has_entries:
-                    if not dep.required:
+            with _dependency_update_output(dep.id, failures):
+                if dep_path.exists() and not has_git:
+                    try:
+                        has_entries = next(dep_path.iterdir(), None) is not None
+                    except OSError:
+                        has_entries = True
+                    if has_entries:
+                        if not dep.required:
+                            continue
+                        lock_deps[dep.id] = build_lock_entry(
+                            dep=dep.raw, ref_type=ref_type, ref_value=ref_value,
+                            status="sync_failed", updated_at=now,
+                            current_commit_value=None, resolved_path=dep_path,
+                        )
+                        print(
+                            f"Dependency path exists but is not a git repo: {dep.id} ({dep_path})",
+                            file=sys.stderr,
+                        )
+                        failures.append((dep.id, 1))
                         continue
+
+                if has_git and skip_installed_sync:
+                    if not announced_skip_mode:
+                        print("Local dep mode enabled: skipping git sync for already-installed dependencies.")
+                        announced_skip_mode = True
+                    if needs_build:
+                        rc = self._run_build_for_dep(dep)
+                        if rc != 0:
+                            self.installed_by_id[dep.id] = True
+                            lock_deps[dep.id] = build_lock_entry(
+                                dep=dep.raw,
+                                ref_type=ref_type,
+                                ref_value=ref_value,
+                                status="build_failed",
+                                updated_at=now,
+                                current_commit_value=current_commit(dep_path),
+                                resolved_path=dep_path,
+                            )
+                            self._write_managed_env_file()
+                            print(f"Failed building dependency: {dep.id}", file=sys.stderr)
+                            failures.append((dep.id, rc))
+                            continue
                     lock_deps[dep.id] = build_lock_entry(
-                        dep=dep.raw, ref_type=ref_type, ref_value=ref_value,
-                        status="sync_failed", updated_at=now,
-                        current_commit_value=None, resolved_path=dep_path,
+                        dep=dep.raw,
+                        ref_type=ref_type,
+                        ref_value=ref_value,
+                        status="local",
+                        updated_at=now,
+                        current_commit_value=current_commit(dep_path),
+                        resolved_path=dep_path,
                     )
-                    print(
-                        f"Dependency path exists but is not a git repo: {dep.id} ({dep_path})",
-                        file=sys.stderr,
-                    )
-                    failures.append((dep.id, 1))
+                    retained_dep_ids.add(dep.id)
                     continue
 
-            if has_git and skip_installed_sync:
-                if not announced_skip_mode:
-                    print("Local dep mode enabled: skipping git sync for already-installed dependencies.")
-                    announced_skip_mode = True
-                if needs_build:
+                newly_installed = not has_git
+                if newly_installed:
+                    rc = clone_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
+                else:
+                    rc = update_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
+
+                if rc != 0:
+                    lock_deps[dep.id] = build_lock_entry(
+                        dep=dep.raw,
+                        ref_type=ref_type,
+                        ref_value=ref_value,
+                        status="sync_failed",
+                        updated_at=now,
+                        current_commit_value=current_commit(dep_path),
+                        resolved_path=dep_path,
+                    )
+                    print(f"Failed syncing dependency: {dep.id}", file=sys.stderr)
+                    failures.append((dep.id, rc))
+                    continue
+
+                if newly_installed or needs_build:
                     rc = self._run_build_for_dep(dep)
                     if rc != 0:
                         self.installed_by_id[dep.id] = True
@@ -896,68 +970,19 @@ class DepCatalog:
                         print(f"Failed building dependency: {dep.id}", file=sys.stderr)
                         failures.append((dep.id, rc))
                         continue
+
                 lock_deps[dep.id] = build_lock_entry(
                     dep=dep.raw,
                     ref_type=ref_type,
                     ref_value=ref_value,
-                    status="local",
+                    status="synced",
                     updated_at=now,
                     current_commit_value=current_commit(dep_path),
                     resolved_path=dep_path,
                 )
                 retained_dep_ids.add(dep.id)
-                continue
-
-            newly_installed = not has_git
-            if newly_installed:
-                rc = clone_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
-            else:
-                rc = update_repo(dep_path, dep.repo, ref_type, ref_value, fetch_tags=fetch_tags)
-
-            if rc != 0:
-                lock_deps[dep.id] = build_lock_entry(
-                    dep=dep.raw,
-                    ref_type=ref_type,
-                    ref_value=ref_value,
-                    status="sync_failed",
-                    updated_at=now,
-                    current_commit_value=current_commit(dep_path),
-                    resolved_path=dep_path,
-                )
-                print(f"Failed syncing dependency: {dep.id}", file=sys.stderr)
-                failures.append((dep.id, rc))
-                continue
-
-            if newly_installed or needs_build:
-                rc = self._run_build_for_dep(dep)
-                if rc != 0:
-                    self.installed_by_id[dep.id] = True
-                    lock_deps[dep.id] = build_lock_entry(
-                        dep=dep.raw,
-                        ref_type=ref_type,
-                        ref_value=ref_value,
-                        status="build_failed",
-                        updated_at=now,
-                        current_commit_value=current_commit(dep_path),
-                        resolved_path=dep_path,
-                    )
-                    self._write_managed_env_file()
-                    print(f"Failed building dependency: {dep.id}", file=sys.stderr)
-                    failures.append((dep.id, rc))
-                    continue
-
-            lock_deps[dep.id] = build_lock_entry(
-                dep=dep.raw,
-                ref_type=ref_type,
-                ref_value=ref_value,
-                status="synced",
-                updated_at=now,
-                current_commit_value=current_commit(dep_path),
-                resolved_path=dep_path,
-            )
-            retained_dep_ids.add(dep.id)
-            self.installed_by_id[dep.id] = True
-            self._write_managed_env_file()
+                self.installed_by_id[dep.id] = True
+                self._write_managed_env_file()
 
         if not failures:
             lock_deps = {
@@ -1097,11 +1122,16 @@ class DepCatalog:
                     print(f"Invalid non-string build command for dependency: {dep.id}")
                     return 1
                 print(f"$ {command}")
+                output = captured_command_output()
+                if output is not None:
+                    output.flush()
                 rc = subprocess.run(
                     ["/bin/sh", "-c", command],
                     cwd=str(dep.path_resolved),
                     check=False,
                     env=command_env,
+                    stdout=output,
+                    stderr=output,
                 ).returncode
                 if rc != 0:
                     return int(rc)

@@ -20,6 +20,21 @@ class _RunOptions:
 
 
 _RUN_OPTIONS_STACK: list[_RunOptions] = [_RunOptions()]
+_CAPTURED_OUTPUT_STACK: list[object] = []
+
+
+@contextmanager
+def capture_command_output(output: object) -> Iterator[None]:
+    """Send normally inherited command output to the given file temporarily."""
+    _CAPTURED_OUTPUT_STACK.append(output)
+    try:
+        yield
+    finally:
+        _CAPTURED_OUTPUT_STACK.pop()
+
+
+def captured_command_output() -> object | None:
+    return _CAPTURED_OUTPUT_STACK[-1] if _CAPTURED_OUTPUT_STACK else None
 
 
 def _current_options() -> _RunOptions:
@@ -101,6 +116,13 @@ def run(
     stderr: object | None = None,
     input_text: str | None = None,
 ) -> int:
+    captured = captured_command_output()
+    if captured is not None:
+        captured.flush()
+        if stdout is None:
+            stdout = captured
+        if stderr is None:
+            stderr = captured
     _apply_pre_run_behavior(stdout=stdout, capture_output=False)
     text_mode = input_text is not None
     try:

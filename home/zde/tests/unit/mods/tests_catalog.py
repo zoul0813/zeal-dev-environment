@@ -183,6 +183,11 @@ def test_overrides_preserve_only_declared_fields_and_require_required_entries(tm
     assert merged[0]["build"] is False
 
 
+def test_local_definition_without_path_receives_default_after_merge() -> None:
+    merged = catalog.merge_deps_lists([{"id": "org/tool", "repo": "local"}], [])
+    assert merged[0]["path"] == "extras/org/tool"
+
+
 def test_order_deps_by_dependency_topological_order_and_cycle_error() -> None:
     ordered = catalog.order_deps_by_dependency(
         [
