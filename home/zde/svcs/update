@@ -28,7 +28,7 @@ if [ -n "$TARGET_BRANCH" ]; then
   echo "Switching ZDE repository to branch: $TARGET_BRANCH"
   switch_to_branch "$TARGET_BRANCH"
 
-  echo "Pulling latest Zeal 8-bit repository branch: $TARGET_BRANCH"
+  echo "Pulling latest ZDE repository branch: $TARGET_BRANCH"
   git -C "$ZDE_PATH" pull --ff-only origin "$TARGET_BRANCH"
 else
   if [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
@@ -40,7 +40,7 @@ else
     switch_to_branch "$DEFAULT_BRANCH"
   fi
 
-  echo "Pulling latest Zeal 8-bit repository branch: $DEFAULT_BRANCH"
+  echo "Pulling latest ZDE repository branch: $DEFAULT_BRANCH"
   git -C "$ZDE_PATH" pull --ff-only origin "$DEFAULT_BRANCH"
 fi
 
