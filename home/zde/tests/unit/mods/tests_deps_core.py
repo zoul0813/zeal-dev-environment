@@ -402,6 +402,8 @@ def test_dep_render_info_nested_values(tmp_path: Path) -> None:
 
 
 def test_depcatalog_init_with_collection_merge_branch(env_factory, fs_builder, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mods.catalog import merge_deps_lists
+
     env = env_factory()
     fs_builder.write_yaml(
         str(env.deps_file.relative_to(fs_builder.root)),
@@ -425,12 +427,13 @@ def test_depcatalog_init_with_collection_merge_branch(env_factory, fs_builder, m
 
     def _merge(primary, secondary):
         merged_called["ok"] = True
-        return [*primary, *secondary]
+        return merge_deps_lists(primary, secondary)
 
     monkeypatch.setattr("mods.deps.merge_deps_lists", _merge)
     catalog = DepCatalog(env)
     assert merged_called["ok"] is True
     assert set(catalog.by_id.keys()) == {"dep-a", "dep-b"}
+    assert catalog.by_id["dep-a"].path == "extras/dep-a"
 
 
 def test_collection_archiver_keeps_legacy_path_and_collection_settings(tmp_path: Path) -> None:
