@@ -433,6 +433,30 @@ def test_depcatalog_init_with_collection_merge_branch(env_factory, fs_builder, m
     assert set(catalog.by_id.keys()) == {"dep-a", "dep-b"}
 
 
+def test_collection_archiver_keeps_legacy_path_and_collection_settings(tmp_path: Path) -> None:
+    env = _make_env(tmp_path)
+    _write_yaml(env.deps_file, "dependencies:\n  - id: zoul0813/zeal-archiver\n    path: home/zeal-archiver")
+    _write_yaml(
+        env.collection_file,
+        """
+        dependencies:
+          - id: zoul0813/zeal-archiver
+            repo: https://example.invalid/archiver.git
+            path: extras/elsewhere
+            branch: collection-branch
+            build: false
+            metadata:
+              name: Collection Archiver
+        """,
+    )
+    dep = DepCatalog(env).by_id["zoul0813/zeal-archiver"]
+    assert dep.path_resolved == env.zde_home / "zeal-archiver"
+    assert dep.raw["repo"] == "https://example.invalid/archiver.git"
+    assert dep.raw["branch"] == "collection-branch"
+    assert dep.raw["build"] is False
+    assert dep.raw["metadata"]["name"] == "Collection Archiver"
+
+
 def test_depcatalog_misc_getters_and_repo_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env = _make_env(tmp_path)
     _write_yaml(

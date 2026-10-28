@@ -83,7 +83,7 @@ def filter_zde_visible_deps(deps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return visible
 
 
-def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
+def load_deps_yaml(deps_file: Path, *, overrides: bool = False) -> list[dict[str, Any]]:
     if not deps_file.is_file():
         raise FileNotFoundError(f"Missing dependency catalog: {deps_file}")
 
@@ -106,13 +106,14 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     for dep in deps:
         if not isinstance(dep, dict):
             raise RuntimeError("Each dependency entry must be a map")
-        for key in ("id", "repo"):
-            if key not in dep or not isinstance(dep[key], str) or not dep[key].strip():
-                raise RuntimeError(f"Dependency missing required string field: {key}")
+        if not isinstance(dep.get("id"), str) or not dep["id"].strip():
+            raise RuntimeError("Dependency missing required string field: id")
+        if (not overrides or "repo" in dep) and (not isinstance(dep.get("repo"), str) or not dep["repo"].strip()):
+            raise RuntimeError("Dependency missing required string field: repo")
         raw_path = dep.get("path")
-        if raw_path is None:
+        if raw_path is None and not overrides:
             dep["path"] = _default_dep_path(dep)
-        elif not isinstance(raw_path, str) or not raw_path.strip():
+        elif raw_path is not None and (not isinstance(raw_path, str) or not raw_path.strip()):
             raise RuntimeError(f"Dependency missing required string field: path")
         required = dep.get("required")
         if required is not None and not isinstance(required, bool):
@@ -134,15 +135,19 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
             elif not isinstance(tag, bool):
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid tag value")
         metadata = dep.get("metadata")
-        if metadata is None:
+        if metadata is None and not overrides:
             metadata = {}
             dep["metadata"] = metadata
+        elif metadata is None:
+            metadata = {}
         elif not isinstance(metadata, dict):
             raise RuntimeError(f"Dependency '{dep['id']}' has non-map metadata")
 
         category = metadata.get("category")
-        if category is None:
+        if category is None and not overrides:
             metadata["category"] = ["Other"]
+        elif category is None:
+            pass
         elif isinstance(category, str):
             if not category.strip():
                 raise RuntimeError(f"Dependency '{dep['id']}' has invalid metadata.category")
@@ -220,7 +225,7 @@ def load_deps_yaml(deps_file: Path) -> list[dict[str, Any]]:
     for dep in deps:
         dep_id = dep["id"]
         for parent in dep.get("depends_on", []):
-            if parent not in ids:
+            if parent not in ids and not overrides:
                 raise RuntimeError(f"Dependency '{dep_id}' depends on unknown id '{parent}'")
             if parent == dep_id:
                 raise RuntimeError(f"Dependency '{dep_id}' cannot depend on itself")
@@ -240,6 +245,9 @@ def merge_deps_lists(primary: list[dict[str, Any]], secondary: list[dict[str, An
 
         existing_meta = existing.get("metadata")
         dep_meta = dep.get("metadata")
+        if existing_meta is None and isinstance(dep_meta, dict):
+            existing["metadata"] = dep_meta
+            existing_meta = dep_meta
         if isinstance(existing_meta, dict) and isinstance(dep_meta, dict):
             existing_categories = existing_meta.get("category", [])
             dep_categories = dep_meta.get("category", [])
@@ -276,7 +284,11 @@ def merge_deps_lists(primary: list[dict[str, Any]], secondary: list[dict[str, An
             if key not in existing:
                 existing[key] = value
 
-    return merged
+    for dep in merged:
+        if "repo" not in dep and dep.get("required"):
+            raise RuntimeError(f"Required dependency '{dep['id']}' is missing from the Software Collection catalog")
+    # An override alone is not an installable dependency.
+    return [dep for dep in merged if "repo" in dep]
 
 
 def order_deps_by_dependency(deps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -293,6 +305,8 @@ def order_deps_by_dependency(deps: list[dict[str, Any]]) -> list[dict[str, Any]]
         visiting.add(dep_id)
         dep = dep_map[dep_id]
         for parent in dep.get("depends_on", []):
+            if parent not in dep_map:
+                raise RuntimeError(f"Dependency '{dep_id}' depends on unknown id '{parent}'")
             visit(parent)
         visiting.remove(dep_id)
         visited.add(dep_id)

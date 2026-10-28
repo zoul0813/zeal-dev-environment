@@ -533,10 +533,9 @@ class Dep:
 class DepCatalog:
     def __init__(self, env: object | None = None) -> None:
         self.env = resolve_env() if env is None else env
-        deps_raw = load_deps_yaml(self.env.deps_file)
-        if self.env.collection_file.is_file():
-            collection_raw = load_deps_yaml(self.env.collection_file)
-            deps_raw = merge_deps_lists(deps_raw, collection_raw)
+        deps_raw = load_deps_yaml(self.env.deps_file, overrides=True)
+        collection_raw = load_deps_yaml(self.env.collection_file) if self.env.collection_file.is_file() else []
+        deps_raw = merge_deps_lists(deps_raw, collection_raw)
         self._deps_raw = order_deps_by_dependency(deps_raw)
         self.by_id: dict[str, Dep] = {dep["id"]: Dep(self, dep) for dep in self._deps_raw}
         self._visible_ids = {dep["id"] for dep in filter_zde_visible_deps(self._deps_raw)}

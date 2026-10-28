@@ -162,6 +162,27 @@ def test_merge_deps_lists_enriches_existing_and_keeps_primary_fields() -> None:
     assert dep_b["repo"] == "secondary-b"
 
 
+def test_path_only_override_requires_a_matching_catalog_entry(tmp_path: Path) -> None:
+    deps_file = tmp_path / "deps.yml"
+    _write_yaml(deps_file, "dependencies:\n  - id: org/tool\n    path: home/tool")
+    overrides = catalog.load_deps_yaml(deps_file, overrides=True)
+    assert catalog.merge_deps_lists(overrides, []) == []
+    merged = catalog.merge_deps_lists(overrides, [{"id": "org/tool", "repo": "collection", "path": "extras/org/tool", "metadata": {"name": "Tool"}}])
+    assert merged == [{"id": "org/tool", "path": "home/tool", "repo": "collection", "metadata": {"name": "Tool"}}]
+
+
+def test_overrides_preserve_only_declared_fields_and_require_required_entries(tmp_path: Path) -> None:
+    deps_file = tmp_path / "deps.yml"
+    _write_yaml(deps_file, "dependencies:\n  - id: org/tool\n    required: true\n    build: false")
+    overrides = catalog.load_deps_yaml(deps_file, overrides=True)
+    assert overrides == [{"id": "org/tool", "required": True, "build": False}]
+    with pytest.raises(RuntimeError, match="missing from the Software Collection"):
+        catalog.merge_deps_lists(overrides, [])
+    merged = catalog.merge_deps_lists(overrides, [{"id": "org/tool", "repo": "collection", "path": "extras/org/tool", "build": {"tool": "make"}}])
+    assert merged[0]["path"] == "extras/org/tool"
+    assert merged[0]["build"] is False
+
+
 def test_order_deps_by_dependency_topological_order_and_cycle_error() -> None:
     ordered = catalog.order_deps_by_dependency(
         [

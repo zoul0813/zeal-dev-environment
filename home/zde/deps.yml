@@ -1,9 +1,11 @@
 version: 1
+# Software Collection supplies the dependency definitions. These entries keep
+# ZDE-specific behavior and paths that existing installations depend on.
 dependencies:
+  - id: zoul0813/zeal-archiver
+    path: home/zeal-archiver
+
   - id: Zeal8bit/Zeal-8-bit-OS
-    repo: https://github.com/Zeal8bit/Zeal-8-bit-OS.git
-    path: home/Zeal-8-bit-OS
-    branch: main
     tag: true
     build: false
     required: true
@@ -12,19 +14,9 @@ dependencies:
       - name: ZOS_PATH
         add_to_path:
           - tools
-    aliases:
-      - zos
-      - zealos
-    metadata:
-      category:
-        - core
-      name: Zeal 8-bit OS
-      description: Zeal 8-bit operating system source
 
   - id: Zeal8bit/Zeal-VideoBoard-SDK
-    repo: https://github.com/Zeal8bit/Zeal-VideoBoard-SDK.git
     path: home/Zeal-VideoBoard-SDK
-    branch: main
     build: false
     migrate: true
     env:
@@ -32,90 +24,34 @@ dependencies:
         add_to_path:
           - tools/zeal2gif
           - tools/tiled2zeal
-    aliases:
-      - zvb
-      - video
     metadata:
-      category:
-        - core
-        - library
-      name: Zeal VideoBoard SDK
-      description: VideoBoard SDK and tools
+      category: [core]
 
   - id: zoul0813/zeal-game-dev-kit
-    repo: https://github.com/zoul0813/zeal-game-dev-kit.git
     path: home/zeal-game-dev-kit
-    branch: main
     build: false
     migrate: true
     env:
       - ZGDK_PATH
-    depends_on:
-      - Zeal8bit/Zeal-VideoBoard-SDK
-      - zoul0813/zeal-coreutils
     metadata:
-      category:
-        - core
-      name: Zeal Game Dev Kit
-      description: Game development kit
-    aliases:
-      - zgdk
-
-  - id: Zeal8bit/Zeal-Bootloader
-    repo: https://github.com/Zeal8bit/Zeal-Bootloader.git
-    path: home/Zeal-Bootloader
-    branch: main
-    metadata:
-      category:
-        - core
-      name: Zeal Bootloader
-      description: Zeal bootloader source
-    aliases:
-      - bootloader
+      category: [core]
 
   - id: Zeal8bit/ZealFS
-    repo: https://github.com/Zeal8bit/ZealFS.git
     path: home/ZealFS
-    branch: main
     build:
       tool: cmake
       stage: false
     metadata:
-      category:
-        - core
-      name: ZealFS
-      description: Zeal file system tools/source
-    aliases:
-      - zealfs
+      category: [core]
 
   - id: Zeal8bit/Zeal-WebEmulator
-    repo: https://github.com/Zeal8bit/Zeal-WebEmulator.git
     path: home/Zeal-WebEmulator
-    branch: main
-    metadata:
-      category:
-        - service
-      name: Zeal Web Emulator
-      description: Browser-based Zeal emulator
-    aliases:
-      - emulator
 
   - id: Zeal8bit/Zeal-Playground
-    repo: https://github.com/Zeal8bit/Zeal-Playground.git
     path: home/Zeal-Playground
-    branch: main
-    metadata:
-      category:
-        - service
-      name: Zeal Playground
-      description: Playground web app and files
-    aliases:
-      - playground
 
   - id: zoul0813/zeal-coreutils
-    repo: https://github.com/zoul0813/zeal-coreutils.git
     path: home/zeal-coreutils
-    branch: main
     migrate: true
     env:
       - COREUTILS_PATH
@@ -127,13 +63,5 @@ dependencies:
       artifacts:
         - bin/
       root: /bin
-    depends_on:
-      - Zeal8bit/Zeal-VideoBoard-SDK
     metadata:
-      category:
-        - core
-        - library
-      name: Zeal Coreutils
-      description: Core utility programs for Zeal
-    aliases:
-      - coreutils
+      category: [core]

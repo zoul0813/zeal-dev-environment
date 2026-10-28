@@ -127,17 +127,14 @@ def migrate_if_legacy(env: object) -> int:
         return 0
 
     # Local imports keep migrate module isolated from deps/update module wiring at import time.
-    from mods.catalog import load_deps_yaml, order_deps_by_dependency
     from mods.deps import DepCatalog
     from mods.update import resolve_dep_path
 
-    deps_file = getattr(env, "deps_file")
-    deps = order_deps_by_dependency(load_deps_yaml(deps_file))
     resolver = lambda dep_path: resolve_dep_path(env, dep_path)
     catalog = DepCatalog(env)
 
     return migrate_and_install_legacy_submodules(
-        deps=deps,
+        deps=[dep for dep in catalog._deps_raw if dep.get("migrate") is True],
         resolve_dep_path=resolver,
         install_dep_by_id=lambda dep_id: catalog.install_dep(dep_id, allow_required=True, include_dependencies=False),
     )

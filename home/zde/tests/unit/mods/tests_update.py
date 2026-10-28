@@ -716,11 +716,11 @@ def test_update_deps_and_update_collection_and_run_update(env_factory, monkeypat
     assert update_collection(env) == 1
 
     monkeypatch.setattr(update_mod.urllib.request, "urlopen", lambda url: _Resp(b"dependencies:\n  - bad\n"))
-    monkeypatch.setattr(update_mod, "load_deps_yaml", lambda path: (_ for _ in ()).throw(RuntimeError("invalid")))
+    monkeypatch.setattr(update_mod, "load_deps_yaml", lambda path, **kwargs: (_ for _ in ()).throw(RuntimeError("invalid")))
     assert update_collection(env) == 1
 
     monkeypatch.setattr(update_mod.urllib.request, "urlopen", lambda url: _Resp(b"dependencies: []"))
-    monkeypatch.setattr(update_mod, "load_deps_yaml", lambda path: [])
+    monkeypatch.setattr(update_mod, "load_deps_yaml", lambda path, **kwargs: [])
     assert update_collection(env) == 0
     assert env.collection_file.read_text(encoding="utf-8").endswith("\n")
     assert "Collection catalog updated" in capsys.readouterr().out

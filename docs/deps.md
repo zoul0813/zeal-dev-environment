@@ -70,6 +70,10 @@ State strings include values such as `ok`, `required-miss`, `broken(...)`, `untr
 - `install` can also target required dependencies when you need an install/update without running `zde update`.
 - Installing an already-installed dependency performs an update/sync instead of being a no-op.
 - Optional dependencies are installed only when you request them.
+- Software Collection supplies dependency definitions. Entries in ZDE's
+  `home/zde/deps.yml` override only their declared fields, such as a legacy
+  checkout path or ZDE-specific build settings. A required override needs its
+  corresponding collection entry; run `zde update` to refresh the catalog.
 - Dependency ref options in `deps.yml`:
   - `branch: <name>`: track and sync that branch.
   - `tag: <name>`: pin to that tag.

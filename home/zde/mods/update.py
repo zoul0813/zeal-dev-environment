@@ -406,7 +406,7 @@ def update_collection(env: Env) -> int:
 
         try:
             collection_deps = load_deps_yaml(source_file)
-            base_deps = load_deps_yaml(env.deps_file)
+            base_deps = load_deps_yaml(env.deps_file, overrides=True)
             order_deps_by_dependency(merge_deps_lists(base_deps, collection_deps))
         except (FileNotFoundError, RuntimeError) as exc:
             print(f"Invalid collection catalog: {exc}", file=sys.stderr)

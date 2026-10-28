@@ -2,18 +2,22 @@ from __future__ import annotations
 
 from mods.migrate import migrate_if_legacy
 from mods.tui.contract import ActionSpec, CommandSpec
-from mods.update import resolve_env, run_update
+from mods.update import resolve_env, update_collection, update_deps
 
 
 def run_maintenance() -> int:
     print("Running in-container update tasks")
 
     env = resolve_env()
+    rc = update_collection(env)
+    if rc != 0:
+        return rc
+
     rc = migrate_if_legacy(env)
     if rc != 0:
         return rc
 
-    rc = run_update(env)
+    rc = update_deps(env)
     if rc != 0:
         return rc
 
