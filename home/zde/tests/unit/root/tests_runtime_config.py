@@ -12,6 +12,8 @@ def test_compose_uses_canonical_image_reference() -> None:
     compose = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
     service = compose["services"]["zeal8bit-dev-env"]
 
+    assert "platform" not in service
+    assert "platforms" not in service["build"]
     assert service["image"] == "${ZDE_IMAGE_REF:-zoul0813/zeal-dev-environment:latest}"
 
 

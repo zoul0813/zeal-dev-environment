@@ -1,6 +1,7 @@
 ARG ZDE_BUILDER_IMAGE=docker.io/zoul0813/zde-builder:latest
 FROM ${ZDE_BUILDER_IMAGE} AS builder
-FROM alpine:latest
+# Match the pinned z88dk base's Alpine release for native library compatibility.
+FROM alpine:3.24
 COPY --from=builder /opt /opt
 
 ENV \
@@ -19,6 +20,10 @@ RUN echo "Installing prerequisites" \
     python3 \
     py3-pip \
     build-base \
+    libxml2 \
+    m4 \
+    gmp \
+    zstd-libs \
     cmake \
     su-exec \
     sudo \

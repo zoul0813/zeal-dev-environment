@@ -60,6 +60,10 @@ For the full command map, runtime configuration, and per-command reference pages
 
 ## Requirements And Dependencies
 
+Published images support AMD64 and ARM64, with automatic native architecture
+selection. See [Building ZDE images](./docs/building-images.md) for the release
+workflow and validation steps.
+
 Base requirements:
 
 - `git`

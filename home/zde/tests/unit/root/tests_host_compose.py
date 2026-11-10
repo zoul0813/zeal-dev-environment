@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -67,3 +68,50 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
     assert payload == ("" if no_tty else "stdin payload\n")
     assert result.stderr == "runtime stderr\n"
     assert result.returncode == exit_code
+
+
+@pytest.mark.parametrize("runtime", ["docker", "podman"])
+@pytest.mark.parametrize("service", ["emulator", "playground"])
+def test_browser_service_uses_native_platform(tmp_path: Path, runtime: str, service: str) -> None:
+    common = Path(__file__).resolve().parents[3] / "svcs" / "common.sh"
+    executable = tmp_path / runtime
+    log = tmp_path / "commands.jsonl"
+    executable.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "with open(os.environ['COMMAND_LOG'], 'a') as log:\n"
+        "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+    )
+    executable.chmod(0o755)
+    root = tmp_path / "zde"
+    services = root / "home" / "zde" / "svcs"
+    services.mkdir(parents=True)
+    shutil.copy(common, services / "common.sh")
+    shutil.copy(common.parent / service, services / service)
+    (root / "bin").mkdir()
+    browser = root / "bin" / "xdg-open"
+    browser.write_text("#!/bin/sh\nexit 0\n")
+    browser.chmod(0o755)
+    state = tmp_path / "state"
+    state.mkdir()
+    dependency = "Zeal8bit/Zeal-WebEmulator" if service == "emulator" else "Zeal8bit/Zeal-Playground"
+    (state / "deps-lock.yml").write_text(f"dependencies:\n  {dependency}:\n    repo: example\n")
+    env = dict(os.environ, CONTAINER_CMD=str(executable), COMMAND_LOG=str(log),
+               LAUNCH_PWD="/project", ZDE_PATH=str(root), ZDE_USER_PATH=str(state),
+               ZDE_IMAGE_REF="example/zde:version")
+    result = subprocess.run(
+        ["bash", str(services / service), "start"],
+        text=True, capture_output=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    commands = [json.loads(line) for line in log.read_text().splitlines()]
+    runs = [args for args in commands if args[0] == "run"]
+    assert len(runs) == (2 if service == "playground" else 1)
+    for run in runs:
+        assert "--platform" not in run
+        assert env["ZDE_IMAGE_REF"] in run
+    port = "1145" if service == "emulator" else "1155"
+    directory = "/home/zeal8bit/Zeal-WebEmulator" if service == "emulator" else "/home/zeal8bit/Zeal-Playground"
+    assert runs[-1][-6:] == ["python3", "-m", "http.server", "--directory", directory, port]
+    if service == "playground":
+        assert "/home/zeal8bit/Zeal-Playground/tools/build_manifest.py" in runs[0]

@@ -196,7 +196,6 @@ start_container() {
   fi
 
   "$CONTAINER_CMD" run -d --name "$CONTAINER_NAME" \
-    --platform linux/amd64 \
     -p "${SERVER_PORT}:${SERVER_PORT}" \
     -v "${LAUNCH_PWD}:/src" \
     -v "$ZDE_PATH/home:/home/zeal8bit" \

@@ -1,14 +1,11 @@
 services:
   zeal8bit-dev-env:
     container_name: zeal8bit
-    platform: linux/amd64
     privileged: true
     image: ${ZDE_IMAGE_REF:-zoul0813/zeal-dev-environment:latest}
     build:
       context: .
       dockerfile: Dockerfile
-      platforms:
-        - "linux/amd64"
     restart: on-failure
     env_file:
       - .env

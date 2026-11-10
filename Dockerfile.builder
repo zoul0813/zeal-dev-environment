@@ -7,7 +7,9 @@ COPY build/z88dk/lib/config/zeal8bit.cfg /lib/config/zeal8bit.cfg
 COPY build/z88dk/lib/target/zeal8bit /lib/target/zeal8bit
 COPY build/z88dk/libsrc/target/zeal8bit /libsrc/target/zeal8bit
 
-FROM z88dk/z88dk:20260803
+# 20260831 supports both architectures and the existing Zeal target installer.
+# Newer images use a different libsrc build interface. Pin the manifest index.
+FROM z88dk/z88dk@sha256:206d3dfbe32020f96ce78245e5c8c0b7edd6b225c21c95371daac37200c6ff98
 
 # Dev Tools
 RUN echo "Installing prerequisites" \
@@ -37,7 +39,7 @@ RUN echo "Building SDCC" \
 		--disable-non-free \
 		--disable-ucsim \
     --prefix=/opt/sdcc \
-  && make all \
+  && make -j$(nproc) all \
   && make install
 
 # GNU AS
@@ -47,7 +49,7 @@ RUN echo "Building GNU AS" \
   && tar xzf /opt/gnu-as/binutils-2.41.tar.gz -C /opt/gnu-as \
   && cd /opt/gnu-as/binutils-2.41 \
   && mkdir build && cd build \
-  && ../configure --target=z80-elf --host=x86_64-linux-musl --prefix=/opt/gnu-as --disable-nls \
+  && ../configure --target=z80-elf --prefix=/opt/gnu-as --disable-nls \
   && make MAKEINFO=true -j$(nproc) \
   && make MAKEINFO=true install
 

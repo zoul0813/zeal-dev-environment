@@ -6,16 +6,28 @@ on:
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.job_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            job_name: unit-tests
+          - runner: ubuntu-24.04-arm
+            job_name: unit-tests-arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      ZDE_IMAGE_REF: zoul0813/zeal-dev-environment:0.4.0
+      ZDE_STRICT_EXIT: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Pull ZDE image for tests
-        run: docker pull zoul0813/zeal-dev-environment:latest
+        run: docker pull "$ZDE_IMAGE_REF"
 
       - name: Run ZDE unit tests in container
-        env:
-          ZDE_IMAGE_REF: zoul0813/zeal-dev-environment:latest
-          ZDE_STRICT_EXIT: "1"
-        run: ./zde test -vv -ra --tb=short --durations=10 --color=no -o console_output_style=classic --cov --cov-report=term
+        run: ./zde --no-tty test -vv -ra --tb=short --durations=10 --color=no -o console_output_style=classic --cov --cov-report=term
+
+      - name: Run toolchain compile and link smoke tests
+        run: ./zde --no-tty exec /bin/sh /src/build/smoke.sh
