@@ -394,6 +394,68 @@ def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 @pytest.mark.parametrize("image_type", ["tf", "eeprom"])
+def test_image_zealfs_copy_creation_modes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, image_type: str
+) -> None:
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "stage with spaces")
+    img = image.ImageZealFS(image_type, "64")
+    nested = img.root / "nested"
+    nested.mkdir(parents=True)
+    (nested / "new file").write_bytes(b"new content")
+    (img.root / "existing").write_bytes(b"replacement content")
+    (img.root / "linked").symlink_to("nested", target_is_directory=True)
+    (img.root / "filelink").symlink_to("existing")
+    source_modes = {
+        img.root: 0o750,
+        nested: 0o700,
+        nested / "new file": 0o640,
+        img.root / "existing": 0o755,
+    }
+    for path, mode in source_modes.items():
+        path.chmod(mode)
+    copied: dict[str, bytes] = {}
+
+    def _run(cmd):
+        if "--no-perms" in cmd:
+            assert cmd[:5] == ["sudo", "sh", "-c", 'umask 000; exec rsync "$@"', "rsync"]
+            assert "--chmod=ugo=rwx" in cmd
+            media = Path(cmd[-1])
+            (media / "existing").write_bytes(b"old")
+            (media / "existing").chmod(0o777)
+            os.utime(media / "existing", (1, 1))
+            (media / "deleted").write_bytes(b"stale")
+            # A restrictive inherited mask must not affect rsync's creation modes.
+            return subprocess.run(cmd[1:], check=False, umask=0o077).returncode
+        if cmd[1] == "umount":
+            media = Path(cmd[-1])
+            for path in media.rglob("*"):
+                assert not path.is_symlink()
+                assert stat.S_IMODE(path.stat().st_mode) == 0o777
+                if path.is_file():
+                    copied[str(path.relative_to(media))] = path.read_bytes()
+            for child in media.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+        return 0
+
+    def unexpected_umask(*args):
+        pytest.fail("The caller's umask must not be changed")
+
+    monkeypatch.setattr(image.os, "umask", unexpected_umask)
+    monkeypatch.setattr(image, "run", _run)
+    assert img._build_image("64") == 0
+    assert copied == {
+        "existing": b"replacement content",
+        "filelink": b"replacement content",
+        "nested/new file": b"new content",
+        "linked/new file": b"new content",
+    }
+    assert {path: stat.S_IMODE(path.stat().st_mode) for path in source_modes} == source_modes
+
+
+@pytest.mark.parametrize("image_type", ["tf", "eeprom"])
 def test_image_zealfs_skips_overlong_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], image_type: str
 ) -> None:
@@ -411,7 +473,7 @@ def test_image_zealfs_skips_overlong_names(
     copied: set[str] = set()
 
     def _run(cmd):
-        if cmd[1] == "rsync":
+        if "--no-perms" in cmd:
             # Exercise rsync's actual filtering without requiring a FUSE mount.
             return subprocess.run(cmd[1:], check=False).returncode
         if cmd[1] == "umount":
@@ -455,7 +517,7 @@ def test_image_zealfs_unmounts_after_copy_failures(
 
     def _run(cmd):
         calls.append(cmd)
-        if cmd[1] == "rsync":
+        if "--no-perms" in cmd:
             copy_result = scenario["copy"]
             if isinstance(copy_result, BaseException):
                 raise copy_result

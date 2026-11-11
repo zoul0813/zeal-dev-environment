@@ -398,10 +398,16 @@ class ImageZealFS(Image):
                 copy_rc = run(
                     [
                         "sudo",
+                        # ZealFS reports 0777 and cannot chmod. Match rsync's
+                        # creation modes, with the umask scoped to this child.
+                        "sh",
+                        "-c",
+                        'umask 000; exec rsync "$@"',
                         "rsync",
                         "-ruLkv",
                         "--temp-dir=/tmp",
                         "--no-perms",
+                        "--chmod=ugo=rwx",
                         "--whole-file",
                         "--delete",
                         # rsync wildcards match bytes; ZealFS allows 16 per name.
