@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import termios
@@ -262,6 +263,61 @@ def test_version_fallback_handles_registry_ports_and_digests(
     assert completed.returncode == 0
     assert f"Image: {reference}" in completed.stdout
     assert f"  - {repository_tag}" in completed.stdout
+
+
+@pytest.mark.parametrize("branch", ["main", "review"])
+@pytest.mark.parametrize("moved_tag", [False, True])
+def test_update_refreshes_tags_used_by_version(tmp_path: Path, branch: str, moved_tag: bool) -> None:
+    source = tmp_path / "source"
+    checkout = tmp_path / "checkout"
+    source.mkdir()
+
+    def git(path: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(path), "-c", "user.name=ZDE Tests",
+             "-c", "user.email=zde-tests@example.invalid", *args],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    git(source, "init", "-q")
+    git(source, "checkout", "-q", "-b", branch)
+    for relative in ("zde", "home/zde/svcs/common.sh", "home/zde/svcs/update"):
+        destination = source / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / relative, destination)
+    git(source, "add", ".")
+    git(source, "commit", "-qm", "initial")
+    git(source, "tag", "latest" if moved_tag else "v1")
+    git(tmp_path, "clone", "-q", source.as_uri(), str(checkout))
+
+    if moved_tag:
+        git(source, "commit", "--allow-empty", "-qm", "upstream update")
+        git(source, "tag", "-f", "latest")
+        expected_tag = "latest"
+    else:
+        # Publish a release after the user already has its commit locally.
+        git(source, "tag", "-a", "v2", "-m", "release")
+        expected_tag = "v2"
+
+    env = dict(os.environ)
+    env.pop("ZDE_BRANCH", None)
+    env.update({
+        "CONTAINER_CMD": str(_stub_runtime(tmp_path)),
+        "STUB_RC": "0",
+        "ZDE_USER_PATH": str(tmp_path / "state"),
+        "ZDE_SOFT_EXIT": "0",
+    })
+    for args in (["update"], ["-v"]):
+        completed = subprocess.run(
+            [str(checkout / "zde"), *args], cwd=tmp_path, env=env,
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20,
+        )
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+
+    assert f"ZDE: {expected_tag}\n" in completed.stdout
+    assert git(checkout, "rev-parse", f"refs/tags/{expected_tag}") == git(source, "rev-parse", f"refs/tags/{expected_tag}")
+    assert git(checkout, "rev-parse", "HEAD") == git(source, "rev-parse", "HEAD")
+    assert git(checkout, "branch", "--show-current") == branch
 
 
 def test_wrapper_sync_routes_directly_to_container_maintenance(tmp_path: Path) -> None:

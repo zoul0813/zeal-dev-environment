@@ -44,6 +44,11 @@ else
   git -C "$ZDE_PATH" pull --ff-only origin "$DEFAULT_BRANCH"
 fi
 
+echo "Refreshing ZDE repository tags"
+# Include tags published for existing commits and rolling tags moved upstream.
+# Force only tag refs; branch updates must still fast-forward.
+git -C "$ZDE_PATH" fetch origin "+refs/tags/*:refs/tags/*"
+
 "$CONTAINER_CMD" image pull "$ZDE_IMAGE_REF"
 
 source "$ZDE_PATH/home/zde/svcs/common.sh"
