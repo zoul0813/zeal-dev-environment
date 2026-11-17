@@ -48,6 +48,12 @@ zde_init() {
   HOST_UID="${HOST_UID:-$(id -u)}"
   HOST_GID="${HOST_GID:-$(id -g)}"
   HOST_HOME="${HOST_HOME:-$HOME}"
+  # This Podman-specific info field also works through runtime wrappers and
+  # remote connections. Docker rejects the template and keeps its current setup.
+  _ZDE_ROOTLESS_PODMAN=0
+  if [ "$("$CONTAINER_CMD" info --format '{{.Host.Security.Rootless}}' 2>/dev/null || true)" = "true" ]; then
+    _ZDE_ROOTLESS_PODMAN=1
+  fi
   ZDE_SOFT_EXIT="${ZDE_SOFT_EXIT:-0}"
   if [ "${ZDE_STRICT_EXIT:-0}" = "1" ]; then
     ZDE_SOFT_EXIT=0
@@ -87,6 +93,25 @@ zde_init() {
   export ZDE_SOFT_EXIT
   export LAUNCH_PWD
   export HOST_CWD
+  export _ZDE_ROOTLESS_PODMAN
+}
+
+zde_compose() {
+  local compose_args=(-f "$COMPOSE_PATH")
+  if [ "${_ZDE_ROOTLESS_PODMAN:-0}" = "1" ]; then
+    compose_args+=(-f "$ZDE_PATH/docker-compose.podman.yml")
+  fi
+  "$CONTAINER_CMD" compose "${compose_args[@]}" "$@"
+}
+
+zde_container_run() {
+  local user_args=()
+  if [ "${_ZDE_ROOTLESS_PODMAN:-0}" = "1" ]; then
+    # The entrypoint starts as root, then switches to HOST_UID/HOST_GID.
+    user_args=(--userns="keep-id:uid=${HOST_UID},gid=${HOST_GID}" --user=0:0
+      -e "HOST_UID=${HOST_UID}" -e "HOST_GID=${HOST_GID}")
+  fi
+  "$CONTAINER_CMD" run ${user_args[@]+"${user_args[@]}"} "$@"
 }
 
 zde_run_in_container() {
@@ -96,7 +121,7 @@ zde_run_in_container() {
   if [ "${_ZDE_NO_TTY:-0}" = "1" ]; then
     terminal_args=(-T)
   fi
-  if "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run --help </dev/null 2>/dev/null | grep -- '--interactive' >/dev/null; then
+  if zde_compose run --help </dev/null 2>/dev/null | grep -- '--interactive' >/dev/null; then
     if [ "${_ZDE_NO_TTY:-0}" = "1" ]; then
       terminal_args+=(--interactive=false)
     else
@@ -104,7 +129,7 @@ zde_run_in_container() {
     fi
   fi
   local exec_args=(
-    "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" run ${terminal_args[@]+"${terminal_args[@]}"} --rm
+    zde_compose run ${terminal_args[@]+"${terminal_args[@]}"} --rm
     -e "HOST_UID=${HOST_UID}"
     -e "HOST_GID=${HOST_GID}"
     -e "HOST_HOME=${HOST_HOME}"
@@ -145,7 +170,7 @@ zde_exec() {
 
 zde_service_exists() {
   local service_name="$1"
-  "$CONTAINER_CMD" compose -f "$COMPOSE_PATH" config --services 2>/dev/null | grep -xq "$service_name"
+  zde_compose config --services 2>/dev/null | grep -xq "$service_name"
 }
 
 zde_shell() {
@@ -195,7 +220,7 @@ start_container() {
     "$CONTAINER_CMD" rm -f "$CONTAINER_NAME" >/dev/null
   fi
 
-  "$CONTAINER_CMD" run -d --name "$CONTAINER_NAME" \
+  zde_container_run -d --name "$CONTAINER_NAME" \
     -p "${SERVER_PORT}:${SERVER_PORT}" \
     -v "${LAUNCH_PWD}:/src" \
     -v "$ZDE_PATH/home:/home/zeal8bit" \

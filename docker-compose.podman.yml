@@ -1,0 +1,5 @@
+services:
+  zeal8bit-dev-env:
+    userns_mode: "keep-id:uid=${HOST_UID},gid=${HOST_GID}"
+    # The entrypoint needs root for setup before dropping to the host IDs.
+    user: "0:0"

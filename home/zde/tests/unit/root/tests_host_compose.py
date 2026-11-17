@@ -10,16 +10,19 @@ import sys
 import pytest
 
 
-@pytest.mark.parametrize("runtime", ["docker", "podman"])
+@pytest.mark.parametrize("runtime, rootless", [("docker", False), ("podman", False), ("podman", True)])
 @pytest.mark.parametrize("provider", ["docker-compose", "podman-compose"])
 @pytest.mark.parametrize("exit_code", [0, 7])
 @pytest.mark.parametrize("no_tty", [False, True])
-def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, runtime: str, provider: str, exit_code: int, no_tty: bool) -> None:
+def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, runtime: str, rootless: bool, provider: str, exit_code: int, no_tty: bool) -> None:
     common = Path(__file__).resolve().parents[3] / "svcs" / "common.sh"
     executable = tmp_path / runtime
     executable.write_text(
         f"#!{sys.executable}\n"
         "import json, sys\n"
+        "if sys.argv[1] == 'info':\n"
+        f"    print({str(rootless).lower()!r})\n"
+        f"    sys.exit({1 if runtime == 'docker' else 0})\n"
         "if sys.argv[-1] == '--help':\n"
         f"    print({'--interactive Keep STDIN open' if provider == 'docker-compose' else '--no-deps Do not start dependencies'!r})\n"
         "    sys.exit(0)\n"
@@ -31,18 +34,23 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
     executable.chmod(0o755)
     env = dict(os.environ)
     env.update(
-        CONTAINER_CMD=str(executable), COMPOSE_PATH="/compose path/compose.yml",
+        CONTAINER_CMD=str(executable), ZDE_PATH="/compose path",
         HOST_UID="1000", HOST_GID="1000", HOST_HOME="/host home",
         HOST_CWD="/project dir", ZDE_SOFT_EXIT="1", TERM="xterm-256color",
         _ZDE_NO_TTY="1" if no_tty else "0",
     )
     result = subprocess.run(
-        ["bash", "-c", 'source "$1"; zde_run_in_container service sh -c "exit 7"', "bash", str(common)],
+        ["bash", "-c", 'source "$1"; zde_init; zde_run_in_container service sh -c "exit 7"', "bash", str(common)],
         input="stdin payload\n", text=True, capture_output=True, env=env,
     )
     arguments, payload = result.stdout.split("\n", 1)
     argv = json.loads(arguments)
-    prefix = ["compose", "-f", env["COMPOSE_PATH"], "run"]
+    prefix = ["compose", "-f", "/compose path/docker-compose.yml"]
+    if rootless:
+        prefix.extend(["-f", "/compose path/docker-compose.podman.yml"])
+    else:
+        assert "/compose path/docker-compose.podman.yml" not in argv
+    prefix.append("run")
     if no_tty:
         prefix.append("-T")
         if provider == "docker-compose":
@@ -70,9 +78,9 @@ def test_container_launcher_preserves_io_arguments_and_status(tmp_path: Path, ru
     assert result.returncode == exit_code
 
 
-@pytest.mark.parametrize("runtime", ["docker", "podman"])
+@pytest.mark.parametrize("runtime, rootless", [("docker", False), ("podman", False), ("podman", True)])
 @pytest.mark.parametrize("service", ["emulator", "playground"])
-def test_browser_service_uses_native_platform(tmp_path: Path, runtime: str, service: str) -> None:
+def test_browser_service_uses_native_platform(tmp_path: Path, runtime: str, rootless: bool, service: str) -> None:
     common = Path(__file__).resolve().parents[3] / "svcs" / "common.sh"
     executable = tmp_path / runtime
     log = tmp_path / "commands.jsonl"
@@ -81,6 +89,9 @@ def test_browser_service_uses_native_platform(tmp_path: Path, runtime: str, serv
         "import json, os, sys\n"
         "with open(os.environ['COMMAND_LOG'], 'a') as log:\n"
         "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "if sys.argv[1] == 'info':\n"
+        f"    print({str(rootless).lower()!r})\n"
+        f"    sys.exit({1 if runtime == 'docker' else 0})\n"
     )
     executable.chmod(0o755)
     root = tmp_path / "zde"
@@ -98,9 +109,10 @@ def test_browser_service_uses_native_platform(tmp_path: Path, runtime: str, serv
     (state / "deps-lock.yml").write_text(f"dependencies:\n  {dependency}:\n    repo: example\n")
     env = dict(os.environ, CONTAINER_CMD=str(executable), COMMAND_LOG=str(log),
                LAUNCH_PWD="/project", ZDE_PATH=str(root), ZDE_USER_PATH=str(state),
-               ZDE_IMAGE_REF="example/zde:version")
+               ZDE_IMAGE_REF="example/zde:version", HOST_UID="1234", HOST_GID="2345")
     result = subprocess.run(
-        ["bash", str(services / service), "start"],
+        ["bash", "-c", 'source "$1"; zde_init; exec "$2" start',
+         "bash", str(services / "common.sh"), str(services / service)],
         text=True, capture_output=True, env=env,
     )
     assert result.returncode == 0, result.stderr
@@ -110,6 +122,13 @@ def test_browser_service_uses_native_platform(tmp_path: Path, runtime: str, serv
     for run in runs:
         assert "--platform" not in run
         assert env["ZDE_IMAGE_REF"] in run
+        if rootless:
+            assert "--userns=keep-id:uid=1234,gid=2345" in run
+            assert "--user=0:0" in run
+            assert "HOST_UID=1234" in run
+            assert "HOST_GID=2345" in run
+        else:
+            assert not any(arg.startswith(("--userns", "--user=")) for arg in run)
     port = "1145" if service == "emulator" else "1155"
     directory = "/home/zeal8bit/Zeal-WebEmulator" if service == "emulator" else "/home/zeal8bit/Zeal-Playground"
     assert runs[-1][-6:] == ["python3", "-m", "http.server", "--directory", directory, port]

@@ -141,6 +141,12 @@ CONTAINER_CMD=podman zde -i
 
 If `CONTAINER_CMD` is set, it takes precedence over `ZDE_USE`.
 
+For rootless Podman, ZDE automatically preserves the host user's UID/GID with
+`keep-id` user namespace mapping so bind-mounted projects and state stay writable.
+It applies `docker-compose.podman.yml` for Compose commands and equivalent options
+for browser service containers. The existing image entrypoint performs setup as
+container root, then switches to the host user's IDs.
+
 ### Compose And Image Defaults
 
 The development container uses `docker-compose.yml`, which is invoked as:

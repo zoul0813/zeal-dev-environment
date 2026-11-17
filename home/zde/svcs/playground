@@ -14,7 +14,7 @@ REQUIRED_DEPS=(
 )
 
 build_manifest() {
-  "$CONTAINER_CMD" run --rm \
+  zde_container_run --rm \
     -v "$ZDE_PATH/home:/home/zeal8bit" \
     "$ZDE_IMAGE_REF" \
     /home/zeal8bit/Zeal-Playground/tools/build_manifest.py \

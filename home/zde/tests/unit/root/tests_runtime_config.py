@@ -15,6 +15,18 @@ def test_compose_uses_canonical_image_reference() -> None:
     assert "platform" not in service
     assert "platforms" not in service["build"]
     assert service["image"] == "${ZDE_IMAGE_REF:-docker.io/zoul0813/zeal-dev-environment:latest}"
+    assert "userns_mode" not in service
+    assert "user" not in service
+
+
+def test_rootless_podman_override_preserves_host_ids_and_entrypoint_setup() -> None:
+    compose = yaml.safe_load((REPO_ROOT / "docker-compose.podman.yml").read_text(encoding="utf-8"))
+    assert compose["services"] == {
+        "zeal8bit-dev-env": {
+            "userns_mode": "keep-id:uid=${HOST_UID},gid=${HOST_GID}",
+            "user": "0:0",
+        }
+    }
 
 
 def test_setup_action_exports_pulled_image_reference() -> None:
