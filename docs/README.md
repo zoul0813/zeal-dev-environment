@@ -152,7 +152,7 @@ $CONTAINER_CMD compose -f "$ZDE_PATH/docker-compose.yml" ...
 The default compose service is configured with:
 
 - service name `zeal8bit-dev-env`
-- container image `zoul0813/zeal-dev-environment:latest`
+- container image `docker.io/zoul0813/zeal-dev-environment:latest`
 - a bind mount of the current working directory as `/src`
 - bind mounts for `./home`, `./mnt`, and the ZDE user state directory
 
@@ -170,8 +170,8 @@ Common user-facing variables:
 - `ZDE_PATH`: location of this repository. The wrapper derives it automatically when unset, but exporting it is recommended because generated VS Code settings reference it.
 - `ZDE_USE`: choose `docker` or `podman` for runtime auto-selection.
 - `CONTAINER_CMD`: explicitly choose the executable used for container operations. This overrides `ZDE_USE`.
-- `ZDE_IMAGE_REF`: canonical image reference used by Compose, services, and updates. Supports tags and digests. Default: `zoul0813/zeal-dev-environment:latest`.
-- `ZDE_IMAGE`: legacy image repository input used when `ZDE_IMAGE_REF` is unset. Default: `zoul0813/zeal-dev-environment`.
+- `ZDE_IMAGE_REF`: canonical image reference used by Compose, services, and updates. Supports tags and digests. Default: `docker.io/zoul0813/zeal-dev-environment:latest`.
+- `ZDE_IMAGE`: legacy image repository input used when `ZDE_IMAGE_REF` is unset. Default: `docker.io/zoul0813/zeal-dev-environment`.
 - `ZDE_VERSION`: legacy image tag input used when `ZDE_IMAGE_REF` is unset. Default: `latest`.
 - `ZDE_USER_PATH`: host path for ZDE state files. Default: `$HOME/.zeal8bit`.
 - `ZDE_BRANCH`: branch used by `zde update` when pulling the ZDE repository.

@@ -15,7 +15,7 @@ zde_init() {
     printf '# Managed by ZDE. Do not edit manually.\n' > "$ZDE_USER_PATH/deps.env"
   fi
 
-  export ZDE_IMAGE="${ZDE_IMAGE:-zoul0813/zeal-dev-environment}"
+  export ZDE_IMAGE="${ZDE_IMAGE:-docker.io/zoul0813/zeal-dev-environment}"
   export ZDE_VERSION="${ZDE_VERSION:-latest}"
 
   if [ -n "${ZDE_USE:-}" ] && [ -z "${CONTAINER_CMD:-}" ]; then

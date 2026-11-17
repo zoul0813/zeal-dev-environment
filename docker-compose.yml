@@ -2,7 +2,7 @@ services:
   zeal8bit-dev-env:
     container_name: zeal8bit
     privileged: true
-    image: ${ZDE_IMAGE_REF:-zoul0813/zeal-dev-environment:latest}
+    image: ${ZDE_IMAGE_REF:-docker.io/zoul0813/zeal-dev-environment:latest}
     build:
       context: .
       dockerfile: Dockerfile

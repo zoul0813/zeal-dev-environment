@@ -69,7 +69,7 @@ isolated state directory and initialize the catalog before installing aliases:
 ```sh
 export ZDE_PATH="$PWD"
 export CONTAINER_CMD=podman
-export ZDE_IMAGE_REF=zoul0813/zeal-dev-environment:0.4.0
+export ZDE_IMAGE_REF=docker.io/zoul0813/zeal-dev-environment:0.4.0
 export ZDE_USER_PATH="$ZDE_PATH/tmp/image-test-state"
 "$ZDE_PATH/zde" --no-tty sync
 "$ZDE_PATH/zde" --no-tty deps install zos zvb zgdk coreutils

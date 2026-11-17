@@ -193,6 +193,13 @@ def test_router_does_not_rewrite_failure_status(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("image_env", "expected"),
     [
+        ({}, "docker.io/zoul0813/zeal-dev-environment:latest"),
+        (
+            {"ZDE_IMAGE_REF": "", "ZDE_IMAGE": "", "ZDE_VERSION": ""},
+            "docker.io/zoul0813/zeal-dev-environment:latest",
+        ),
+        ({"ZDE_VERSION": "dev"}, "docker.io/zoul0813/zeal-dev-environment:dev"),
+        ({"ZDE_IMAGE": "example/zde"}, "example/zde:latest"),
         ({"ZDE_IMAGE_REF": "example/zde:review"}, "example/zde:review"),
         ({"ZDE_IMAGE_REF": "localhost:5000/example/zde:review"}, "localhost:5000/example/zde:review"),
         ({"ZDE_IMAGE_REF": f"example/zde@sha256:{'a' * 64}"}, f"example/zde@sha256:{'a' * 64}"),
@@ -203,15 +210,12 @@ def test_router_does_not_rewrite_failure_status(tmp_path: Path) -> None:
     ],
 )
 def test_wrapper_uses_one_resolved_image_reference(
-    tmp_path: Path, image_env: dict[str, str], expected: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, image_env: dict[str, str], expected: str
 ) -> None:
     log = tmp_path / "image-ref.log"
-    clean_image_env = {
-        "ZDE_IMAGE_REF": "",
-        "ZDE_IMAGE": "zoul0813/zeal-dev-environment",
-        "ZDE_VERSION": "latest",
-    }
-    clean_image_env.update(image_env)
+    for name in ("ZDE_IMAGE_REF", "ZDE_IMAGE", "ZDE_VERSION"):
+        monkeypatch.delenv(name, raising=False)
+    clean_image_env = dict(image_env)
     clean_image_env["STUB_LOG"] = str(log)
 
     assert (
