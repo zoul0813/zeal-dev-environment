@@ -22,9 +22,9 @@ Supported subcommands:
 
 ## Targets
 
-- `eeprom`: directory-backed staging plus ZealFS image creation.
+- `eeprom`: directory-backed staging plus raw ZealFS v2 image creation using `zdt`.
 - `cf`: directory-backed staging plus packed CompactFlash image creation.
-- `tf`: directory-backed staging plus ZealFS image creation with MBR support.
+- `tf`: directory-backed staging plus ZealFS v2 image creation using `zdt`, with an MBR.
 - `romdisk`: staged file target plus ROM disk regeneration using the latest kernel image.
 
 ## Subcommand Details
@@ -46,13 +46,17 @@ Supported subcommands:
 
 ### `create`
 
-- Requires dependency `Zeal8bit/ZealFS`.
-- `eeprom` defaults to size `32`.
+- Requires dependency `Zeal8bit/Zeal-Disk-Tool`.
+- `eeprom` defaults to size `64`.
+- `cf` and `romdisk` use the OS tools supplied by `Zeal8bit/Zeal-8-bit-OS`.
+- Sizes for `eeprom` and `tf` are positive integers in KiB.
 - `cf` uses the packed image format and does not accept a size argument.
-- `tf` defaults to size `4096`.
+- `tf` defaults to `4096` (4 MiB), with the first partition starting at sector 1.
 - `eeprom` and `tf` skip file and directory names longer than ZealFS's 16-byte limit, including their subtrees, and print a warning. Staged files remain unchanged; rename an excluded entry before creating the image if it is needed.
 - If the image file already exists, ZDE asks for confirmation before overwriting it.
-- Created images belong to the user running ZDE (`HOST_UID`/`HOST_GID`, which default to the host user's UID/GID), including TF/EEPROM images built with `sudo`. Recreate an existing root-owned image to correct its ownership.
+- Created images belong to the user running ZDE (`HOST_UID`/`HOST_GID`, which default to the host user's UID/GID). TF/EEPROM creation writes image files directly through `zdt`.
+- TF/EEPROM creation includes staged directory trees, empty directories, hidden files, and symlink targets. Directory symlink cycles or unreadable sources fail the build.
+- A failed build preserves the previous image. Images are replaced atomically after successful creation and population.
 - Pass `-y` or `--yes` to `zde image ... create` to confirm overwriting without a prompt.
 - `romdisk create`:
   - Packs staged files from `mnt/romdisk` into `mnt/romdisk.img`.

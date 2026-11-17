@@ -48,6 +48,20 @@ dependencies:
     metadata:
       category: [core]
 
+  - id: Zeal8bit/Zeal-Disk-Tool
+    path: home/Zeal-Disk-Tool
+    build:
+      tool: make
+      args:
+        - cli
+      stage: false
+    env:
+      - name: ZDT_PATH
+        add_to_path:
+          - build/cli
+    metadata:
+      category: [core]
+
   - id: Zeal8bit/Zeal-WebEmulator
     path: home/Zeal-WebEmulator
 

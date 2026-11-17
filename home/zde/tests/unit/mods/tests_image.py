@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import shutil
-import stat
 import subprocess
 
 import pytest
@@ -227,9 +227,7 @@ def test_image_pack_create_pack_concat(
     assert img.create(["64"]) == 1
     assert "Usage: zde image cf create" in capsys.readouterr().out
 
-    monkeypatch.setattr(image, "require_deps", lambda deps: False)
-    assert img.create([]) == 1
-    monkeypatch.setattr(image, "require_deps", lambda deps: True)
+    monkeypatch.setattr(image, "require_deps", lambda deps: pytest.fail("CF must not require a disk tool"))
 
     img.path.parent.mkdir(parents=True, exist_ok=True)
     img.path.write_text("x", encoding="utf-8")
@@ -344,213 +342,242 @@ def test_image_restores_caller_ownership_before_publish(
     assert not list(tmp_path.glob(".tf.img.*"))
 
 
-def test_image_zealfs_build_and_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
-    zealfs = tmp_path / "zealfs"
-    zealfs.write_text("bin", encoding="utf-8")
-    monkeypatch.setattr(image.ImageZealFS, "_TOOLS", {"zealfs": ToolSpec(zealfs, required=True)})
+@pytest.mark.parametrize("returncode", [0, 7])
+def test_image_zdt_hides_success_and_shows_failure_output(tmp_path, monkeypatch, capsys, returncode):
+    img = image.ImageZealFS("tf", "4096")
+    streams = []
 
-    tf = image.ImageZealFS("tf", "4096")
-    calls: list[list[str]] = []
-    returns = [3, 0, 4, 0, 0, 0, 0]
+    def run(cmd, *, stdout, stderr):
+        assert stdout is stderr
+        stdout.write("import: change staged on temporary image\nChanges applied\n")
+        stderr.write("zdt diagnostic\n")
+        streams.append(stdout)
+        return returncode
 
-    def _run(cmd):
+    monkeypatch.setattr(image, "run", run)
+    assert img._zdt(["import", "source", "/file"]) == returncode
+    output = capsys.readouterr().out
+    if returncode:
+        assert "zdt diagnostic" in output
+        assert "import: change staged" in output
+    else:
+        assert output == ""
+    assert streams[0].closed
+
+
+@pytest.mark.parametrize("colored", [False, True])
+@pytest.mark.parametrize("returncode,diagnostic", [(0, ""), (7, "Disk full\nNo space left"), (7, "")])
+def test_image_zdt_copy_status(tmp_path, monkeypatch, capsys, returncode, diagnostic, colored):
+    monkeypatch.setattr("mods.cli.colors_enabled", lambda stdout=None: colored)
+    img = image.ImageZealFS("tf", "4096")
+    source = tmp_path / "hello.bin"
+
+    def run(cmd, *, stdout, stderr):
+        assert stdout is stderr
+        stdout.write(diagnostic)
+        return returncode
+
+    monkeypatch.setattr(image, "run", run)
+    assert img._zdt(["-i", "image.img", "import", str(source), "/hello.bin"], copying=source) == returncode
+    output = capsys.readouterr().out
+    prefix = f"  Copying file: {source} -> tf.img:/hello.bin ... "
+    if returncode:
+        message = "Disk full No space left" if diagnostic else "zdt exited with status 7"
+        label = "\033[31m[FAIL]\033[0m" if colored else "[FAIL]"
+        assert output == prefix + f'{label}: "{message}"\n'
+    else:
+        label = "\033[32m[OK]\033[0m" if colored else "[OK]"
+        assert output == prefix + label + "\n"
+
+
+@pytest.mark.parametrize("image_type,size,mbr", [("tf", "4096", True), ("eeprom", "32", False)])
+def test_image_zdt_build_commands(tmp_path, monkeypatch, capsys, image_type, size, mbr):
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt with spaces")
+    img = image.ImageZealFS(image_type, size)
+    (img.root / "nested" / "empty").mkdir(parents=True)
+    (img.root / "nested" / "file name").write_bytes(b"content")
+    (img.root / ".hidden").write_bytes(b"hidden")
+    (img.root / "filelink").symlink_to("nested/file name")
+    (img.root / "dirlink").symlink_to("nested", target_is_directory=True)
+    calls = []
+    imported = {}
+
+    def run(cmd, **kwargs):
         calls.append(cmd)
-        return returns.pop(0)
+        assert cmd[1] == "--yes"
+        assert cmd[0].endswith("/zdt")
+        if "import" in cmd:
+            imported[cmd[-1]] = Path(cmd[-2]).read_bytes()
+        return 0
 
-    monkeypatch.setattr(image, "run", _run)
-    assert tf._build_image("64") == 3
-    assert tf._build_image("64") == 4
-    assert tf._build_image("64") == 0
-    assert any("--mbr" in cmd for cmd in calls)
-    assert len([cmd for cmd in calls if cmd[1] == "umount"]) == 2
+    monkeypatch.setattr(image, "run", run)
+    assert img._build_image(size) == 0
+    assert calls[0][2:] == ["image", "create", str(img.path), "--size", size + "KiB"] + (["--mbr"] if mbr else [])
+    assert calls[1][2:] == ["-i", str(img.path), "partition", "create", "--alignment", "512B"]
+    assert imported == {
+        "/.hidden": b"hidden", "/filelink": b"content",
+        "/dirlink/file name": b"content", "/nested/file name": b"content",
+    }
+    directories = [cmd[-1] for cmd in calls if "mkdir" in cmd]
+    assert directories == ["/dirlink", "/dirlink/empty", "/nested", "/nested/empty"]
+    assert not Path(next(cmd[-2] for cmd in calls if "import" in cmd)).exists()
+    output = capsys.readouterr().out
+    for destination in imported:
+        assert f"-> {image_type}.img:{destination}" in output
+    assert output.count("Copying file:") == len(imported)
+    assert output.count("[OK]") == len(imported)
 
-    ee = image.ImageZealFS("eeprom", "32")
-    monkeypatch.setattr(image, "run", lambda cmd: 0)
-    assert ee._build_image("32") == 0
 
-    monkeypatch.setattr(tf, "_require_tools", lambda names: False)
-    assert tf.create([]) == 1
-    monkeypatch.setattr(tf, "_require_tools", lambda names: True)
-    assert tf.create(["1", "2"]) == 1
-    monkeypatch.setattr(image, "require_deps", lambda deps: False)
-    assert tf.create([]) == 1
-    monkeypatch.setattr(image, "require_deps", lambda deps: True)
+@pytest.mark.parametrize("image_type", ["tf", "eeprom"])
+def test_image_zdt_empty_staging(tmp_path, monkeypatch, image_type):
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path)
+    img = image.get_image(image_type)
+    calls = []
+    monkeypatch.setattr(image, "run", lambda cmd, **kwargs: calls.append(cmd) or 0)
+    assert img._build_image(img.default_size) == 0
+    assert img.root.is_dir()
+    assert len(calls) == 2
 
-    tf.path.parent.mkdir(parents=True, exist_ok=True)
-    tf.path.write_text("x", encoding="utf-8")
+
+def test_image_zdt_create_validation_and_dependencies(tmp_path, monkeypatch):
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path)
+    img = image.ImageZealFS("tf", "4096")
+    dependencies = []
+
+    def require(deps):
+        dependencies.append(deps)
+        return True
+
+    monkeypatch.setattr(image, "require_deps", require)
+    monkeypatch.setattr(img, "_require_configured_tools", lambda: bool(dependencies))
+    sizes = []
+
+    def build(size, output):
+        sizes.append(size)
+        output.write_bytes(b"new image")
+        return 0
+
+    monkeypatch.setattr(img, "_build_image", build)
+    for args in (["1", "2"], ["0"], ["-1"], ["1MiB"], ["abc"], ["1.5"], ["１２"], ["9" * 5000]):
+        assert img.create(args) == 1
+    assert dependencies == []
+    assert img.create([]) == 0
+    assert dependencies == [["Zeal8bit/Zeal-Disk-Tool"]]
+    with confirmation_scope(True):
+        assert img.create(["77"]) == 0
+    assert sizes == ["4096", "77"]
     monkeypatch.setattr("builtins.input", lambda _: "n")
-    assert tf.create([]) == 1
-    monkeypatch.setattr("builtins.input", lambda _: "y")
-    def _build(size, output):
-        if size not in {"4096", "77"}:
-            return 1
-        output.write_text(f"image {size}", encoding="utf-8")
-        return 0
-
-    monkeypatch.setattr(tf, "_build_image", _build)
-    assert tf.create([]) == 0
-    assert tf.create(["77"]) == 0
+    assert img.create([]) == 1
+    monkeypatch.setattr(image, "require_deps", lambda deps: False)
+    assert img.create([]) == 1
+    monkeypatch.setattr(image, "require_deps", require)
+    monkeypatch.setattr(img, "_require_configured_tools", lambda: False)
+    assert img.create([]) == 1
 
 
 @pytest.mark.parametrize("image_type", ["tf", "eeprom"])
-def test_image_zealfs_copy_creation_modes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, image_type: str
-) -> None:
-    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "stage with spaces")
+def test_image_zdt_skips_overlong_names(tmp_path, monkeypatch, capsys, image_type):
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path)
     img = image.ImageZealFS(image_type, "64")
-    nested = img.root / "nested"
-    nested.mkdir(parents=True)
-    (nested / "new file").write_bytes(b"new content")
-    (img.root / "existing").write_bytes(b"replacement content")
-    (img.root / "linked").symlink_to("nested", target_is_directory=True)
-    (img.root / "filelink").symlink_to("existing")
-    source_modes = {
-        img.root: 0o750,
-        nested: 0o700,
-        nested / "new file": 0o640,
-        img.root / "existing": 0o755,
-    }
-    for path, mode in source_modes.items():
-        path.chmod(mode)
-    copied: dict[str, bytes] = {}
-
-    def _run(cmd):
-        if "--no-perms" in cmd:
-            assert cmd[:5] == ["sudo", "sh", "-c", 'umask 000; exec rsync "$@"', "rsync"]
-            assert "--chmod=ugo=rwx" in cmd
-            media = Path(cmd[-1])
-            (media / "existing").write_bytes(b"old")
-            (media / "existing").chmod(0o777)
-            os.utime(media / "existing", (1, 1))
-            (media / "deleted").write_bytes(b"stale")
-            # A restrictive inherited mask must not affect rsync's creation modes.
-            return subprocess.run(cmd[1:], check=False, umask=0o077).returncode
-        if cmd[1] == "umount":
-            media = Path(cmd[-1])
-            for path in media.rglob("*"):
-                assert not path.is_symlink()
-                assert stat.S_IMODE(path.stat().st_mode) == 0o777
-                if path.is_file():
-                    copied[str(path.relative_to(media))] = path.read_bytes()
-            for child in media.iterdir():
-                if child.is_dir():
-                    shutil.rmtree(child)
-                else:
-                    child.unlink()
-        return 0
-
-    def unexpected_umask(*args):
-        pytest.fail("The caller's umask must not be changed")
-
-    monkeypatch.setattr(image.os, "umask", unexpected_umask)
-    monkeypatch.setattr(image, "run", _run)
-    assert img._build_image("64") == 0
-    assert copied == {
-        "existing": b"replacement content",
-        "filelink": b"replacement content",
-        "nested/new file": b"new content",
-        "linked/new file": b"new content",
-    }
-    assert {path: stat.S_IMODE(path.stat().st_mode) for path in source_modes} == source_modes
-
-
-@pytest.mark.parametrize("image_type", ["tf", "eeprom"])
-def test_image_zealfs_skips_overlong_names(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], image_type: str
-) -> None:
-    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
-    img = image.ImageZealFS(image_type, "64")
-    assets = img.root / "games" / "poker" / "assets"
+    assets = img.root / "assets"
     assets.mkdir(parents=True)
     names = ["cards.tiled-project", "cards.gif", "1234567890123456", "12345678901234567", "é" * 8, "é" * 9]
     for name in names:
-        (assets / name).write_text("asset", encoding="utf-8")
+        (assets / name).write_text("asset")
     long_dir = img.root / "directory-too-long"
     long_dir.mkdir()
-    (long_dir / "child").write_text("asset", encoding="utf-8")
-    (img.root / "linked").symlink_to(assets, target_is_directory=True)
-    copied: set[str] = set()
+    (long_dir / "child").write_text("asset")
+    copied = set()
 
-    def _run(cmd):
-        if "--no-perms" in cmd:
-            # Exercise rsync's actual filtering without requiring a FUSE mount.
-            return subprocess.run(cmd[1:], check=False).returncode
-        if cmd[1] == "umount":
-            media_dir = Path(cmd[-1])
-            copied.update(str(path.relative_to(media_dir)) for path in media_dir.rglob("*") if path.is_file())
-            for child in media_dir.iterdir():
-                if child.is_dir():
-                    shutil.rmtree(child)
-                else:
-                    child.unlink()
+    def run(cmd, **kwargs):
+        if "import" in cmd:
+            copied.add(cmd[-1])
         return 0
 
-    monkeypatch.setattr(image, "run", _run)
+    monkeypatch.setattr(image, "run", run)
     assert img._build_image("64") == 0
-    expected_names = {"cards.gif", "1234567890123456", "é" * 8}
-    assert copied == {f"{directory}/{name}" for directory in ["games/poker/assets", "linked"] for name in expected_names}
-    assert all((assets / name).read_text(encoding="utf-8") == "asset" for name in names)
+    assert copied == {"/assets/cards.gif", "/assets/1234567890123456", "/assets/" + "é" * 8}
+    assert all((assets / name).read_text() == "asset" for name in names)
     assert (long_dir / "child").is_file()
     assert "longer than 16 bytes" in capsys.readouterr().out
 
 
-def test_image_zealfs_unmounts_after_copy_failures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt")
-    zealfs = tmp_path / "zealfs"
-    zealfs.write_text("bin", encoding="utf-8")
-    monkeypatch.setattr(image.ImageZealFS, "_TOOLS", {"zealfs": ToolSpec(zealfs, required=True)})
-    img = image.ImageZealFS("tf", "4096")
-    mount_dirs: list[Path] = []
+@pytest.mark.parametrize("failed_command", ["image", "partition", "mkdir", "import"])
+def test_image_zdt_failure_preserves_output(tmp_path, monkeypatch, failed_command):
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path)
+    monkeypatch.setattr(image, "require_deps", lambda deps: True)
+    img = image.ImageZealFS("tf", "64")
+    monkeypatch.setattr(img, "_require_configured_tools", lambda: True)
+    (img.root / "dir").mkdir(parents=True)
+    (img.root / "dir" / "file").write_bytes(b"new")
+    img.path.write_bytes(b"old")
+    calls = []
 
-    def _mkdtemp(prefix):
-        mount_dir = tmp_path / f"{prefix}{len(mount_dirs)}"
-        mount_dir.mkdir()
-        mount_dirs.append(mount_dir)
-        return str(mount_dir)
-
-    monkeypatch.setattr(image.tempfile, "mkdtemp", _mkdtemp)
-    scenario: dict[str, object] = {}
-    calls: list[list[str]] = []
-
-    def _run(cmd):
+    def run(cmd, **kwargs):
         calls.append(cmd)
-        if "--no-perms" in cmd:
-            copy_result = scenario["copy"]
-            if isinstance(copy_result, BaseException):
-                raise copy_result
-            return copy_result
-        if cmd[1] == "umount":
-            return scenario["unmount"]
-        return 0
+        if "image" in cmd:
+            Path(cmd[4]).write_bytes(b"partial image")
+        return 7 if failed_command in cmd else 0
 
-    monkeypatch.setattr(image, "run", _run)
+    monkeypatch.setattr(image, "run", run)
+    with confirmation_scope(True):
+        assert img.create([]) == 7
+    assert failed_command in calls[-1]
+    assert img.path.read_bytes() == b"old"
+    assert not list(tmp_path.glob(".tf.img.*"))
+    imports = [cmd for cmd in calls if "import" in cmd]
+    assert all(not Path(cmd[-2]).exists() for cmd in imports)
 
-    scenario.update(copy=RuntimeError("copy exploded"), unmount=0)
-    with pytest.raises(RuntimeError, match="copy exploded"):
-        img._build_image("64")
-    assert not mount_dirs[-1].exists()
 
-    scenario.update(copy=KeyboardInterrupt(), unmount=0)
-    with pytest.raises(KeyboardInterrupt):
-        img._build_image("64")
-    assert not mount_dirs[-1].exists()
+@pytest.mark.parametrize("bad_entry", ["cycle", "broken", "rootlink"])
+def test_image_zdt_rejects_invalid_links(tmp_path, monkeypatch, capsys, bad_entry):
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path)
+    img = image.ImageZealFS("tf", "64")
+    if bad_entry == "rootlink":
+        img.root.symlink_to(tmp_path, target_is_directory=True)
+    else:
+        img.root.mkdir()
+        (img.root / bad_entry).symlink_to("." if bad_entry == "cycle" else "missing")
+    monkeypatch.setattr(image, "run", lambda cmd, **kwargs: 0)
+    assert img._build_image("64") == 1
+    assert "Failed to populate" in capsys.readouterr().out
 
-    scenario.update(copy=23, unmount=5)
-    assert img._build_image("64") == 23
-    assert mount_dirs[-1].exists()
-    assert "Failed to unmount ZealFS image" in capsys.readouterr().out
 
-    scenario.update(copy=0, unmount=6)
-    assert img._build_image("64") == 6
-    assert mount_dirs[-1].exists()
-    assert "Failed to unmount ZealFS image" in capsys.readouterr().out
-
-    unmount_calls = [cmd for cmd in calls if cmd[1] == "umount"]
-    assert len(unmount_calls) == 4
-    assert len({cmd[-1] for cmd in unmount_calls}) == 4
+@pytest.mark.parametrize("image_type,size,mbr", [("tf", "4096", True), ("eeprom", "32", False)])
+def test_image_zdt_real_roundtrip(tmp_path, monkeypatch, capfd, image_type, size, mbr):
+    zdt = shutil.which("zdt") or str(image.ImageZealFS._TOOLS["zdt"].path)
+    if not Path(zdt).is_file():
+        pytest.skip("zdt is unavailable")
+    monkeypatch.setattr(image, "MNT_DIR", tmp_path / "mnt with spaces")
+    monkeypatch.setattr(image, "require_deps", lambda deps: True)
+    monkeypatch.setattr(image.ImageZealFS, "_TOOLS", {"zdt": ToolSpec(Path(zdt), required=True)})
+    img = image.get_image(image_type)
+    (img.root / "dir" / "empty").mkdir(parents=True)
+    (img.root / "dir" / ".hidden").write_bytes(b"hidden")
+    (img.root / "dir" / "star*?.bin").write_bytes(b"literal wildcard name")
+    (img.root / "dir" / "file name").write_bytes(b"content")
+    (img.root / "linked").symlink_to("dir", target_is_directory=True)
+    assert img.create([]) == 0
+    output = capfd.readouterr()
+    assert output.out.count("[OK]") == 6
+    assert "change staged" not in output.out + output.err
+    assert "Changes applied" not in output.out + output.err
+    missing = tmp_path / "missing.bin"
+    assert img._zdt(["-i", str(img.path), "import", str(missing), "/missing.bin"], copying=missing) == 1
+    output = capfd.readouterr().out
+    assert '[FAIL]: "' in output
+    assert "missing.bin" in output
+    assert img.path.stat().st_size == int(size) * 1024
+    assert img.path.stat().st_uid == os.getuid()
+    metadata = json.loads(subprocess.check_output([zdt, "--json", "-i", str(img.path), "info"]))["data"]
+    assert metadata["mbr"] is mbr
+    assert metadata["partitions"][0]["start_lba"] == (1 if mbr else 0)
+    exported = tmp_path / "exported"
+    subprocess.run([zdt, "--yes", "-i", str(img.path), "export", "/", str(exported)], check=True)
+    for directory in ("dir", "linked"):
+        assert (exported / directory / "empty").is_dir()
+        for name in (".hidden", "star*?.bin", "file name"):
+            assert (exported / directory / name).read_bytes() == (img.root / directory / name).read_bytes()
 
 
 def test_image_romdisk_config_and_create_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 from typing import Callable
 
 from mods.common import HOME_DIR, MNT_DIR, ZOS_PATH
+from mods.cli import paint
 from mods.confirmation import confirm
 from mods.process import run
 from mods.requirements import require_deps
@@ -80,8 +82,7 @@ class Image(ToolingSupport):
             if not temporary_path.is_file():
                 print(f"Image build did not produce output: {temporary_path}")
                 return 1
-            # Privileged builders (ZealFS) create root-owned files. Publish
-            # artifacts as the mapped caller, just like unprivileged builders.
+            # Publish artifacts as the mapped caller.
             owner = temporary_path.stat()
             uid, gid = os.getuid(), os.getgid()
             if (owner.st_uid, owner.st_gid) != (uid, gid):
@@ -326,9 +327,6 @@ class ImagePack(Image):
         if not self._require_configured_tools():
             return 1
 
-        if not require_deps(["Zeal8bit/ZealFS"]):
-            return 1
-
         if self.path.exists():
             if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1
@@ -355,7 +353,7 @@ class ImagePack(Image):
 
 class ImageZealFS(Image):
     _TOOLS: dict[str, ToolSpec] = {
-        "zealfs": ToolSpec(HOME_DIR / "ZealFS" / "build" / "zealfs", required=True),
+        "zdt": ToolSpec(HOME_DIR / "Zeal-Disk-Tool" / "build" / "cli" / "zdt", required=True),
     }
 
     def __init__(self, image_type: str, default_size: str) -> None:
@@ -367,97 +365,99 @@ class ImageZealFS(Image):
         )
         self.default_size = default_size
 
+    def _zdt(self, args: list[str], *, copying: Path | None = None) -> int:
+        if copying is not None:
+            print(f"  Copying file: {copying} -> {self.path.name}:{args[-1]} ... ", end="", flush=True)
+        with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as output:
+            rc = run([str(self._TOOLS["zdt"].path), "--yes", *args], stdout=output, stderr=output)
+            if rc != 0:
+                output.seek(0)
+                diagnostic = output.read().strip() or f"zdt exited with status {rc}"
+                if copying is not None:
+                    message = " ".join(diagnostic.splitlines())
+                    label = paint("[FAIL]", "red")
+                    print(f'{label}: "{message}"')
+                else:
+                    print(diagnostic)
+            elif copying is not None:
+                print(paint("[OK]", "green"))
+            return rc
+
     def _build_image(self, size: str, output: Path | None = None) -> int:
-        self.root.mkdir(parents=True, exist_ok=True)
-        zealfs_bin = self._TOOLS["zealfs"].path
-        media_dir = Path(tempfile.mkdtemp(prefix="zde-zealfs-"))
         output_path = output or self.path
-        cmd = [
-            "sudo",
-            str(zealfs_bin),
-            "-v2",
-            f"--image={output_path}",
-            f"--size={size}",
-        ]
+        cmd = ["image", "create", str(output_path), "--size", f"{size}KiB"]
         if self.image_type == "tf":
             cmd.append("--mbr")
-        cmd.append(str(media_dir))
+        rc = self._zdt(cmd)
+        if rc != 0:
+            return rc
+        target = ["-i", str(output_path)]
+        # Match ZealFS's sector-1 MBR layout and fill the remaining image.
+        rc = self._zdt([*target, "partition", "create", "--alignment", "512B"])
+        if rc != 0:
+            return rc
 
-        mounted = False
-        unmounted = False
+        print("Warning: ZealFS skips file and directory names longer than 16 bytes; staged files are unchanged.")
         try:
-            rc = run(cmd)
-            if rc != 0:
-                return rc
-            mounted = True
+            if self.root.is_symlink():
+                raise ValueError(f"Refusing symlinked {self.image_type} image root")
+            self.root.mkdir(parents=True, exist_ok=True)
+            # zdt interprets * and ? in host paths. A literal alias also lets
+            # imports dereference links while retaining the staged filename.
+            with tempfile.TemporaryDirectory(prefix="zde-zdt-") as temporary_dir:
+                source_alias = Path(temporary_dir) / "source"
 
-            copy_rc = 0
-            copy_error: BaseException | None = None
-            try:
-                print("Warning: ZealFS skips file and directory names longer than 16 bytes; staged files are unchanged.")
-                copy_rc = run(
-                    [
-                        "sudo",
-                        # ZealFS reports 0777 and cannot chmod. Match rsync's
-                        # creation modes, with the umask scoped to this child.
-                        "sh",
-                        "-c",
-                        'umask 000; exec rsync "$@"',
-                        "rsync",
-                        "-ruLkv",
-                        "--temp-dir=/tmp",
-                        "--no-perms",
-                        "--chmod=ugo=rwx",
-                        "--whole-file",
-                        "--delete",
-                        # rsync wildcards match bytes; ZealFS allows 16 per name.
-                        "--exclude=?????????????????*",
-                        f"{self.root}/",
-                        f"{media_dir}/",
-                    ]
-                )
-            except BaseException as exc:
-                copy_error = exc
+                def import_directory(directory: Path, relative: Path, ancestors: set[tuple[int, int]]) -> int:
+                    info = directory.stat()
+                    identity = (info.st_dev, info.st_ino)
+                    if identity in ancestors:
+                        raise ValueError(f"Directory symlink cycle: {directory}")
+                    ancestors = ancestors | {identity}
+                    for entry in sorted(directory.iterdir(), key=lambda path: path.name):
+                        if len(os.fsencode(entry.name)) > 16:
+                            continue
+                        destination = relative / entry.name
+                        fs_path = "/" + destination.as_posix()
+                        mode = entry.stat().st_mode
+                        if stat.S_ISDIR(mode):
+                            rc = self._zdt([*target, "mkdir", fs_path])
+                            if rc == 0:
+                                rc = import_directory(entry, destination, ancestors)
+                        elif stat.S_ISREG(mode):
+                            source_alias.symlink_to(entry.resolve(strict=True))
+                            try:
+                                rc = self._zdt([*target, "import", str(source_alias), fs_path], copying=entry)
+                            finally:
+                                source_alias.unlink()
+                        else:
+                            print(f"Warning: '{entry}' is not a file or directory, skipping")
+                            continue
+                        if rc != 0:
+                            return rc
+                    return 0
 
-            unmount_rc = 0
-            unmount_error: BaseException | None = None
-            try:
-                unmount_rc = run(["sudo", "umount", str(media_dir)])
-                unmounted = unmount_rc == 0
-            except BaseException as exc:
-                unmount_error = exc
-
-            if unmount_error is not None:
-                print(f"Failed to unmount ZealFS image at {media_dir}: {unmount_error}")
-            elif unmount_rc != 0:
-                print(f"Failed to unmount ZealFS image at {media_dir}: exit {unmount_rc}")
-
-            if copy_error is not None:
-                raise copy_error.with_traceback(copy_error.__traceback__)
-            if copy_rc != 0:
-                return copy_rc
-            if unmount_error is not None:
-                raise unmount_error.with_traceback(unmount_error.__traceback__)
-            return unmount_rc
-        finally:
-            if not mounted or unmounted:
-                try:
-                    media_dir.rmdir()
-                except OSError as exc:
-                    print(f"Failed to remove ZealFS mount directory {media_dir}: {exc}")
+                return import_directory(self.root, Path("."), set())
+        except (OSError, ValueError) as exc:
+            print(f"Failed to populate {self.image_type} image: {exc}")
+            return 1
 
     def create(self, args: list[str]) -> int:
         if len(args) > 1:
             print(f"Usage: zde image {self.image_type} create [size]")
             return 1
 
-        if not self._require_tools(["zealfs"]):
-            return 1
-
-        if not require_deps(["Zeal8bit/ZealFS"]):
-            return 1
-
         size = args[0] if args else self.default_size
+        try:
+            if not size.isascii() or not size.isdecimal() or int(size) <= 0:
+                raise ValueError
+        except ValueError:
+            print(f"Invalid image size in KiB: {size}")
+            return 1
+
+        if not require_deps(["Zeal8bit/Zeal-Disk-Tool"]):
+            return 1
+        if not self._require_configured_tools():
+            return 1
         if self.path.exists():
             if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
                 return 1

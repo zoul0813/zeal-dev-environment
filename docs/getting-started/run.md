@@ -107,7 +107,7 @@ See the [`zde image` reference](../image.md) for staging, removal, image sizes, 
 - If the program does not start, confirm `--uprog` points to the raw `.bin` artifact.
 - If `load` waits forever, confirm the terminal is sending a raw file and that the UART settings are 57600 baud, 8N1.
 - If transfer ends too soon or too late, recalculate the exact binary size with `wc -c`.
-- If `zde image tf create` reports a missing ZealFS dependency, run `zde update` and check `zde deps list`.
+- If `zde image tf create` reports a missing disk-tool dependency, run `zde deps install disk-tool` and check `zde deps list`. This builds the headless `zdt` CLI used to create images directly.
 - If you only need to update an existing card, use Zeal Disk Tool instead of recreating the entire image.
 - If Zeal 8-bit OS cannot execute a file, confirm you transferred the `.bin` artifact rather than an `.ihx`, `.map`, object, or ELF file.
 

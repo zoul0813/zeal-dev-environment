@@ -471,6 +471,45 @@ def test_collection_archiver_keeps_legacy_path_and_collection_settings(tmp_path:
     assert str(env.zde_home / "zeal-archiver") in dep.runtime_paths()
 
 
+def test_disk_tool_override_builds_cli_and_preserves_zealfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    env = _make_env(tmp_path)
+    env.deps_file.write_text((Path(__file__).resolve().parents[3] / "deps.yml").read_text())
+    _write_yaml(env.collection_file, """
+        dependencies:
+          - id: Zeal8bit/Zeal-8-bit-OS
+            repo: https://example.invalid/os.git
+          - id: Zeal8bit/ZealFS
+            repo: https://example.invalid/zealfs.git
+            aliases: [zealfs]
+          - id: Zeal8bit/Zeal-Disk-Tool
+            repo: https://example.invalid/disk-tool.git
+            build: false
+            aliases: [disk-tool]
+    """)
+    catalog = DepCatalog(env)
+    dep = catalog.resolve("disk-tool")
+    assert dep is not None
+    assert dep.path_resolved == env.zde_home / "Zeal-Disk-Tool"
+    assert dep.build_required
+    assert dep.stage_disabled
+    assert dep.artifact_paths() == []
+    dep.path_resolved.mkdir(parents=True)
+    catalog.installed_by_id[dep.id] = True
+    catalog.lock_deps[dep.id] = {"status": "synced"}
+    assert str(dep.path_resolved / "build" / "cli") in dep.runtime_paths()
+    assert dict(dep.runtime_env())["ZDT_PATH"] == str(dep.path_resolved)
+    calls = []
+
+    def run(cmd):
+        calls.append((cmd, Path.cwd()))
+        return 0
+
+    monkeypatch.setattr("cmds.make.run", run)
+    assert catalog._run_build_for_dep(dep) == 0
+    assert calls == [(["make", "cli"], dep.path_resolved)]
+    assert catalog.resolve("zealfs").raw["build"]["tool"] == "cmake"
+
+
 def test_depcatalog_misc_getters_and_repo_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env = _make_env(tmp_path)
     _write_yaml(
