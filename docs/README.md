@@ -146,6 +146,8 @@ For rootless Podman, ZDE automatically preserves the host user's UID/GID with
 It applies `docker-compose.podman.yml` for Compose commands and equivalent options
 for browser service containers. The existing image entrypoint performs setup as
 container root, then switches to the host user's IDs.
+The override disables Compose pod creation so user namespace mapping applies to
+each container.
 
 ### Compose And Image Defaults
 

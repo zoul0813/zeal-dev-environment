@@ -1,3 +1,7 @@
+x-podman:
+  # Container-level user namespaces require running outside a Compose pod.
+  in_pod: false
+
 services:
   zeal8bit-dev-env:
     userns_mode: "keep-id:uid=${HOST_UID},gid=${HOST_GID}"
