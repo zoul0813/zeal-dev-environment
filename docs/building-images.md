@@ -10,7 +10,7 @@ Apple Silicon uses ARM64; Intel Macs and x86 Linux hosts use AMD64.
 Run from a checkout with Podman installed and its Linux VM running:
 
 ```sh
-./build.sh 0.4.0
+./build.sh 0.4.1
 ```
 
 Replace the example version with the release version. Omitting it increments the
@@ -45,7 +45,7 @@ the script pulls each builder variant from the published `latest` manifest.
 To reuse both local builders without pulling them:
 
 ```sh
-USE_LOCAL_ZDE_BUILDER=true ./build.sh 0.4.0
+USE_LOCAL_ZDE_BUILDER=true ./build.sh 0.4.1
 ```
 
 Answer no to rebuilding the builder. The script requires
@@ -69,7 +69,7 @@ isolated state directory and initialize the catalog before installing aliases:
 ```sh
 export ZDE_PATH="$PWD"
 export CONTAINER_CMD=podman
-export ZDE_IMAGE_REF=docker.io/zoul0813/zeal-dev-environment:0.4.0
+export ZDE_IMAGE_REF=docker.io/zoul0813/zeal-dev-environment:0.4.1
 export ZDE_USER_PATH="$ZDE_PATH/tmp/image-test-state"
 "$ZDE_PATH/zde" --no-tty sync
 "$ZDE_PATH/zde" --no-tty deps install zos zvb zgdk coreutils
@@ -82,12 +82,25 @@ or replaced before building; the wrapper only configures absent directories.
 
 ## CI validation
 
-The existing unit-test workflow runs on native AMD64 and ARM64 Linux runners.
-It pulls the pinned `0.4.0` image, runs the Python suite, and checks tool ELF
-architectures plus real SDCC, z88dk, and GNU binutils compilation/linking.
-Update the workflow image pin when preparing the next release. Publish and
-validate the versioned images before pushing the release branch; promote
-`latest` and push the Git release tag after both native CI jobs pass.
+On every push and pull request, CI resolves Docker Hub's `latest` tag to an
+immutable image digest. If its runtime inputs match the checkout, both native
+runners pull that digest. Otherwise each runner builds the runtime Dockerfile
+with the published builder. BuildKit reuses cached layers per architecture and
+checks the current base image digests. Both paths run the Python suite and
+toolchain smoke tests. CI needs read access to Docker Hub and never publishes.
+
+Other workflows can call `./.github/actions/build-runtime` after checkout on a
+native Linux runner. Pass `arch` and `tag`. The tagged image is available in
+that job's Docker daemon for testing or a separate publication step.
+
+Release builds label both image variants with a fingerprint of the Dockerfile,
+entrypoint, and Docker ignore file. Keep the input list in
+`build/runtime-inputs.sh` in sync when adding runtime build inputs. CI recognizes
+the original unlabeled 0.4.0 manifest by digest and compares against its Git
+tag. Other unlabeled images trigger a local build.
+
+After CI passes, you can publish the versioned release, verify it, then promote
+the same manifest to `latest`.
 
 For this staged procedure, decline the script's publish prompt and publish each
 versioned list with `podman manifest push --all <local-list> docker://<repo>:<version>`.
@@ -101,7 +114,7 @@ Inspect both manifests and confirm they contain Linux AMD64 and ARM64:
 
 ```sh
 podman manifest inspect docker.io/zoul0813/zde-builder:latest
-podman manifest inspect docker.io/zoul0813/zeal-dev-environment:0.4.0
+podman manifest inspect docker.io/zoul0813/zeal-dev-environment:0.4.1
 ```
 
 Run the standalone toolchain smoke test for each local image (replace `arm64`
@@ -110,13 +123,13 @@ with `amd64` for the other variant):
 ```sh
 podman run --rm --platform linux/arm64 --entrypoint /bin/sh \
   -v "$PWD/build/smoke.sh:/tmp/zde-smoke.sh:ro" \
-  docker.io/zoul0813/zeal-dev-environment:0.4.0-arm64 /tmp/zde-smoke.sh
+  docker.io/zoul0813/zeal-dev-environment:0.4.1-arm64 /tmp/zde-smoke.sh
 ```
 
 On each architecture, use the local versioned runtime variant to run the suite:
 
 ```sh
-ZDE_USE=podman ZDE_IMAGE_REF=docker.io/zoul0813/zeal-dev-environment:0.4.0-arm64 ./zde --no-tty test
+ZDE_USE=podman ZDE_IMAGE_REF=docker.io/zoul0813/zeal-dev-environment:0.4.1-arm64 ./zde --no-tty test
 ```
 
 Use `-amd64` for AMD64 validation. Also compile representative SDCC, z88dk,

@@ -1,0 +1,32 @@
+name: Build ZDE runtime
+description: Build one Linux runtime variant and load its tag into the runner's Docker daemon.
+inputs:
+  arch:
+    description: Linux architecture (amd64 or arm64)
+    required: true
+  tag:
+    description: Docker image tag to load
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: docker/setup-buildx-action@v3
+
+    - name: Identify runtime inputs
+      id: source
+      shell: bash
+      run: |
+        fingerprint=$(bash build/runtime-inputs.sh)
+        echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+    - uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/${{ inputs.arch }}
+        tags: ${{ inputs.tag }}
+        labels: io.zeal8bit.zde.runtime-inputs=${{ steps.source.outputs.fingerprint }}
+        pull: true
+        load: true
+        cache-from: type=gha,scope=zde-runtime-${{ inputs.arch }}
+        cache-to: type=gha,mode=max,scope=zde-runtime-${{ inputs.arch }}

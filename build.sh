@@ -132,11 +132,17 @@ if [ "$BUILD_BUILDER" != true ]; then
   create_manifest "$BUILDER_REPO" latest
 fi
 
+runtime_inputs=$(bash build/runtime-inputs.sh)
+labels=(--label "io.zeal8bit.zde.runtime-inputs=$runtime_inputs")
+if git rev-parse --verify HEAD >/dev/null 2>&1 && [[ "$runtime_inputs" == "$(bash build/runtime-inputs.sh HEAD)" ]]; then
+  labels+=(--label "org.opencontainers.image.revision=$(git rev-parse HEAD)")
+fi
+
 for arch in "${ARCHITECTURES[@]}"; do
   echo "* Building ZDE for linux/$arch"
   # Base images may be pulled if missing; the validated local builder must
   # remain local. Podman's default pull=missing provides both behaviors.
-  podman build --platform "linux/$arch" --pull=missing \
+  podman build --platform "linux/$arch" --pull=missing "${labels[@]}" \
     --build-arg "ZDE_BUILDER_IMAGE=$BUILDER_REPO:latest-$arch" \
     -t "$ZDE_REPO:$VERSION-$arch" .
 done

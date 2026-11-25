@@ -62,6 +62,17 @@ dependencies:
     metadata:
       category: [core]
 
+  - id: Zeal8bit/Zeal-NativeEmulator
+    build:
+      commands:
+        - meson setup --reconfigure build-headless -Dfrontend=headless --buildtype=release
+        - meson compile -C build-headless zeal-headless
+      stage: false
+    env:
+      - name: ZEAL_NATIVE_PATH
+        add_to_path:
+          - build-headless
+
   - id: Zeal8bit/Zeal-WebEmulator
     path: home/Zeal-WebEmulator
 

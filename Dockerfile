@@ -25,6 +25,7 @@ RUN echo "Installing prerequisites" \
     gmp \
     zstd-libs \
     cmake \
+    meson \
     su-exec \
     sudo \
     fuse3 \

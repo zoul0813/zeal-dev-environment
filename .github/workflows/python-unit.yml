@@ -4,8 +4,49 @@ on:
   pull_request:
   push:
 
+permissions:
+  contents: read
+
 jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.select.outputs.image }}
+      build: ${{ steps.select.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select the runtime for both architectures
+        id: select
+        shell: bash
+        run: |
+          repo=docker.io/zoul0813/zeal-dev-environment
+          if ! command -v skopeo >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y skopeo
+          fi
+          digest=$(skopeo inspect --no-tags --format '{{.Digest}}' "docker://$repo:latest")
+          image="$repo@$digest"
+          published_inputs=$(skopeo inspect --config "docker://$image" | jq -r '.config.Labels["io.zeal8bit.zde.runtime-inputs"] // empty')
+          # The published 0.4.0 index predates the runtime-inputs label.
+          if [[ -z "$published_inputs" && "$digest" == sha256:e31b408c0a794af577f526885ca1702f126bfb3bcf1199060a939939cf60b4ad ]]; then
+            published_inputs=$(bash build/runtime-inputs.sh v0.4.0)
+          fi
+          inputs=$(bash build/runtime-inputs.sh)
+          if [[ "$inputs" == "$published_inputs" ]]; then
+            echo "Using published runtime $image"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            image="zde-ci:$inputs"
+            echo "Testing checkout with a local runtime $image"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
   unit-tests:
+    needs: runtime
     name: ${{ matrix.job_name }}
     strategy:
       fail-fast: false
@@ -13,21 +54,35 @@ jobs:
         include:
           - runner: ubuntu-latest
             job_name: unit-tests
+            arch: amd64
           - runner: ubuntu-24.04-arm
             job_name: unit-tests-arm64
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     env:
-      ZDE_IMAGE_REF: zoul0813/zeal-dev-environment:0.4.0
+      ZDE_IMAGE_REF: ${{ needs.runtime.outputs.image }}
       ZDE_STRICT_EXIT: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Pull ZDE image for tests
+      - name: Pull matching published runtime
+        if: needs.runtime.outputs.build == 'false'
         run: docker pull "$ZDE_IMAGE_REF"
+
+      - name: Build runtime from checkout
+        if: needs.runtime.outputs.build == 'true'
+        uses: ./.github/actions/build-runtime
+        with:
+          arch: ${{ matrix.arch }}
+          tag: ${{ env.ZDE_IMAGE_REF }}
 
       - name: Run ZDE unit tests in container
         run: ./zde --no-tty test -vv -ra --tb=short --durations=10 --color=no -o console_output_style=classic --cov --cov-report=term
 
       - name: Run toolchain compile and link smoke tests
-        run: ./zde --no-tty exec /bin/sh /src/build/smoke.sh
+        run: |
+          ZDE_USER_PATH=$(mktemp -d)
+          export ZDE_USER_PATH
+          echo 'ZDE_DEP_PATHS=/src/build' > "$ZDE_USER_PATH/deps.env"
+          ./zde --no-tty exec smoke.sh

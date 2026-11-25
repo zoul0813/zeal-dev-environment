@@ -18,7 +18,10 @@ ZDE = "docker.io/zoul0813/zeal-dev-environment"
 @pytest.fixture
 def release(tmp_path: Path):
     shutil.copy(REPO_ROOT / "build.sh", tmp_path / "build.sh")
+    for name in ("Dockerfile", "entrypoint.sh", ".dockerignore"):
+        shutil.copy(REPO_ROOT / name, tmp_path / name)
     (tmp_path / "build").mkdir()
+    shutil.copy(REPO_ROOT / "build/runtime-inputs.sh", tmp_path / "build")
     (tmp_path / "build" / "sdcc-src-4.4.0.tar.bz2").touch()
     fetch = tmp_path / "build" / "zeal8bit.sh"
     fetch.write_text("#!/bin/sh\nexit 0\n")
@@ -70,6 +73,7 @@ def test_release_builds_matching_architectures_and_publishes_manifests(release, 
     assert len(runtime_builds) == 2
     for arch, build in zip(("amd64", "arm64"), runtime_builds):
         assert build[build.index("--platform") + 1] == f"linux/{arch}"
+        assert any(arg.startswith("io.zeal8bit.zde.runtime-inputs=") for arg in build)
         assert f"ZDE_BUILDER_IMAGE={BUILDER}:latest-{arch}" in build
         assert f"{ZDE}:1.2.4-{arch}" in build
     pulls = [c for c in commands if c[0] == "pull"]

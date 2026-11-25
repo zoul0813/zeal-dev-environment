@@ -35,6 +35,10 @@ export PS1="($CONTAINER_ID_SHORT) \u:\w\$ "
 
 chown $HOST_UID:$HOST_GID /home/zeal8bit
 
+if [ -n "${ZDE_DEP_PATHS:-}" ]; then
+    export PATH="$PATH:$ZDE_DEP_PATHS"
+fi
+
 # If no command is passed, default to bash
 if [ $# -eq 0 ]; then
     exec su-exec "$USERNAME" /bin/bash
