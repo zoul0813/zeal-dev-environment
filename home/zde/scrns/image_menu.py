@@ -14,7 +14,7 @@ class ImageMenuScreen(ItemActionScreen):
     def __init__(self) -> None:
         super().__init__(
             title="Image Browser",
-            subtitle="Select a media type, then open its staged file viewer",
+            subtitle="Select a media type and an action",
             items_title="Media",
             actions_title="Actions",
         )
@@ -25,6 +25,8 @@ class ImageMenuScreen(ItemActionScreen):
             action_ids = ["open"]
             if image.create_usage is not None:
                 action_ids.append("create")
+            if isinstance(image, image_mod.ImageTf):
+                action_ids.append("update")
             rows.append(ItemEntry(id=image.image_type, label=image.image_type, action_ids=action_ids))
         return rows
 
@@ -32,11 +34,27 @@ class ImageMenuScreen(ItemActionScreen):
         return [
             ItemAction("open", "open", shortcut="f3", callback=self._action_open),
             ItemAction("create", "create", shortcut="f5", callback=self._action_create),
+            ItemAction(
+                "update", "Update from Software Collection",
+                shortcut="f6", callback=self._action_update, pause_after_run=True,
+            ),
         ]
 
     def _action_open(self, item: ItemEntry) -> ActionResult:
         self.app.push_screen(FileTreeScreen(item.id), lambda _result: self.action_focus_items())
         return ActionResult(status="", focus_items=False)
+
+    def _action_update(self, item: ItemEntry) -> ActionResult:
+        image = image_mod.get_image(item.id)
+        if not isinstance(image, image_mod.ImageTf):
+            return ActionResult(rc=1)
+        with suspend_for_external_output(self.app):
+            rc = image.update([])
+        if rc == 3:
+            return ActionResult(rc=rc, status="[warn] TF image update cancelled")
+        if rc == 0:
+            return ActionResult(status="[ok] TF image is up to date")
+        return ActionResult(rc=rc)
 
     def _action_create(self, item: ItemEntry) -> ActionResult:
         image = image_mod.get_image(item.id)

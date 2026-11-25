@@ -164,6 +164,13 @@ ChoiceModal {
   width: 24;
   margin-right: 0;
 }
+ImageMenuScreen #item-actions-panel {
+  width: 38;
+  max-width: 65%;
+}
+ImageMenuScreen #item-actions Label {
+  max-width: 100%;
+}
 #item-list-panel.active-panel,
 #item-actions-panel.active-panel {
   border: round $primary;

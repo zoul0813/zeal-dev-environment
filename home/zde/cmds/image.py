@@ -20,6 +20,8 @@ def _dispatch(image: image_mod.Image, args: list[str]) -> int:
         return image.ls(subargs)
     if subcmd == "create" and image.create_usage is not None:
         return image.create(subargs)
+    if subcmd == "update" and isinstance(image, image_mod.ImageTf):
+        return image.update(subargs)
 
     print(f"Unknown subcommand: {subcmd}")
     return image.help()
@@ -47,10 +49,12 @@ def help() -> int:
     print("Usage: zde image <subcommand> [args]")
     print("Subcommands:")
     for image in _sorted_images():
-        if image.create_usage is None:
-            print(f"  {image.image_type} <add|rm|ls> [args]")
-        else:
-            print(f"  {image.image_type} <add|rm|ls|create> [args]")
+        subcommands = ["add", "rm", "ls"]
+        if image.create_usage is not None:
+            subcommands.append("create")
+        if isinstance(image, image_mod.ImageTf):
+            subcommands.append("update")
+        print(f"  {image.image_type} <{'|'.join(subcommands)}> [args]")
     return 0
 
 

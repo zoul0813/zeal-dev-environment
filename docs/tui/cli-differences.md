@@ -44,8 +44,8 @@ Examples:
 
 ### Image Management
 
-- The CLI supports the full `image` command set, including `add`, `rm`, `ls`, and `create`.
-- The TUI supports browsing, staged-file removal, and top-level image creation.
+- The CLI supports the full `image` command set, including `add`, `rm`, `ls`, `create`, and `tf update --dry-run`.
+- The TUI supports browsing, staged-file removal, image creation, and Software Collection updates for TF images.
 - The CLI still has broader image coverage, especially for `add` and the full typed command workflow.
 
 ### Output Handling

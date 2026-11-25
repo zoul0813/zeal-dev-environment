@@ -1,19 +1,39 @@
 from __future__ import annotations
 
+import fcntl
 import os
 import shutil
 import stat
 import tempfile
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
+from mods.community_image import download_community_image
 from mods.common import HOME_DIR, MNT_DIR, ZOS_PATH
 from mods.cli import paint
-from mods.confirmation import confirm
-from mods.process import run
+from mods.confirmation import confirm, is_auto_confirm
+from mods.process import run, with_run_options
 from mods.requirements import require_deps
 from mods.rom import publish_rom_image
 from mods.tooling import ToolSpec, ToolingSupport
+
+
+@contextmanager
+def _tf_image_lock(directory: Path) -> Iterator[None]:
+    directory.mkdir(parents=True, exist_ok=True)
+    # The lock lives beside the image so atomic image replacement cannot change its inode.
+    fd = os.open(directory / ".tf-image.lock", os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("Expected a regular TF image lock file")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ValueError("Another ZDE command is creating or updating the TF image") from exc
+        yield
+    finally:
+        os.close(fd)
 
 
 class Image(ToolingSupport):
@@ -458,14 +478,75 @@ class ImageZealFS(Image):
             return 1
         if not self._require_configured_tools():
             return 1
-        if self.path.exists():
-            if not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
-                return 1
+        lock = _tf_image_lock(self.path.parent) if self.image_type == "tf" else nullcontext()
+        try:
+            with lock:
+                if self.path.exists() and not confirm("Image exists, overwrite? ([Y]es, [N]o) "):
+                    return 1
 
-        print("Image Name:", self.image_type)
-        print("Image Size:", size)
+                print("Image Name:", self.image_type)
+                print("Image Size:", size)
 
-        return self._build_and_publish(lambda output: self._build_image(size, output))
+                return self._build_and_publish(lambda output: self._build_image(size, output))
+        except (OSError, ValueError) as exc:
+            print(f"Failed to create {self.image_type} image: {exc}")
+            return 1
+
+
+class ImageTf(ImageZealFS):
+    update_usage = "update [--dry-run]"
+
+    def __init__(self) -> None:
+        super().__init__("tf", "4096")
+
+    def help(self) -> int:
+        super().help()
+        print(f"  {self.update_usage}")
+        return 0
+
+    def _merge_supported(self) -> bool:
+        with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as output:
+            if run([str(self._TOOLS["zdt"].path), "--help"], stdout=output, stderr=output) != 0:
+                return False
+            output.seek(0)
+            help_text = output.read()
+        return "--from-image" in help_text and any(
+            line.split()[:1] == ["merge"] for line in help_text.splitlines()
+        )
+
+    def update(self, args: list[str]) -> int:
+        if args not in ([], ["--dry-run"]):
+            print(f"Usage: zde image tf {self.update_usage}")
+            return 0 if args in (["--help"], ["-h"]) else 1
+
+        try:
+            with _tf_image_lock(self.path.parent), with_run_options(clear_before_run=False, pause_on_error=False):
+                try:
+                    target_mode = self.path.lstat().st_mode
+                except FileNotFoundError:
+                    print(f"Missing TF image at {self.path}. Create it with 'zde image tf create'.")
+                    return 1
+                if not stat.S_ISREG(target_mode):
+                    print(f"Expected a regular TF image file at {self.path}")
+                    return 1
+                if not require_deps(["Zeal8bit/Zeal-Disk-Tool"]) or not self._require_configured_tools():
+                    return 1
+                if not self._merge_supported():
+                    print("This zdt does not support image merge.")
+                    print("Run 'zde deps update disk-tool' followed by 'zde deps build disk-tool'.")
+                    return 1
+                with tempfile.TemporaryDirectory(prefix="zde-community-image-") as temp_dir:
+                    print(f"Downloading the latest Software Collection image for {self.path} ...", flush=True)
+                    source = download_community_image(Path(temp_dir))
+                    command = [str(self._TOOLS["zdt"].path), "-i", str(self.path), "--from-image", str(source), "merge"]
+                    if args:
+                        command.append("--dry-run")
+                    elif is_auto_confirm():
+                        command.append("--yes")
+                    return run(command)
+        except (OSError, ValueError) as exc:
+            print(f"Failed to update TF image: {exc}")
+            return 1
 
 
 class ImageRomdisk(ImagePack):
@@ -593,7 +674,7 @@ class ImageRomdisk(ImagePack):
 _IMAGE_HANDLERS: dict[str, Image] = {
     "eeprom": ImageZealFS("eeprom", "32"),
     "cf": ImagePack("cf"),
-    "tf": ImageZealFS("tf", "4096"),
+    "tf": ImageTf(),
     "romdisk": ImageRomdisk(),
 }
 

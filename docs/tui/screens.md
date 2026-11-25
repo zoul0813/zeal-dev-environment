@@ -97,6 +97,7 @@ Top-level features:
 - pick a media target: `eeprom`, `cf`, `tf`, or `romdisk`
 - open a file-tree style browser for that target
 - create `eeprom`, `cf`, and `tf` images from the TUI
+- select `tf` and choose **Update from Software Collection** to preview and confirm a merge into the current TF image
 
 Image creation behavior:
 

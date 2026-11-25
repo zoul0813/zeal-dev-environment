@@ -1,6 +1,6 @@
 # `zde image`
 
-`image` manages file staging and image creation for ZDE media targets.
+`image` manages file staging, image creation, and TF community updates for ZDE media targets.
 
 ## Usage
 
@@ -19,6 +19,7 @@ Supported subcommands:
 - `create [size]` for `eeprom` and `tf`
 - `create` for `cf`
 - `create` for `romdisk`
+- `update [--dry-run]` for `tf`
 
 ## Targets
 
@@ -62,6 +63,19 @@ Supported subcommands:
   - Packs staged files from `mnt/romdisk` into `mnt/romdisk.img`.
   - Uses `home/Zeal-8-bit-OS/build/os.bin` and its matching `build/os.conf` to rebuild `mnt/roms/os_with_romdisk.img`.
   - Atomically updates `mnt/roms/latest.img` to select the regenerated image used by the default emulator launch.
+
+### `update`
+
+```sh
+zde image tf update --dry-run
+zde image tf update
+zde --no-tty image tf update --yes
+```
+
+- Downloads and verifies the latest 16 MiB image as the source for a `zdt` merge into the existing `mnt/tf.img`. [Software Collection releases](https://github.com/Zeal8bit/Zeal-Software-Collection/releases/latest)
+- Preview the merge with `--dry-run`. For an update, review the added, replaced, and preserved file counts and confirm the merge. Use `--yes` for unattended updates.
+- Community files replace differing files at matching paths. Files found only in your image are kept. The image keeps its original size, so smaller images work when the combined files fit. A file/directory conflict or lack of space stops the update before it writes the image.
+- The merge updates `mnt/tf.img` without a backup. `zde image tf create` rebuilds from `mnt/tf/`. Run `update` again after rebuilding to bring the community software back into the image.
 
 ## Legacy Alias
 
